@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Lib", "MusicCrawler.Lib\MusicCrawler.Lib.csproj", "{578076C6-249D-4707-9491-29A7CA2893FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler", "MusicCrawler\MusicCrawler.csproj", "{77E57031-178B-487F-B077-765689351ECB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{578076C6-249D-4707-9491-29A7CA2893FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{578076C6-249D-4707-9491-29A7CA2893FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{578076C6-249D-4707-9491-29A7CA2893FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{578076C6-249D-4707-9491-29A7CA2893FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77E57031-178B-487F-B077-765689351ECB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77E57031-178B-487F-B077-765689351ECB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77E57031-178B-487F-B077-765689351ECB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77E57031-178B-487F-B077-765689351ECB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
