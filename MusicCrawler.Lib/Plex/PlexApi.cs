@@ -23,23 +23,38 @@ public class PlexApi
         return data["MediaContainer"]["Directory"].ToObject<Library[]>();
     }
 
-    public async Task<Item[]> GetRecentlyAdded(string libraryKey, int maxResults = 5)
+    public async Task<MusicArtist[]> GetMusicArtists(int library)
+    {
+        string url = $"{baseUri}/library/sections/{library}/all";
+        var response = await httpClient.GetStringAsync(url);
+        var data = JObject.Parse(response);
+        return data["MediaContainer"]["Metadata"].ToObject<MusicArtist[]>();
+    }
+
+    public async Task<RecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
     {
         string url = $"{baseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
-        return data["MediaContainer"]["Metadata"].ToObject<Item[]>();
+        return data["MediaContainer"]["Metadata"].ToObject<RecentlyAddedItem[]>();
     }
 }
 
 public class Library
 {
-    public string Key { get; set; }
+    public int Key { get; set; }
     public string Title { get; set; }
 }
 
-public class Item
+public class RecentlyAddedItem
 {
     public string Title { get; set; }
-    // Add other properties you want to retrieve
+}
+
+public record MusicArtist
+{
+    public int RatingKey { get; set; }
+    public string Key { get; set; }
+    public string Guid { get; set; }
+    public string Title { get; set; }
 }

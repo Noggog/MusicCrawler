@@ -2,7 +2,7 @@
 
 PlexApi plex = new PlexApi(args[0], args[1]);
 
-try
+async Task PrintLibrariesAndRecentlyAdded()
 {
     var libraries = await plex.GetLibraries();
     foreach (var library in libraries)
@@ -14,6 +14,17 @@ try
         {
             Console.WriteLine($"  - {item.Title}");
         }
+    }
+}
+
+try
+{
+    // await PrintLibrariesAndRecentlyAdded();
+
+    var artists = await plex.GetMusicArtists(1);
+    foreach (var artist in artists)
+    {
+        Console.WriteLine($"Library: {artist})");
     }
 }
 catch (Exception ex)
