@@ -48,14 +48,14 @@ public class SpotifyApi
         var state = RandomStringGenerator.GenerateRandomString(16);
         var scope = "user-read-private user-read-email";
 
-        var queryString = HttpUtility.ParseQueryString(string.Empty);
-        queryString["response_type"] = "code";
-        queryString["client_id"] = client_id;
-        queryString["scope"] = scope;
-        queryString["redirect_uri"] = redirect_uri;
-        queryString["state"] = state;
+        var queryParams = HttpUtility.ParseQueryString(string.Empty);
+        queryParams["response_type"] = "code";
+        queryParams["client_id"] = client_id;
+        queryParams["scope"] = scope;
+        queryParams["redirect_uri"] = redirect_uri;
+        queryParams["state"] = state;
 
-        var url = $"https://accounts.spotify.com/authorize?{queryString}";
+        var url = $"https://accounts.spotify.com/authorize?{queryParams}";
 
         Console.WriteLine($"url:{url}");
 
@@ -94,39 +94,16 @@ public class SpotifyApi
 
     public async Task<string> Recommendations(string token)
     {
-        // var queryString = HttpUtility.ParseQueryString(string.Empty);
-        // queryString["limit"] = "10";
-        // queryString["seed_artists"] = "4NHQUGzhtTLFvgF5SZesLK";
-        //
-        // var url = $"https://api.spotify.com/recommendations?{queryString}";
-        //
-        // var response = await httpClient.GetStringAsync(url);
-        //
-        // return response;
-
-        var queryString = HttpUtility.ParseQueryString(string.Empty);
-        queryString["limit"] = "10";
-        queryString["seed_artists"] = "4NHQUGzhtTLFvgF5SZesLK";
-
-        // var requestData = new FormUrlEncodedContent(new[]
-        // {
-        //     new KeyValuePair<string, string>("limit", "10"),
-        //     new KeyValuePair<string, string>("seed_artists", "4NHQUGzhtTLFvgF5SZesLK"),
-        // });
-
-        var uri = new Uri($"https://api.spotify.com/v1/recommendations?{queryString}");
-
-        Console.WriteLine($"uri: {uri}");
-
+        var queryParams = HttpUtility.ParseQueryString(string.Empty);
+        queryParams["limit"] = "10";
+        queryParams["seed_artists"] = "4NHQUGzhtTLFvgF5SZesLK";
+        
         var request = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = uri,
+            RequestUri = new Uri($"https://api.spotify.com/v1/recommendations?{queryParams}"),
             Headers = { { "Authorization", $"Bearer {token}" } },
-            // Content = requestData
         };
-        
-        Console.WriteLine($"headers: {request.Headers}");
 
         var response = await httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
