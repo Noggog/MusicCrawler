@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 
-namespace MusicCrawler.Lib;
+namespace MusicCrawler.Lib.Environment;
 
 public class PlexApi
 {

@@ -1,4 +1,4 @@
-﻿using MusicCrawler.Lib.Spotify;
+﻿using MusicCrawler.Lib.Environment;
 
 namespace MusicCrawler.Lib.Data;
 
@@ -8,11 +8,11 @@ namespace MusicCrawler.Lib.Data;
  */
 public class SpotifyRepo
 {
-    private SpotifyApi spotifyApi;
+    private readonly SpotifyApi _spotifyApi;
 
     public SpotifyRepo()
     {
-        this.spotifyApi = new SpotifyApi();
+        this._spotifyApi = new SpotifyApi();
     }
 
     /**
@@ -20,8 +20,8 @@ public class SpotifyRepo
      */
     public async Task<string> Recommendations(string seedArtists)
     {
-        return await spotifyApi.Recommendations(
-            token: await spotifyApi.NonUserOAuthToken(),
+        return await _spotifyApi.Recommendations(
+            token: await _spotifyApi.NonUserOAuthToken(),
             seedArtists: seedArtists
         );
     }

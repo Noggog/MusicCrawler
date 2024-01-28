@@ -3,7 +3,7 @@ using System.Text;
 using System.Web;
 using Newtonsoft.Json;
 
-namespace MusicCrawler.Lib.Spotify;
+namespace MusicCrawler.Lib.Environment;
 
 /**
  * docs:
@@ -14,29 +14,29 @@ namespace MusicCrawler.Lib.Spotify;
  */
 public class SpotifyApi
 {
-    private readonly HttpClient httpClient;
+    private readonly HttpClient _httpClient;
 
-    private readonly string baseUri;
+    private readonly string _baseUri;
 
     // The client ID from https://developer.spotify.com/dashboard
-    private readonly string client_id = "267c94026025449b8013ddde6d959e13";
+    private const string client_id = "267c94026025449b8013ddde6d959e13";
 
     // The client secret from https://developer.spotify.com/dashboard
-    private readonly string client_secret = "92c88db9315545e38989ca8cc4cad2ad";
+    private const string client_secret = "92c88db9315545e38989ca8cc4cad2ad";
 
     // This is the page that the user will be sent to after clicking "accept" from the html given by accounts.spotify.com/authorize.
-    private readonly string redirect_uri = "http://localhost/";
+    private const string redirect_uri = "http://localhost/";
 
     public SpotifyApi()
     {
-        this.baseUri = "https://api.spotify.com";
-        this.httpClient = new HttpClient();
+        this._baseUri = "https://api.spotify.com";
+        this._httpClient = new HttpClient();
     }
 
     public SpotifyApi(string baseUri)
     {
-        this.baseUri = baseUri;
-        this.httpClient = new HttpClient();
+        this._baseUri = baseUri;
+        this._httpClient = new HttpClient();
     }
 
 
@@ -60,7 +60,7 @@ public class SpotifyApi
 
         Console.WriteLine($"url:{url}");
 
-        var response = await httpClient.GetStringAsync(url);
+        var response = await _httpClient.GetStringAsync(url);
 
         return response;
     }
@@ -85,7 +85,7 @@ public class SpotifyApi
             Content = requestData
         };
 
-        var response = await httpClient.SendAsync(request);
+        var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
         var token = JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)?.access_token;
 
@@ -105,11 +105,11 @@ public class SpotifyApi
         var request = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = new Uri($"https://api.spotify.com/v1/recommendations?{queryParams}"),
+            RequestUri = new Uri($"{_baseUri}/v1/recommendations?{queryParams}"),
             Headers = { { "Authorization", $"Bearer {token}" } },
         };
 
-        var response = await httpClient.SendAsync(request);
+        var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
         return responseBody;
     }

@@ -1,6 +1,6 @@
 ﻿using MusicCrawler.Lib;
 using MusicCrawler.Lib.Data;
-using MusicCrawler.Lib.Spotify;
+using MusicCrawler.Lib.Environment;
 
 PlexApi plex = new PlexApi(args[0], args[1]);
 SpotifyApi spotifyApi = new SpotifyApi();
