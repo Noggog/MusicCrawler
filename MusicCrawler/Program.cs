@@ -1,6 +1,8 @@
 ﻿using MusicCrawler.Lib;
+using MusicCrawler.Lib.Spotify;
 
 PlexApi plex = new PlexApi(args[0], args[1]);
+SpotifyApi spotifyApi = new SpotifyApi();
 
 async Task PrintLibrariesAndRecentlyAdded()
 {
@@ -17,15 +19,22 @@ async Task PrintLibrariesAndRecentlyAdded()
     }
 }
 
+async Task ManuallyVerifySpotifyApi()
+{
+    var result = await spotifyApi.NonUserOAuthToken();
+    Console.WriteLine($"result: {result}");
+}
+
 try
 {
+    await ManuallyVerifySpotifyApi();
     // await PrintLibrariesAndRecentlyAdded();
 
-    var artists = await plex.GetMusicArtists(1);
-    foreach (var artist in artists)
-    {
-        Console.WriteLine($"Library: {artist})");
-    }
+    // var artists = await plex.GetMusicArtists(1);
+    // foreach (var artist in artists)
+    // {
+    //     Console.WriteLine($"Library: {artist})");
+    // }
 }
 catch (Exception ex)
 {
