@@ -1,8 +1,10 @@
 ﻿using MusicCrawler.Lib;
+using MusicCrawler.Lib.Data;
 using MusicCrawler.Lib.Spotify;
 
 PlexApi plex = new PlexApi(args[0], args[1]);
 SpotifyApi spotifyApi = new SpotifyApi();
+SpotifyRepo spotifyRepo = new SpotifyRepo();
 
 async Task PrintLibrariesAndRecentlyAdded()
 {
@@ -21,7 +23,7 @@ async Task PrintLibrariesAndRecentlyAdded()
 
 async Task ManuallyVerifySpotifyApi()
 {
-    var result = await spotifyApi.NonUserOAuthToken();
+    var result = await spotifyRepo.Recommendations();
     Console.WriteLine($"result: {result}");
 }
 
