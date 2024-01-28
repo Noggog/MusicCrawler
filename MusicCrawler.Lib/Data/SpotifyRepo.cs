@@ -2,6 +2,10 @@
 
 namespace MusicCrawler.Lib.Data;
 
+/**
+ * requirements:
+ *      https://docs.google.com/document/d/1mKoThanmaFHvZXRKpsoGgsvToyE7HyI1lqf1iSG3hkg/edit#heading=h.4fw8ke4bldgf
+ */
 public class SpotifyRepo
 {
     private SpotifyApi spotifyApi;

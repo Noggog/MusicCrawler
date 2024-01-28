@@ -113,4 +113,9 @@ public class SpotifyApi
         var responseBody = await response.Content.ReadAsStringAsync();
         return responseBody;
     }
+    
+    public class AccessTokenResponse
+    {
+        public string access_token { get; set; }
+    }
 }
