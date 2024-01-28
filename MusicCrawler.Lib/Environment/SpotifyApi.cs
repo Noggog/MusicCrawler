@@ -42,6 +42,7 @@ public class SpotifyApi
 
     /**
      * responds with an html for a page where the user can click "accept".
+     * Might be useful if we want to access information specific to a spotify user.
      */
     public async Task<string> OAuthLogin()
     {
@@ -65,7 +66,7 @@ public class SpotifyApi
     }
 
     /**
-     * retrieves an oAuth token without user input and therefore no user-related permissions.
+     * retrieves an oAuth token without user input and therefore has no user-related permissions.
      */
     public async Task<string> NonUserOAuthToken()
     {
@@ -92,11 +93,14 @@ public class SpotifyApi
         return token;
     }
 
-    public async Task<string> Recommendations(string token)
+    /**
+     * [seed_artists] example: 4NHQUGzhtTLFvgF5SZesLK
+     */
+    public async Task<string> Recommendations(string token, string seedArtists)
     {
         var queryParams = HttpUtility.ParseQueryString(string.Empty);
         queryParams["limit"] = "10";
-        queryParams["seed_artists"] = "4NHQUGzhtTLFvgF5SZesLK";
+        queryParams["seed_artists"] = seedArtists;
         
         var request = new HttpRequestMessage
         {

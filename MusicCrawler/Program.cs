@@ -23,7 +23,7 @@ async Task PrintLibrariesAndRecentlyAdded()
 
 async Task ManuallyVerifySpotifyApi()
 {
-    var result = await spotifyRepo.Recommendations();
+    var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
     Console.WriteLine($"result: {result}");
 }
 

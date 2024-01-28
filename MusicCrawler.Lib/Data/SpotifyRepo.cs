@@ -11,8 +11,14 @@ public class SpotifyRepo
         this.spotifyApi = new SpotifyApi();
     }
 
-    public async Task<string> Recommendations()
+    /**
+     * [seedArtists] example: 4NHQUGzhtTLFvgF5SZesLK
+     */
+    public async Task<string> Recommendations(string seedArtists)
     {
-        return await spotifyApi.Recommendations(await spotifyApi.NonUserOAuthToken());
+        return await spotifyApi.Recommendations(
+            token: await spotifyApi.NonUserOAuthToken(),
+            seedArtists: seedArtists
+        );
     }
 }
