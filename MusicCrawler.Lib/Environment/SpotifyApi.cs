@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using System.Web;
 using Newtonsoft.Json.Linq;
 
@@ -80,13 +81,12 @@ public class SpotifyApi
             Content = requestData
         };
         
-        // var response = await httpClient.GetStringAsync(url);
         var response = await httpClient.SendAsync(request);
-        
-        // Read the content of the response
-        var responseContent = await response.Content.ReadAsStringAsync();
+        var responseBody = await response.Content.ReadAsStringAsync();
+        var token = Newtonsoft.Json.JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)?.access_token;
 
-        return responseContent;
+        Debug.Assert(token != null, nameof(token) + " != null");
+        return token;
     }
     
     
