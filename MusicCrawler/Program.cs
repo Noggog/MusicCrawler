@@ -20,10 +20,6 @@ builder.RegisterInstance(
     new PlexEndpointInfo(args[0]));
 builder.RegisterInstance(
     new PlexClientInfo(args[1]));
-builder.RegisterInstance(
-    new SpotifyEndpointInfo(
-        BaseUri: "https://api.spotify.com",
-        RedirectUri: "http://localhost/"));
 builder.RegisterType<HttpClient>().AsSelf().SingleInstance();
 var container = builder.Build();
 
