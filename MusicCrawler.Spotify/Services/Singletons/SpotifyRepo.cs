@@ -1,4 +1,4 @@
-﻿namespace MusicCrawler.Spotify;
+﻿namespace MusicCrawler.Spotify.Services.Singletons;
 
 /**
  * requirements:
@@ -8,9 +8,9 @@ public class SpotifyRepo
 {
     private readonly SpotifyApi _spotifyApi;
 
-    public SpotifyRepo()
+    public SpotifyRepo(SpotifyApi spotifyApi)
     {
-        this._spotifyApi = new SpotifyApi();
+        _spotifyApi = spotifyApi;
     }
 
     /**

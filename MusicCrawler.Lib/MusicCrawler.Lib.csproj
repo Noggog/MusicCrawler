@@ -8,10 +8,7 @@
 
     <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Environment\" />
+      <PackageReference Include="Noggog.Autofac" Version="2.61.0" />
     </ItemGroup>
 
 </Project>

@@ -1,23 +1,25 @@
 ﻿using Newtonsoft.Json.Linq;
 
-namespace MusicCrawler.Plex;
+namespace MusicCrawler.Plex.Services.Singletons;
 
 public class PlexApi
 {
+    private readonly PlexEndpointInfo _endpointInfo;
+    private readonly PlexClientInfo _clientInfo;
     private readonly HttpClient httpClient;
-    private readonly string baseUri;
 
-    public PlexApi(string baseUri, string token)
+    public PlexApi(PlexEndpointInfo endpointInfo, PlexClientInfo clientInfo)
     {
-        this.baseUri = baseUri;
+        _endpointInfo = endpointInfo;
+        _clientInfo = clientInfo;
         this.httpClient = new HttpClient();
         this.httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-        this.httpClient.DefaultRequestHeaders.Add("X-Plex-Token", token);
+        this.httpClient.DefaultRequestHeaders.Add("X-Plex-Token", clientInfo.Token);
     }
 
     public async Task<Library[]> GetLibraries()
     {
-        string url = $"{baseUri}/library/sections";
+        string url = $"{_endpointInfo.BaseUri}/library/sections";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
         return data["MediaContainer"]["Directory"].ToObject<Library[]>();
@@ -25,7 +27,7 @@ public class PlexApi
 
     public async Task<MusicArtist[]> GetMusicArtists(int library)
     {
-        string url = $"{baseUri}/library/sections/{library}/all";
+        string url = $"{_endpointInfo.BaseUri}/library/sections/{library}/all";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
         return data["MediaContainer"]["Metadata"].ToObject<MusicArtist[]>();
@@ -33,7 +35,7 @@ public class PlexApi
 
     public async Task<RecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
     {
-        string url = $"{baseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
+        string url = $"{_endpointInfo.BaseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
         return data["MediaContainer"]["Metadata"].ToObject<RecentlyAddedItem[]>();

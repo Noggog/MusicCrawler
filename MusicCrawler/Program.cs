@@ -1,12 +1,35 @@
-﻿using MusicCrawler.Plex;
+﻿using Autofac;
+using MusicCrawler.Lib;
+using MusicCrawler.Plex;
+using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
+using MusicCrawler.Spotify.Services.Singletons;
 
-PlexApi plex = new PlexApi(args[0], args[1]);
-SpotifyApi spotifyApi = new SpotifyApi();
-SpotifyRepo spotifyRepo = new SpotifyRepo();
+var builder = new ContainerBuilder();
+builder.RegisterModule<LibModule>();
+builder.RegisterModule<SpotifyModule>();
+builder.RegisterInstance(
+    new SpotifyClientInfo(
+        Id: "267c94026025449b8013ddde6d959e13",
+        Secret: "92c88db9315545e38989ca8cc4cad2ad"));
+builder.RegisterInstance(
+    new SpotifyEndpointInfo(
+        BaseUri: "https://api.spotify.com",
+        RedirectUri: "http://localhost/"));
+builder.RegisterInstance(
+    new PlexEndpointInfo(args[0]));
+builder.RegisterInstance(
+    new PlexClientInfo(args[1]));
+builder.RegisterInstance(
+    new SpotifyEndpointInfo(
+        BaseUri: "https://api.spotify.com",
+        RedirectUri: "http://localhost/"));
+builder.RegisterType<HttpClient>().AsSelf().SingleInstance();
+var container = builder.Build();
 
 async Task PrintLibrariesAndRecentlyAdded()
 {
+    var plex = container.Resolve<PlexApi>();
     var libraries = await plex.GetLibraries();
     foreach (var library in libraries)
     {
@@ -22,6 +45,7 @@ async Task PrintLibrariesAndRecentlyAdded()
 
 async Task ManuallyVerifySpotifyApi()
 {
+    SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
     var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
     Console.WriteLine($"result: {result}");
 }
