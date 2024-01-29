@@ -1,9 +1,11 @@
-﻿using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using System.Web;
+using MusicCrawler.Lib.Services.Singletons;
+using MusicCrawler.Spotify.Inputs;
+using MusicCrawler.Spotify.Models;
 using Newtonsoft.Json;
 
-namespace MusicCrawler.Lib.Environment;
+namespace MusicCrawler.Spotify.Services.Singletons;
 
 /**
  * docs:
@@ -15,30 +17,20 @@ namespace MusicCrawler.Lib.Environment;
 public class SpotifyApi
 {
     private readonly HttpClient _httpClient;
+    private readonly RandomStringGenerator _randomStringGenerator;
+    private readonly SpotifyClientInfo _clientInfo;
+    private readonly SpotifyEndpointInfo _endpointInfo;
 
-    private readonly string _baseUri;
-
-    // The client ID from https://developer.spotify.com/dashboard
-    private const string client_id = "267c94026025449b8013ddde6d959e13";
-
-    // The client secret from https://developer.spotify.com/dashboard
-    private const string client_secret = "92c88db9315545e38989ca8cc4cad2ad";
-
-    // This is the page that the user will be sent to after clicking "accept" from the html given by accounts.spotify.com/authorize.
-    private const string redirect_uri = "http://localhost/";
-
-    public SpotifyApi()
+    public SpotifyApi(
+        RandomStringGenerator randomStringGenerator,
+        SpotifyClientInfo clientInfo,
+        SpotifyEndpointInfo endpointInfo)
     {
-        this._baseUri = "https://api.spotify.com";
-        this._httpClient = new HttpClient();
+        _httpClient = new HttpClient();
+        _randomStringGenerator = randomStringGenerator;
+        _clientInfo = clientInfo;
+        _endpointInfo = endpointInfo;
     }
-
-    public SpotifyApi(string baseUri)
-    {
-        this._baseUri = baseUri;
-        this._httpClient = new HttpClient();
-    }
-
 
     /**
      * responds with an html for a page where the user can click "accept".
@@ -46,14 +38,14 @@ public class SpotifyApi
      */
     public async Task<string> OAuthLogin()
     {
-        var state = RandomStringGenerator.GenerateRandomString(16);
+        var state = _randomStringGenerator.GenerateRandomString(16);
         var scope = "user-read-private user-read-email";
 
         var queryParams = HttpUtility.ParseQueryString(string.Empty);
         queryParams["response_type"] = "code";
-        queryParams["client_id"] = client_id;
+        queryParams["client_id"] = _clientInfo.Id;
         queryParams["scope"] = scope;
-        queryParams["redirect_uri"] = redirect_uri;
+        queryParams["redirect_uri"] = _endpointInfo.RedirectUri;
         queryParams["state"] = state;
 
         var url = $"https://accounts.spotify.com/authorize?{queryParams}";
@@ -70,7 +62,7 @@ public class SpotifyApi
      */
     public async Task<string> NonUserOAuthToken()
     {
-        var authHeader = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{client_id}:{client_secret}"));
+        var authHeader = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_clientInfo.Id}:{_clientInfo.Secret}"));
 
         var requestData = new FormUrlEncodedContent(new[]
         {
@@ -89,8 +81,7 @@ public class SpotifyApi
         var responseBody = await response.Content.ReadAsStringAsync();
         var token = JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)?.access_token;
 
-        Debug.Assert(token != null, nameof(token) + " != null");
-        return token;
+        return token ?? throw new NullReferenceException();
     }
 
     /**
@@ -105,17 +96,12 @@ public class SpotifyApi
         var request = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = new Uri($"{_baseUri}/v1/recommendations?{queryParams}"),
+            RequestUri = new Uri($"{_endpointInfo.BaseUri}/v1/recommendations?{queryParams}"),
             Headers = { { "Authorization", $"Bearer {token}" } },
         };
 
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
         return responseBody;
-    }
-    
-    public class AccessTokenResponse
-    {
-        public string access_token { get; set; }
     }
 }
