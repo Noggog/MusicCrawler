@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using System.Web;
 using MusicCrawler.Lib.Services.Singletons;
+using MusicCrawler.Spotify.Inputs;
+using MusicCrawler.Spotify.Models;
 using Newtonsoft.Json;
 
 namespace MusicCrawler.Spotify.Services.Singletons;
@@ -101,10 +103,5 @@ public class SpotifyApi
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
         return responseBody;
-    }
-    
-    public class AccessTokenResponse
-    {
-        public string access_token { get; set; }
     }
 }

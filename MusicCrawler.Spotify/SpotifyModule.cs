@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Services.Singletons;
 using Noggog.Autofac;
 

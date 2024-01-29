@@ -3,6 +3,7 @@ using MusicCrawler.Lib;
 using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
+using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Services.Singletons;
 
 var builder = new ContainerBuilder();
