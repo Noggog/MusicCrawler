@@ -1,9 +1,8 @@
-﻿using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using System.Web;
 using Newtonsoft.Json;
 
-namespace MusicCrawler.Lib.Environment;
+namespace MusicCrawler.Spotify;
 
 /**
  * docs:
@@ -89,8 +88,7 @@ public class SpotifyApi
         var responseBody = await response.Content.ReadAsStringAsync();
         var token = JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)?.access_token;
 
-        Debug.Assert(token != null, nameof(token) + " != null");
-        return token;
+        return token ?? throw new NullReferenceException();
     }
 
     /**

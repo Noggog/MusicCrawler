@@ -1,6 +1,4 @@
-﻿using MusicCrawler.Lib.Environment;
-
-namespace MusicCrawler.Lib.Data;
+﻿namespace MusicCrawler.Spotify;
 
 /**
  * requirements:

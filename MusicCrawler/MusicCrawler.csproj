@@ -9,6 +9,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
+      <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
+      <ProjectReference Include="..\MusicCrawler.Spotify\MusicCrawler.Spotify.csproj" />
     </ItemGroup>
 
 </Project>
