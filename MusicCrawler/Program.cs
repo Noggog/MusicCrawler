@@ -13,10 +13,6 @@ builder.RegisterInstance(
         Id: "267c94026025449b8013ddde6d959e13",
         Secret: "92c88db9315545e38989ca8cc4cad2ad"));
 builder.RegisterInstance(
-    new SpotifyEndpointInfo(
-        BaseUri: "https://api.spotify.com",
-        RedirectUri: "http://localhost/"));
-builder.RegisterInstance(
     new PlexEndpointInfo(args[0]));
 builder.RegisterInstance(
     new PlexClientInfo(args[1]));

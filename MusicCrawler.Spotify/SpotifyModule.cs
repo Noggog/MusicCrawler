@@ -14,5 +14,10 @@ public class SpotifyModule : Autofac.Module
             .AsImplementedInterfaces()
             .AsSelf()
             .SingleInstance();
+        builder.RegisterInstance(
+            new SpotifyEndpointInfo(
+                BaseUri: "https://api.spotify.com",
+                RedirectUri: "http://localhost/"))
+            .AsSelf().SingleInstance();
     }
 }
