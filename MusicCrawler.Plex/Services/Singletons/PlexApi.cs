@@ -17,43 +17,43 @@ public class PlexApi
         this.httpClient.DefaultRequestHeaders.Add("X-Plex-Token", clientInfo.Token);
     }
 
-    public async Task<Library[]> GetLibraries()
+    public async Task<PlexLibrary[]> GetLibraries()
     {
         string url = $"{_endpointInfo.BaseUri}/library/sections";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
-        return data["MediaContainer"]["Directory"].ToObject<Library[]>();
+        return data["MediaContainer"]["Directory"].ToObject<PlexLibrary[]>();
     }
 
-    public async Task<MusicArtist[]> GetMusicArtists(int library)
+    public async Task<PlexMusicArtist[]> GetMusicArtists(int library)
     {
         string url = $"{_endpointInfo.BaseUri}/library/sections/{library}/all";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
-        return data["MediaContainer"]["Metadata"].ToObject<MusicArtist[]>();
+        return data["MediaContainer"]["Metadata"].ToObject<PlexMusicArtist[]>();
     }
 
-    public async Task<RecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
+    public async Task<PlexRecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
     {
         string url = $"{_endpointInfo.BaseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
-        return data["MediaContainer"]["Metadata"].ToObject<RecentlyAddedItem[]>();
+        return data["MediaContainer"]["Metadata"].ToObject<PlexRecentlyAddedItem[]>();
     }
 }
 
-public class Library
+public class PlexLibrary
 {
     public int Key { get; set; }
     public string Title { get; set; }
 }
 
-public class RecentlyAddedItem
+public class PlexRecentlyAddedItem
 {
     public string Title { get; set; }
 }
 
-public record MusicArtist
+public record PlexMusicArtist
 {
     public int RatingKey { get; set; }
     public string Key { get; set; }
