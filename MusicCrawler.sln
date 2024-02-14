@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Spotify", "Mus
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Plex", "MusicCrawler.Plex\MusicCrawler.Plex.csproj", "{D1A6E493-39A1-4F38-9A3F-151BA9988B28}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Fakes", "MusicCrawler.Fakes\MusicCrawler.Fakes.csproj", "{E44528F1-9500-408C-B455-9FA12621B681}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{D1A6E493-39A1-4F38-9A3F-151BA9988B28}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1A6E493-39A1-4F38-9A3F-151BA9988B28}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1A6E493-39A1-4F38-9A3F-151BA9988B28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E44528F1-9500-408C-B455-9FA12621B681}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E44528F1-9500-408C-B455-9FA12621B681}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E44528F1-9500-408C-B455-9FA12621B681}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E44528F1-9500-408C-B455-9FA12621B681}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

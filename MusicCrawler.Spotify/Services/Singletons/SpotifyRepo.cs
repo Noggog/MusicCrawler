@@ -1,4 +1,6 @@
-﻿namespace MusicCrawler.Spotify.Services.Singletons;
+﻿using MusicCrawler.Lib;
+
+namespace MusicCrawler.Spotify.Services.Singletons;
 
 /**
  * requirements:
@@ -16,11 +18,22 @@ public class SpotifyRepo
     /**
      * [seedArtists] example: 4NHQUGzhtTLFvgF5SZesLK
      */
+    // TODO: do transformations to satisfy the IRecommendationRepo contract.
     public async Task<string> Recommendations(string seedArtists)
     {
         return await _spotifyApi.Recommendations(
             token: await _spotifyApi.NonUserOAuthToken(),
             seedArtists: seedArtists
         );
+    }
+
+    public Task<ArtistKey[]> RecommendArtistsFrom(ArtistKey artist)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists)
+    {
+        throw new NotImplementedException();
     }
 }

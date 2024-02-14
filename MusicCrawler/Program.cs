@@ -1,5 +1,7 @@
 ﻿using Autofac;
+using MusicCrawler.Fakes;
 using MusicCrawler.Lib;
+using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
@@ -9,6 +11,8 @@ using MusicCrawler.Spotify.Services.Singletons;
 var builder = new ContainerBuilder();
 builder.RegisterModule<LibModule>();
 builder.RegisterModule<SpotifyModule>();
+builder.RegisterModule<PlexModule>();
+builder.RegisterModule<FakesModule>();
 builder.RegisterInstance(
     new SpotifyClientInfo(
         Id: "267c94026025449b8013ddde6d959e13",
@@ -43,9 +47,16 @@ async Task ManuallyVerifySpotifyApi()
     Console.WriteLine($"result: {result}");
 }
 
-try
+async Task ManuallyVerifyRecommendationInteractor()
 {
-    await ManuallyVerifySpotifyApi();
+    RecommendationInteractor recommendationInteractor = container.Resolve<RecommendationInteractor>();
+    var result = await recommendationInteractor.Recommendations();
+    Console.WriteLine($"result: {result.ToLogStr()}");
+}
+
+// try
+// {
+    await ManuallyVerifyRecommendationInteractor();
     // await PrintLibrariesAndRecentlyAdded();
 
     // var artists = await plex.GetMusicArtists(1);
@@ -53,8 +64,8 @@ try
     // {
     //     Console.WriteLine($"Library: {artist})");
     // }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Error: {ex.Message}");
-}
+// }
+// catch (Exception ex)
+// {
+//     Console.WriteLine($"Error: {ex}");
+// }
