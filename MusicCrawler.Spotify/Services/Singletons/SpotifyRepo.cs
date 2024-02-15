@@ -6,7 +6,7 @@ namespace MusicCrawler.Spotify.Services.Singletons;
  * requirements:
  *      https://docs.google.com/document/d/1mKoThanmaFHvZXRKpsoGgsvToyE7HyI1lqf1iSG3hkg/edit#heading=h.4fw8ke4bldgf
  */
-public class SpotifyRepo
+public class SpotifyRepo : IRecommendationRepo
 {
     private readonly SpotifyApi _spotifyApi;
 
