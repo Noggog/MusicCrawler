@@ -18,15 +18,16 @@ public class RecommendationInteractor
         _libraryQuery = libraryQuery;
     }
 
-    public async Task<IEnumerable<ArtistKey>> Recommendations()
+    public async Task<IEnumerable<Recommendation>> Recommendations()
     {
         var currentPlexLibrary = await _libraryQuery.QueryAllData();
-        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Metadata.Key);
+        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Metadata.Key).ToList();
         var recommendations = await _recommendationRepo.RecommendArtistsFrom(
             artists: sourceArtists
         );
         var artistNameSet = currentPlexLibrary.Select(x => x.Metadata.Key.ArtistName).ToHashSet();
         return recommendations
-            .Where(recommendedArtist => !artistNameSet.Contains(recommendedArtist.ArtistName));
+            .Where(recommendedArtist => !artistNameSet.Contains(recommendedArtist.ArtistName))
+            .Select(recommendedArtist => new Recommendation(recommendedArtist, sourceArtists));
     }
 }

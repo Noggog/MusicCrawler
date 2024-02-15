@@ -39,12 +39,27 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
     var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
     Console.WriteLine($"result: {result}");
 }
+else if (args.Length > 2 && args[2] == "PrintRecommendations")
+{
+    builder.RegisterModule<FakesModule>();
+    container = builder.Build();
+
+    await PrintRecommendations();
+}
 else
 {
     builder.RegisterModule<SpotifyModule>();
     container = builder.Build();
     
     await PrintLibrariesAndRecentlyAdded();
+}
+
+// TODO: Put this in some place for CLI "presenters"
+async Task PrintRecommendations()
+{
+    RecommendationInteractor recommendationInteractor = container.Resolve<RecommendationInteractor>();
+    var recommendations = await recommendationInteractor.Recommendations();
+    Console.WriteLine($"Recommendations\n-{recommendations.Select(recommendation => $"{recommendation.Key.ArtistName}. Recommended from:{recommendation.SourceArtists.Select(x => x.ArtistName).JoinToStr(", ")}").JoinToStr("\n-")}");
 }
 
 
