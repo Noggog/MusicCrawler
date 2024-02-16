@@ -14,4 +14,11 @@ public static class IEnumerableExtensions
         var x = enumerable.Select(x => x?.ToString());
         return String.Join(delimiter, x);
     }
+
+    public static IEnumerable<T> TakeRandomly<T>(this IEnumerable<T> list, int count)
+    {
+        Random random = new Random();
+        return list.OrderBy(x => random.Next())
+            .Take(count);
+    }
 }
