@@ -15,6 +15,20 @@ public class SpotifyRepo : IRecommendationRepo
         _spotifyApi = spotifyApi;
     }
 
+    public async Task<string> GetArtistId(string artistName)
+    {
+        return (await _spotifyApi.SearchArtist(
+                token: await _spotifyApi.NonUserOAuthToken(),
+                artistName: artistName
+            ))
+            .Artists
+            .Items
+            // The api responds with lots of artists, the first being what it considers the strongest match.
+            // However, if we wanted to, we could inspect the others and determine the strongest match in our own custom way.
+            .First()
+            .Id;
+    }
+
     /**
      * [seedArtists] example: 4NHQUGzhtTLFvgF5SZesLK
      */
