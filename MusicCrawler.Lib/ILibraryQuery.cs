@@ -6,4 +6,5 @@
 public interface ILibraryQuery : IMusicQuery
 {
     Task<ArtistPackage[]> QueryAllData();
+    Task<ArtistMetadata[]> QueryAllArtistMetadata();
 }

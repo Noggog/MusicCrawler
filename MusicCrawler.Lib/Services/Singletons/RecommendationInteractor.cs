@@ -1,9 +1,10 @@
-﻿namespace MusicCrawler.Lib.Services.Singletons;
+namespace MusicCrawler.Lib.Services.Singletons;
 
 /**
  * requirements:
  *   https://github.com/Noggog/MusicCrawler/issues/16
  * TODO: Should depend on some derivative of user input, for when the user wants to stop getting recommendations for certain artists.
+ * TODO: Should also investigate if there are new albums for artists already in the library.
  */
 public class RecommendationInteractor
 {
@@ -20,12 +21,12 @@ public class RecommendationInteractor
 
     public async Task<IEnumerable<Recommendation>> Recommendations()
     {
-        var currentPlexLibrary = await _libraryQuery.QueryAllData();
-        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Metadata.Key).ToList();
+        var currentPlexLibrary = await _libraryQuery.QueryAllArtistMetadata();
+        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Key).ToList();
         var recommendations = await _recommendationRepo.RecommendArtistsFrom(
             artists: sourceArtists
         );
-        var artistNameSet = currentPlexLibrary.Select(x => x.Metadata.Key.ArtistName).ToHashSet();
+        var artistNameSet = currentPlexLibrary.Select(it => it.Key.ArtistName).ToHashSet();
         return recommendations
             .Where(recommendedArtist => !artistNameSet.Contains(recommendedArtist.ArtistName))
             .Select(recommendedArtist => new Recommendation(recommendedArtist, sourceArtists));

@@ -27,4 +27,14 @@ public class FakeLibraryQuery : ILibraryQuery
             )
         };
     }
+
+    public async Task<ArtistMetadata[]> QueryAllArtistMetadata()
+    {
+        return new[]
+        {
+            new ArtistMetadata(
+                Key: new ArtistKey("fakeArtistName1"),
+                ArtistImageUrl: "fakeArtistImageUrl1")
+        };
+    }
 }
