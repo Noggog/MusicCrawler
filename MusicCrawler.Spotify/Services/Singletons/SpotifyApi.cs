@@ -104,4 +104,29 @@ public class SpotifyApi
         var responseBody = await response.Content.ReadAsStringAsync();
         return responseBody;
     }
+
+    /**
+     * Useful for retrieving an artistId from an artistName.
+     * 
+     * [artistName] example: Genghis Tron
+     */
+    public async Task<SearchArtistDto> SearchArtist(string token, string artistName)
+    {
+        var queryParams = HttpUtility.ParseQueryString(string.Empty);
+        queryParams["type"] = "artist";
+        queryParams["q"] = artistName;
+        
+        var request = new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = new Uri($"{_endpointInfo.BaseUri}/v1/search?{queryParams}"),
+            Headers = { { "Authorization", $"Bearer {token}" } },
+        };
+
+        var response = await _httpClient.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"responseBody:{responseBody}");
+        var searchArtistDto = JsonConvert.DeserializeObject<SearchArtistDto>(responseBody);
+        return searchArtistDto ?? throw new NullReferenceException();
+    }
 }

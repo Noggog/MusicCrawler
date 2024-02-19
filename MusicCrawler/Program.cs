@@ -37,7 +37,8 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
     container = builder.Build();
     
     SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
-    var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
+    // var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
+    var result = await spotifyRepo.GetArtistId("Ghengis Tron");
     Console.WriteLine($"result: {result}");
 }
 else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
