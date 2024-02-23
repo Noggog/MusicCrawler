@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Web;
 using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Spotify.Inputs;
@@ -87,7 +87,7 @@ public class SpotifyApi
     /**
      * [seed_artists] example: 4NHQUGzhtTLFvgF5SZesLK
      */
-    public async Task<string> Recommendations(string token, string seedArtists)
+    public async Task<RecommendedArtistsDto> Recommendations(string token, string seedArtists)
     {
         var queryParams = HttpUtility.ParseQueryString(string.Empty);
         queryParams["limit"] = "10";
@@ -102,7 +102,11 @@ public class SpotifyApi
 
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
-        return responseBody;
+        
+        var recommendedArtistsDto = JsonConvert.DeserializeObject<RecommendedArtistsDto>(responseBody);
+        return recommendedArtistsDto ?? throw new NullReferenceException();
+        
+        
     }
 
     /**

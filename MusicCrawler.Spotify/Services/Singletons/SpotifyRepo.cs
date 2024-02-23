@@ -1,4 +1,6 @@
 ﻿using MusicCrawler.Lib;
+using MusicCrawler.Spotify.Models;
+using NotImplementedException = System.NotImplementedException;
 
 namespace MusicCrawler.Spotify.Services.Singletons;
 
@@ -28,26 +30,26 @@ public class SpotifyRepo : IRecommendationRepo
             .First()
             .Id;
     }
-
-    /**
-     * [seedArtists] example: 4NHQUGzhtTLFvgF5SZesLK
-     */
-    // TODO: do transformations to satisfy the IRecommendationRepo contract.
-    public async Task<string> Recommendations(string seedArtists)
-    {
-        return await _spotifyApi.Recommendations(
-            token: await _spotifyApi.NonUserOAuthToken(),
-            seedArtists: seedArtists
-        );
-    }
-
+    
     public Task<ArtistKey[]> RecommendArtistsFrom(ArtistKey artist)
     {
         throw new NotImplementedException();
     }
 
-    public Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists)
+    public async Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists)
     {
-        throw new NotImplementedException();
+    
+        var allRecommendedArtists = new List<Artist>();
+        foreach (var artistKey in artists)
+        {
+            var artistId = await GetArtistId(artistKey.ArtistName);
+            var recommendedArtistsDto = await _spotifyApi.Recommendations(token: await _spotifyApi.NonUserOAuthToken(), artistId);
+            var recommendedArtists = recommendedArtistsDto.Tracks.SelectMany(track => track.Artists);
+            allRecommendedArtists.AddRange(recommendedArtists);
+        }
+    
+        var recommendedArtistKeys = allRecommendedArtists.Select(artist => new ArtistKey(artist.Name));
+    
+        return recommendedArtistKeys.ToArray();
     }
 }
