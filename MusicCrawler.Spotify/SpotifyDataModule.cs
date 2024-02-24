@@ -1,6 +1,5 @@
 ﻿using Autofac;
 using MusicCrawler.Spotify.Services.Data;
-using MusicCrawler.Spotify.Services.Singletons;
 using Noggog.Autofac;
 
 namespace MusicCrawler.Spotify;

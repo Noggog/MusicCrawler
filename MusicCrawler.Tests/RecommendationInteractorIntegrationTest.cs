@@ -4,21 +4,22 @@ using FluentAssertions;
 using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
+using Noggog.Testing.AutoFixture;
 using Xunit;
 
 namespace MusicCrawler.Tests;
 
 public class RecommendationInteractorIntegrationTest
 {
-    [Fact]
-    public async Task typical()
+    [Theory, DefaultAutoData]
+    public async Task typical(ArtistPackage artistPackage1)
     {
         // # Given
         var containerBuilder =
             FakeBaseIocContainer.fakeBaseIocContainer();
         containerBuilder
             .RegisterInstance(
-                new FakeLibraryQuery())
+                new FakeLibraryQuery(artistPackage1))
             .AsImplementedInterfaces()
             .SingleInstance();
         containerBuilder
@@ -34,6 +35,7 @@ public class RecommendationInteractorIntegrationTest
         var result = await sut.Recommendations();
         // # Then
         result
+            .Take(3)
             .ToJson()
             .Should().Be(
                 new Recommendation[]
@@ -43,8 +45,7 @@ public class RecommendationInteractorIntegrationTest
                             ArtistName: "Flagboy Giz"),
                         SourceArtists: new[]
                         {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
+                            artistPackage1.Metadata.Key
                         }
                     ),
                     new Recommendation(
@@ -52,8 +53,7 @@ public class RecommendationInteractorIntegrationTest
                             ArtistName: "The Wild Tchoupitoulas"),
                         SourceArtists: new[]
                         {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
+                            artistPackage1.Metadata.Key
                         }
                     ),
                     new Recommendation(
@@ -61,161 +61,7 @@ public class RecommendationInteractorIntegrationTest
                             ArtistName: "Lord Kossity"),
                         SourceArtists: new[]
                         {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Classified"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Dilated Peoples"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Capleton"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Ombladon"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Bitza"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Damian Marley"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Stephen Marley"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Capleton"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Drag-On"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Spectacular"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Conquering Sound"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "The Mouse Outfit"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "IAMDDB"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Fox"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "L'Entourloop"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Rodney P"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
-                        }
-                    ),
-                    new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "Mad Lion"),
-                        SourceArtists: new[]
-                        {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
+                            artistPackage1.Metadata.Key
                         }
                     )
                 }.ToJson());

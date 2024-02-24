@@ -1,12 +1,10 @@
 ﻿using Autofac;
-using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Services.Environment;
-using MusicCrawler.Spotify.Services.Singletons;
 using Noggog.Autofac;
 
 namespace MusicCrawler.Spotify;
 
-public class SpotifyEnvironmentModule : Autofac.Module
+public class SpotifyEnvironmentModule : Module
 {
     protected override void Load(ContainerBuilder builder)
     {

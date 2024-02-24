@@ -3,21 +3,22 @@ using FluentAssertions;
 using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
+using Noggog.Testing.AutoFixture;
 using Xunit;
 
 namespace MusicCrawler.Tests;
 
 public class RecommendationInteractorTest
 {
-    [Fact]
-    public async Task typical()
+    [Theory, DefaultAutoData]
+    public async Task typical(ArtistPackage artistPackage1, ArtistPackage artistPackage2, ArtistPackage artistPackage3)
     {
         // # Given
         var containerBuilder =
             FakeBaseIocContainer.fakeBaseIocContainer();
         containerBuilder
             .RegisterInstance(
-                new FakeLibraryQuery())
+                new FakeLibraryQuery(artistPackage1, artistPackage2))
             .AsImplementedInterfaces()
             .SingleInstance();
         containerBuilder
@@ -26,12 +27,11 @@ public class RecommendationInteractorTest
                     dictionary: new Dictionary<ArtistKey, ArtistKey[]>
                     {
                         {
-                            new ArtistKey("fakeArtistName1"), new[]
+                            artistPackage1.Metadata.Key,
+                            new[]
                             {
-                                new ArtistKey(
-                                    "fakeArtistName2"),
-                                new ArtistKey(
-                                    "fakeArtistName3")
+                                artistPackage2.Metadata.Key,
+                                artistPackage3.Metadata.Key,
                             }
                         }
                     }))
@@ -50,12 +50,10 @@ public class RecommendationInteractorTest
                 new Recommendation[]
                 {
                     new Recommendation(
-                        Key: new ArtistKey(
-                            ArtistName: "fakeArtistName3"),
+                        Key: artistPackage3.Metadata.Key,
                         SourceArtists: new[]
                         {
-                            new ArtistKey(
-                                ArtistName: "fakeArtistName1")
+                            artistPackage1.Metadata.Key
                         }
                     )
                 }.ToJson());
