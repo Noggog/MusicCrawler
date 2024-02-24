@@ -1,5 +1,6 @@
 using System.Text;
 using System.Web;
+using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Models;
@@ -52,9 +53,7 @@ public class SpotifyApi
 
         Console.WriteLine($"url:{url}");
 
-        var response = await _httpClient.GetStringAsync(url);
-
-        return response;
+        return await _httpClient.GetStringAsync(url);
     }
 
     /**
@@ -76,12 +75,12 @@ public class SpotifyApi
             Headers = { { "Authorization", $"Basic {authHeader}" } },
             Content = requestData
         };
-
+        
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
-        var token = JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)?.access_token;
-
-        return token ?? throw new NullReferenceException();
+        return responseBody
+            .ToDto<AccessTokenResponse>()
+            ?.access_token ?? throw new NullReferenceException();
     }
 
     /**
@@ -92,21 +91,18 @@ public class SpotifyApi
         var queryParams = HttpUtility.ParseQueryString(string.Empty);
         queryParams["limit"] = "10";
         queryParams["seed_artists"] = seedArtists;
-        
+
         var request = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = new Uri($"{_endpointInfo.BaseUri}/v1/recommendations?{queryParams}"),
             Headers = { { "Authorization", $"Bearer {token}" } },
         };
-
+        
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
-        
-        var recommendedArtistsDto = JsonConvert.DeserializeObject<RecommendedArtistsDto>(responseBody);
-        return recommendedArtistsDto ?? throw new NullReferenceException();
-        
-        
+        return responseBody
+            .ToDto<RecommendedArtistsDto>() ?? throw new NullReferenceException();
     }
 
     /**
@@ -119,7 +115,7 @@ public class SpotifyApi
         var queryParams = HttpUtility.ParseQueryString(string.Empty);
         queryParams["type"] = "artist";
         queryParams["q"] = artistName;
-        
+
         var request = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
@@ -129,8 +125,7 @@ public class SpotifyApi
 
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
-        Console.WriteLine($"responseBody:{responseBody}");
-        var searchArtistDto = JsonConvert.DeserializeObject<SearchArtistDto>(responseBody);
-        return searchArtistDto ?? throw new NullReferenceException();
+        return responseBody
+            .ToDto<SearchArtistDto>() ?? throw new NullReferenceException();
     }
 }
