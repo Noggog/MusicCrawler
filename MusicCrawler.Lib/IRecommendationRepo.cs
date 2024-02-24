@@ -5,6 +5,6 @@
 /// </summary>
 public interface IRecommendationRepo
 {
-    Task<ArtistKey[]> RecommendArtistsFrom(ArtistKey artist);
-    Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists);
+    Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(ArtistKey artist);
+    Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys);
 }

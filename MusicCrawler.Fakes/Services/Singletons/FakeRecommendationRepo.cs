@@ -4,7 +4,7 @@ namespace MusicCrawler.Fakes.Services.Singletons;
 
 public class FakeRecommendationRepo : IRecommendationRepo
 {
-    public async Task<ArtistKey[]> RecommendArtistsFrom(ArtistKey artist)
+    public async Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(ArtistKey artist)
     {
         return new[]
         {
@@ -13,7 +13,7 @@ public class FakeRecommendationRepo : IRecommendationRepo
         };
     }
 
-    public async Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists)
+    public async Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)
     {
         return new[]
         {
