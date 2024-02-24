@@ -7,7 +7,7 @@ using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
 using MusicCrawler.Spotify.Inputs;
-using MusicCrawler.Spotify.Services.Singletons;
+using MusicCrawler.Spotify.Services.Data;
 
 var builder = new ContainerBuilder();
 builder.RegisterModule<LibModule>();

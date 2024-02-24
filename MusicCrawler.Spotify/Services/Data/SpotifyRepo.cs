@@ -1,8 +1,8 @@
 ﻿using MusicCrawler.Lib;
 using MusicCrawler.Spotify.Models;
-using NotImplementedException = System.NotImplementedException;
+using MusicCrawler.Spotify.Services.Singletons;
 
-namespace MusicCrawler.Spotify.Services.Singletons;
+namespace MusicCrawler.Spotify.Services.Data;
 
 /**
  * requirements:
@@ -10,9 +10,9 @@ namespace MusicCrawler.Spotify.Services.Singletons;
  */
 public class SpotifyRepo : IRecommendationRepo
 {
-    private readonly SpotifyApi _spotifyApi;
+    private readonly ISpotifyApi _spotifyApi;
 
-    public SpotifyRepo(SpotifyApi spotifyApi)
+    public SpotifyRepo(ISpotifyApi spotifyApi)
     {
         _spotifyApi = spotifyApi;
     }

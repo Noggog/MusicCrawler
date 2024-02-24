@@ -4,9 +4,9 @@ using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Models;
-using Newtonsoft.Json;
+using MusicCrawler.Spotify.Services.Singletons;
 
-namespace MusicCrawler.Spotify.Services.Singletons;
+namespace MusicCrawler.Spotify.Services.Environment;
 
 /**
  * docs:
@@ -15,7 +15,7 @@ namespace MusicCrawler.Spotify.Services.Singletons;
  *      https://developer.spotify.com/documentation/web-api/tutorials/code-flow
  *      https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow
  */
-public class SpotifyApi
+public class SpotifyApi : ISpotifyApi
 {
     private readonly HttpClient _httpClient;
     private readonly RandomStringGenerator _randomStringGenerator;
@@ -101,6 +101,7 @@ public class SpotifyApi
         
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
+        // Console.WriteLine($"--> Recommendations\n\t{responseBody}\n<--");
         return responseBody
             .ToDto<RecommendedArtistsDto>() ?? throw new NullReferenceException();
     }
@@ -125,6 +126,8 @@ public class SpotifyApi
 
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
+        // Console.WindowWidth = 200;
+        // Console.WriteLine($"--> SearchArtist\n\t{responseBody}\n<--");
         return responseBody
             .ToDto<SearchArtistDto>() ?? throw new NullReferenceException();
     }
