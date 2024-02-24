@@ -1,5 +1,4 @@
 ﻿using FluentAssertions;
-using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 using Xunit;
@@ -8,15 +7,11 @@ namespace MusicCrawler.Tests;
 
 public class RecommendationInteractorTest
 {
-    [Fact]
-    public async Task typical()
+    [Theory, FakeData(false)]
+    public async Task typical(
+        RecommendationInteractor sut
+    )
     {
-        // # Given
-        var sut =
-            new RecommendationInteractor(
-                new FakeRecommendationRepo(),
-                new FakeLibraryQuery()
-            );
         // # When
         var result = await sut.Recommendations();
         // # Then
