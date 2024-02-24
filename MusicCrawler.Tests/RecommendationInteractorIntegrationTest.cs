@@ -12,7 +12,7 @@ namespace MusicCrawler.Tests;
 public class RecommendationInteractorIntegrationTest
 {
     [Theory, DefaultAutoData]
-    public async Task typical(ArtistPackage artistPackage1)
+    public async Task Typical(ArtistPackage artistPackage1)
     {
         // # Given
         var containerBuilder =
