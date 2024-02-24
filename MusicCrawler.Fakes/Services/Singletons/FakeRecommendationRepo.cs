@@ -1,33 +1,21 @@
 ﻿using MusicCrawler.Lib;
-using Noggog;
 
 namespace MusicCrawler.Fakes.Services.Singletons;
 
 public class FakeRecommendationRepo : IRecommendationRepo
 {
-    private readonly Dictionary<ArtistKey, ArtistKey[]> _dictionary;
+    private readonly Dictionary<ArtistKey, ArtistKey[]> _sourceArtistToRecommendedArtistDict;
 
-    public FakeRecommendationRepo(Dictionary<ArtistKey, ArtistKey[]> dictionary)
+    public FakeRecommendationRepo(Dictionary<ArtistKey, ArtistKey[]> sourceArtistToRecommendedArtistDict)
     {
-        _dictionary = dictionary;
+        _sourceArtistToRecommendedArtistDict = sourceArtistToRecommendedArtistDict;
     }
 
     public async Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)
     {
-        Dictionary<ArtistKey, List<ArtistKey>> returnDictionary = new();
-
-        foreach (var artist in artistKeys)
-        {
-            if (_dictionary.TryGetValue(artist, out var recommendations))
-            {
-                foreach (var recommendation in recommendations)
-                {
-                    returnDictionary.GetOrAdd(recommendation)
-                        .Add(artist);
-                }
-            }
-        }
-
-        return returnDictionary.Select(x => new Recommendation(x.Key, x.Value.ToArray())).ToArray();
+        return _sourceArtistToRecommendedArtistDict
+            .Inverse()
+            .Select(it => new Recommendation(it.Key, it.Value.ToArray()))
+            .ToArray();
     }
 }

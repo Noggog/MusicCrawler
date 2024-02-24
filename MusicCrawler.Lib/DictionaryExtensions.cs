@@ -1,0 +1,28 @@
+﻿using Noggog;
+
+namespace MusicCrawler.Lib;
+
+public static class DictionaryExtensions
+{
+    public static Dictionary<TKey, List<TValue>> Inverse<TKey, TValue>(
+        this Dictionary<TValue, TKey[]> originalDictionary)
+        where TKey : notnull
+        where TValue : notnull
+    {
+        var inverseDictionary = new Dictionary<TKey, List<TValue>>();
+
+        foreach (var key in originalDictionary.Keys)
+        {
+            if (originalDictionary.TryGetValue(key, out var values))
+            {
+                foreach (var value in values)
+                {
+                    inverseDictionary.GetOrAdd(value)
+                        .Add(key);
+                }
+            }
+        }
+
+        return inverseDictionary;
+    }
+}

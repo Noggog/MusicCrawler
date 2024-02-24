@@ -24,7 +24,7 @@ public class RecommendationInteractorTest
         containerBuilder
             .RegisterInstance(
                 new FakeRecommendationRepo(
-                    dictionary: new Dictionary<ArtistKey, ArtistKey[]>
+                    sourceArtistToRecommendedArtistDict: new Dictionary<ArtistKey, ArtistKey[]>
                     {
                         {
                             artistPackage1.Metadata.Key,
