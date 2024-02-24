@@ -24,11 +24,10 @@ public class RecommendationInteractor
         var currentPlexLibrary = await _libraryQuery.QueryAllArtistMetadata();
         var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Key).ToList();
         var recommendations = await _recommendationRepo.RecommendArtistsFrom(
-            artists: sourceArtists
+            artistKeys: sourceArtists
         );
-        var artistNameSet = currentPlexLibrary.Select(it => it.Key.ArtistName).ToHashSet();
+        var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.Key.ArtistName).ToHashSet();
         return recommendations
-            .Where(recommendedArtist => !artistNameSet.Contains(recommendedArtist.ArtistName))
-            .Select(recommendedArtist => new Recommendation(recommendedArtist, sourceArtists));
+            .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
     }
 }

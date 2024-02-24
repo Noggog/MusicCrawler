@@ -1,6 +1,7 @@
 ﻿using MusicCrawler.Lib;
 using MusicCrawler.Spotify.Models;
 using MusicCrawler.Spotify.Services.Singletons;
+using Noggog;
 
 namespace MusicCrawler.Spotify.Services.Data;
 
@@ -36,20 +37,23 @@ public class SpotifyRepo : IRecommendationRepo
         throw new NotImplementedException();
     }
 
-    public async Task<ArtistKey[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artists)
+    public async Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)
     {
-    
-        var allRecommendedArtists = new List<Artist>();
-        foreach (var artistKey in artists)
+        Dictionary<ArtistKey, List<ArtistKey>> returningDictionary = new();
+        
+        foreach (var artistKey in artistKeys)
         {
             var artistId = await GetArtistId(artistKey.ArtistName);
             var recommendedArtistsDto = await _spotifyApi.Recommendations(token: await _spotifyApi.NonUserOAuthToken(), artistId);
             var recommendedArtists = recommendedArtistsDto.Tracks.SelectMany(track => track.Artists);
-            allRecommendedArtists.AddRange(recommendedArtists);
+
+            foreach (var recommendedArtist in recommendedArtists)
+            {
+                returningDictionary.GetOrAdd(new ArtistKey(recommendedArtist.Name))
+                    .Add(artistKey);
+            }
         }
     
-        var recommendedArtistKeys = allRecommendedArtists.Select(artist => new ArtistKey(artist.Name));
-    
-        return recommendedArtistKeys.ToArray();
+        return returningDictionary.Select(x => new Recommendation(x.Key, x.Value.ToArray())).ToArray();
     }
 }

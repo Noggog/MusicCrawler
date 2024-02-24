@@ -1,5 +1,4 @@
 ﻿using Autofac;
-using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Spotify;
 

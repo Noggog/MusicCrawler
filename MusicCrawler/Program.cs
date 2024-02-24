@@ -1,6 +1,5 @@
 ﻿using Autofac;
 using MusicCrawler.Fakes;
-using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Plex;
@@ -56,15 +55,6 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 else if (args.Length > 2 && args[2] == "PrintRecommendations")
 {
     builder.RegisterModule<SpotifyModule>();
-    container = builder.Build();
-
-    await PrintRecommendations();
-}
-else if (args.Length > 2 && args[2] == "PrintRecommendationsWithFakes")
-{
-    builder.RegisterInstance(
-        new FakeRecommendationRepo())
-        .AsImplementedInterfaces();
     container = builder.Build();
 
     await PrintRecommendations();

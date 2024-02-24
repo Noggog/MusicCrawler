@@ -22,7 +22,19 @@ public class RecommendationInteractorTest
             .SingleInstance();
         containerBuilder
             .RegisterInstance(
-                new FakeRecommendationRepo())
+                new FakeRecommendationRepo(
+                    dictionary: new Dictionary<ArtistKey, ArtistKey[]>
+                    {
+                        {
+                            new ArtistKey("fakeArtistName1"), new[]
+                            {
+                                new ArtistKey(
+                                    "fakeArtistName2"),
+                                new ArtistKey(
+                                    "fakeArtistName3")
+                            }
+                        }
+                    }))
             .AsImplementedInterfaces()
             .SingleInstance();
         var sut =
@@ -39,7 +51,7 @@ public class RecommendationInteractorTest
                 {
                     new Recommendation(
                         Key: new ArtistKey(
-                            ArtistName: "fakeArtistName2"),
+                            ArtistName: "fakeArtistName3"),
                         SourceArtists: new[]
                         {
                             new ArtistKey(

@@ -24,6 +24,18 @@ public class FakeLibraryQuery : ILibraryQuery
                             "fakeAlbumName1"),
                         AlbumArt: "fakeAlbumArt1")
                 }
+            ),
+            new ArtistPackage(
+                Metadata: new ArtistMetadata(
+                    Key: new ArtistKey("fakeArtistName2"),
+                    ArtistImageUrl: "fakeArtistImageUrl2"),
+                Albums: new[]
+                {
+                    new Album(
+                        Key: new AlbumKey(
+                            "fakeAlbumName2"),
+                        AlbumArt: "fakeAlbumArt2")
+                }
             )
         };
     }
@@ -34,7 +46,10 @@ public class FakeLibraryQuery : ILibraryQuery
         {
             new ArtistMetadata(
                 Key: new ArtistKey("fakeArtistName1"),
-                ArtistImageUrl: "fakeArtistImageUrl1")
+                ArtistImageUrl: "fakeArtistImageUrl1"),
+            new ArtistMetadata(
+                Key: new ArtistKey("fakeArtistName2"),
+                ArtistImageUrl: "fakeArtistImageUrl2"),
         };
     }
 }
