@@ -1,4 +1,4 @@
-﻿using MusicCrawler.Lib;
+using MusicCrawler.Lib;
 using MusicCrawler.Spotify.Services.Singletons;
 using Noggog;
 
@@ -30,8 +30,8 @@ public class SpotifyRepo : IRecommendationRepo
             .First()
             .Id;
     }
-    
-    public Task<ArtistKey[]> RecommendArtistsFrom(ArtistKey artist)
+
+    public Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(ArtistKey artist)
     {
         throw new NotImplementedException();
     }

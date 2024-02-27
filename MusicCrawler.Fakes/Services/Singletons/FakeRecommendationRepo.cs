@@ -1,4 +1,4 @@
-﻿using MusicCrawler.Lib;
+using MusicCrawler.Lib;
 
 namespace MusicCrawler.Fakes.Services.Singletons;
 
