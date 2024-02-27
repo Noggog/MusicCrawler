@@ -1,4 +1,5 @@
-﻿using Autofac;
+﻿using System.Reactive.Linq;
+using Autofac;
 using FluentAssertions;
 using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
@@ -8,33 +9,22 @@ using Xunit;
 
 namespace MusicCrawler.Tests;
 
-public class RecommendationInteractorTest
+public class RecommendationInteractorIntegrationTest
 {
     [Theory, DefaultAutoData]
-    public async Task Typical(ArtistPackage artistPackage1, ArtistPackage artistPackage2, ArtistPackage artistPackage3)
+    public async Task Typical(ArtistPackage artistPackage1)
     {
         // # Given
         var containerBuilder =
             FakeBaseIocContainer.fakeBaseIocContainer();
         containerBuilder
             .RegisterInstance(
-                new FakeLibraryQuery(artistPackage1, artistPackage2))
+                new FakeLibraryQuery(artistPackage1))
             .AsImplementedInterfaces()
             .SingleInstance();
         containerBuilder
             .RegisterInstance(
-                new FakeRecommendationRepo(
-                    sourceArtistToRecommendedArtistDict: new Dictionary<ArtistKey, ArtistKey[]>
-                    {
-                        {
-                            artistPackage1.Metadata.Key,
-                            new[]
-                            {
-                                artistPackage2.Metadata.Key,
-                                artistPackage3.Metadata.Key,
-                            }
-                        }
-                    }))
+                new FakeSpotifyApi())
             .AsImplementedInterfaces()
             .SingleInstance();
         var sut =
@@ -45,12 +35,30 @@ public class RecommendationInteractorTest
         var result = await sut.Recommendations();
         // # Then
         result
+            .Take(3)
             .ToJson()
             .Should().Be(
                 new Recommendation[]
                 {
                     new Recommendation(
-                        Key: artistPackage3.Metadata.Key,
+                        Key: new ArtistKey(
+                            ArtistName: "Flagboy Giz"),
+                        SourceArtists: new[]
+                        {
+                            artistPackage1.Metadata.Key
+                        }
+                    ),
+                    new Recommendation(
+                        Key: new ArtistKey(
+                            ArtistName: "The Wild Tchoupitoulas"),
+                        SourceArtists: new[]
+                        {
+                            artistPackage1.Metadata.Key
+                        }
+                    ),
+                    new Recommendation(
+                        Key: new ArtistKey(
+                            ArtistName: "Lord Kossity"),
                         SourceArtists: new[]
                         {
                             artistPackage1.Metadata.Key

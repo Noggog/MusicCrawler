@@ -1,24 +1,21 @@
-﻿using MusicCrawler.Lib;
+using MusicCrawler.Lib;
 
 namespace MusicCrawler.Fakes.Services.Singletons;
 
 public class FakeRecommendationRepo : IRecommendationRepo
 {
-    public async Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(ArtistKey artist)
+    private readonly Dictionary<ArtistKey, ArtistKey[]> _sourceArtistToRecommendedArtistDict;
+
+    public FakeRecommendationRepo(Dictionary<ArtistKey, ArtistKey[]> sourceArtistToRecommendedArtistDict)
     {
-        return new[]
-        {
-            new ArtistKey("fakeArtistName1"),
-            new ArtistKey("fakeArtistName2"),
-        };
+        _sourceArtistToRecommendedArtistDict = sourceArtistToRecommendedArtistDict;
     }
 
-    public async Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)
+    public async Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)
     {
-        return new[]
-        {
-            new ArtistKey("fakeArtistName1"),
-            new ArtistKey("fakeArtistName2"),
-        };
+        return _sourceArtistToRecommendedArtistDict
+            .Inverse()
+            .Select(it => new Recommendation(it.Key, it.Value.ToArray()))
+            .ToArray();
     }
 }

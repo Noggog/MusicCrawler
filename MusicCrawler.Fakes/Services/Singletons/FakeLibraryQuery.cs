@@ -4,6 +4,13 @@ namespace MusicCrawler.Fakes.Services.Singletons;
 
 public class FakeLibraryQuery : ILibraryQuery
 {
+    private readonly ArtistPackage[] _packages;
+
+    public FakeLibraryQuery(params ArtistPackage[] packages)
+    {
+        _packages = packages;
+    }
+
     public Task<ArtistPackage> QueryArtistPackage(ArtistKey artistKey)
     {
         throw new NotImplementedException();
@@ -11,30 +18,11 @@ public class FakeLibraryQuery : ILibraryQuery
 
     public async Task<ArtistPackage[]> QueryAllData()
     {
-        return new[]
-        {
-            new ArtistPackage(
-                Metadata: new ArtistMetadata(
-                    Key: new ArtistKey("fakeArtistName1"),
-                    ArtistImageUrl: "fakeArtistImageUrl1"),
-                Albums: new[]
-                {
-                    new Album(
-                        Key: new AlbumKey(
-                            "fakeAlbumName1"),
-                        AlbumArt: "fakeAlbumArt1")
-                }
-            )
-        };
+        return _packages;
     }
 
     public async Task<ArtistMetadata[]> QueryAllArtistMetadata()
     {
-        return new[]
-        {
-            new ArtistMetadata(
-                Key: new ArtistKey("fakeArtistName1"),
-                ArtistImageUrl: "fakeArtistImageUrl1")
-        };
+        return _packages.Select(it => it.Metadata).ToArray();
     }
 }
