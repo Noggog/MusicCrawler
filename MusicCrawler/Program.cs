@@ -25,7 +25,7 @@ if (args.Length > 2 && args[2] == "ManuallyVerifyRecommendationInteractor")
 {
     builder.RegisterModule<FakesModule>();
     container = builder.Build();
-    
+
     RecommendationInteractor recommendationInteractor = container.Resolve<RecommendationInteractor>();
     var result = await recommendationInteractor.Recommendations();
     Console.WriteLine($"result: {result.ToLogStr()}");
@@ -34,7 +34,7 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
 {
     builder.RegisterModule<SpotifyModule>();
     container = builder.Build();
-    
+
     SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
     // var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
     var result = await spotifyRepo.GetArtistId("Ghengis Tron");
@@ -44,10 +44,10 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 {
     builder.RegisterModule<SpotifyModule>();
     container = builder.Build();
-    
-    
+
+
     PlexApi plexApi = container.Resolve<PlexApi>();
-    
+
     var plexLibraries = await plexApi.GetLibraries();
     var plexLibrary = plexLibraries.Where(x => x.Type == "artist").TakeRandomly(1).First(); // TODO: Probably should select a predefined library.
     await plexApi.GetMusicArtists(plexLibrary.Key);
@@ -59,11 +59,18 @@ else if (args.Length > 2 && args[2] == "PrintRecommendations")
 
     await PrintRecommendations();
 }
+else if (args.Length > 2 && args[2] == "PrintLibrariesAndRecentlyAdded")
+{
+    builder.RegisterModule<SpotifyModule>();
+    container = builder.Build();
+
+    await PrintLibrariesAndRecentlyAdded();
+}
 else
 {
     builder.RegisterModule<SpotifyModule>();
     container = builder.Build();
-    
+
     await PrintLibrariesAndRecentlyAdded();
 }
 

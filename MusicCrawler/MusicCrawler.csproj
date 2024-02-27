@@ -8,10 +8,18 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MusicCrawler.Backend\MusicCrawler.Backend.csproj" />
       <ProjectReference Include="..\MusicCrawler.Fakes\MusicCrawler.Fakes.csproj" />
       <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
       <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
       <ProjectReference Include="..\MusicCrawler.Spotify\MusicCrawler.Spotify.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore" Version="2.2.0" />
+      <PackageReference Include="Microsoft.AspNetCore.Cors" Version="2.2.0" />
+      <PackageReference Include="Microsoft.AspNetCore.Hosting" Version="2.2.7" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     </ItemGroup>
 
 </Project>
