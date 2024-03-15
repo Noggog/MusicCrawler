@@ -18,6 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\MusicCrawler.Fakes\MusicCrawler.Fakes.csproj" />
         <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
         <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
         <ProjectReference Include="..\MusicCrawler.Spotify\MusicCrawler.Spotify.csproj" />
