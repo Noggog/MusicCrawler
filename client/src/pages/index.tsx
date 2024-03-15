@@ -29,13 +29,18 @@ export default function Home() {
   }, [recommendationResponse]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center p-24 bg-gray-600">
-      <div className="w-8/12">
+    <main className="flex min-h-screen flex-col items-center pt-24 bg-gray-700">
+      <div>
+        <h1 className="text-white font-semibold text-[40px] mb-10">Recommended Artists</h1>
+      </div>
+      <div className="flex flex-col w-[80%] items-center">
         {recommendationResponse?.recommendations?.map((it) => {
           return (
-            <div className="flex justify-between my-5 bg-gradient-to-br from-gray-700 to-gray-900 rounded py-8 border-gray-800 border-2 shadow-xl">
-              <div className="flex flex-col pl-10">
-                <h2 className="text-white">Recommended artist: {it.key.artistName}</h2>
+            <div className="flex flex-col sm:flex-row max-w-[800px] w-[100%] justify-between my-5 bg-gradient-to-br from-gray-700 to-gray-900 rounded py-8 border-gray-800 border-2 shadow-xl">
+              <div className="flex flex-col justify-around pl-5 sm:pl-10 w-400px">
+                <h2 className="text-white">
+                  Recommended artist: {it.key.artistName}
+                </h2>
                 <h2 className="text-white">
                   Source artists:{" "}
                   {it.sourceArtists
@@ -44,15 +49,19 @@ export default function Home() {
                     })
                     .join(", ")}
                 </h2>
-                </div>
-                <div className="flex flex-row pr-10">
-                  <button className="mx-3 px-5 bg-green-500 rounded">Accept</button>
-                  <button className="mx-3 px-5 bg-red-400 rounded">Decline</button>
-                </div>
               </div>
+              <div className="flex items-center justify-center flex-col md:flex-row sm:pr-10 mt-5 sm:mt-0">
+                <button className="w-22 mx-3 my-4 px-5 py-2 bg-green-500 rounded" onClick={() => console.log("Accepted")}>
+                  Accept
+                </button>
+                <button className="w-22 mx-3 px-5 py-2 bg-red-400 rounded" onClick={() => console.log("Ooof declined")}>
+                  Decline
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
-    </div>
+    </main>
   );
 }
