@@ -33,10 +33,10 @@ export default function Home() {
       <div className="w-8/12">
         {recommendationResponse?.recommendations?.map((it) => {
           return (
-            <div className="flex flex-col">
-              <div className="flex flex-col my-5 bg-gradient-to-br from-gray-500 to-gray-800 rounded py-8">
-                <h2>Recommended artist: {it.key.artistName}</h2>
-                <h2>
+            <div className="flex justify-between my-5 bg-gradient-to-br from-gray-700 to-gray-900 rounded py-8 border-gray-800 border-2 shadow-xl">
+              <div className="flex flex-col pl-10">
+                <h2 className="text-white">Recommended artist: {it.key.artistName}</h2>
+                <h2 className="text-white">
                   Source artists:{" "}
                   {it.sourceArtists
                     .map((x) => {
@@ -44,12 +44,12 @@ export default function Home() {
                     })
                     .join(", ")}
                 </h2>
-                <div className="flex">
-                  <button>button1</button>
-                  <button>button2</button>
+                </div>
+                <div className="flex flex-row pr-10">
+                  <button className="mx-3 px-5 bg-green-500 rounded">Accept</button>
+                  <button className="mx-3 px-5 bg-red-400 rounded">Decline</button>
                 </div>
               </div>
-            </div>
           );
         })}
       </div>
