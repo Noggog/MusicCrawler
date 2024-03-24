@@ -71,7 +71,8 @@ else
     builder.RegisterModule<SpotifyModule>();
     container = builder.Build();
 
-    await PrintLibrariesAndRecentlyAdded();
+    var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
+    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.getString());
 }
 
 // TODO: Put this in some place for CLI "presenters"
