@@ -8,4 +8,10 @@ public static class ObjectExtensions
     {
         return JsonConvert.SerializeObject(obj);
     }
+
+    public static T Also<T>(this T obj, Action<T> action)
+    {
+        action(obj);
+        return obj;
+    }
 }
