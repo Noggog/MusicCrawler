@@ -15,14 +15,11 @@ public class PlaygroundInteractor
 
     public async Task<string> GetString()
     {
-        return (await _recommendationInteractor.Recommendations())
+        (await _recommendationInteractor.Recommendations())
             .Count()
-            .Also(x => Console.WriteLine("first count:" + x))
-            .plus(
-                (await _recommendationInteractor.Recommendations())
-                .Count()
-                .Also(x => Console.WriteLine("second count:" + x))
-            )
-            .ToString();
+            .Also(x => Console.WriteLine("first count:" + x));
+        return (await _recommendationInteractor.Recommendations())
+            .Also(x => Console.WriteLine("second count:" + x.Count()))
+            .ToLogStr();
     }
 }

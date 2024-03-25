@@ -47,7 +47,10 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
 
             keyDocument.Add("relatedKeys", relatedKeysArray);
 
-            await collection.InsertOneAsync(keyDocument);
+            await collection.ReplaceOneAsync(
+                filter: new BsonDocument("_id", kvp.Key.ToString()),
+                options: new ReplaceOptions { IsUpsert = true },
+                replacement: keyDocument);
         }
     }
 
