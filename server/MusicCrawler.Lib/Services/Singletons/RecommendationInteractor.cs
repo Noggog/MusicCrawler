@@ -34,7 +34,7 @@ public class RecommendationInteractor
             recommendations
                 .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
 
-        await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap());
+        await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap().Also(x => Console.WriteLine("Adding " + x.Count + " Recommendations")));
 
         return (await _recommendationPersistanceRepo.GetMap())
             .ToRecommendations();
