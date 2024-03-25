@@ -1,5 +1,6 @@
 ﻿using Autofac;
 using MusicCrawler.Fakes;
+using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.MongoDB;
@@ -12,7 +13,6 @@ using MusicCrawler.Spotify.Services.Data;
 var builder = new ContainerBuilder();
 builder.RegisterModule<LibModule>();
 builder.RegisterModule<PlexModule>();
-builder.RegisterModule<MongoDbModule>();
 builder.RegisterInstance(
     new SpotifyClientInfo(
         Id: "267c94026025449b8013ddde6d959e13",
@@ -35,6 +35,7 @@ if (args.Length > 2 && args[2] == "ManuallyVerifyRecommendationInteractor")
 else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
@@ -45,6 +46,7 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
 else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
 
@@ -57,6 +59,7 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 else if (args.Length > 2 && args[2] == "PrintRecommendations")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     await PrintRecommendations();
@@ -64,6 +67,7 @@ else if (args.Length > 2 && args[2] == "PrintRecommendations")
 else if (args.Length > 2 && args[2] == "PrintLibrariesAndRecentlyAdded")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     await PrintLibrariesAndRecentlyAdded();
@@ -71,10 +75,13 @@ else if (args.Length > 2 && args[2] == "PrintLibrariesAndRecentlyAdded")
 else
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbDataModule>();
+    builder.RegisterInstance(new FakeMongoDbProvider())
+        .AsImplementedInterfaces();
     container = builder.Build();
 
     var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
-    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.GetString().Substring(0, 1000));
+    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.GetString().Truncate(1000));
 }
 
 // TODO: Put this in some place for CLI "presenters"

@@ -12,6 +12,18 @@ public class PlaygroundInteractor
 
     public string GetString()
     {
-        return _recommendationMapRepo.GetString();
+        _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
+        {
+            {
+                new ArtistKey("artistName1"),
+                new[]
+                {
+                    new ArtistKey("artistName2"),
+                    new ArtistKey("artistName3"),
+                }
+            }
+        });
+
+        return _recommendationMapRepo.GetEntireCollectionAsString("collection1");
     }
 }
