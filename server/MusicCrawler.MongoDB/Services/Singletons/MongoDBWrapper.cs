@@ -8,11 +8,7 @@ public class MongoDbWrapper : IRecommendationMapRepo
 {
     public string GetString()
     {
-        var environmentString =
-            Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException();
-        Console.WriteLine(environmentString);
-
-        var client = new MongoClient(environmentString);
+        var client = new MongoClient(Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
         var database = client.GetDatabase("sample_mflix");
         var collection = database.GetCollection<BsonDocument>("comments");
 
