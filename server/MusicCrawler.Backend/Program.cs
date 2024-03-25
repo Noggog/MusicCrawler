@@ -6,7 +6,15 @@ builder.Services.AddGraphQLServer()
     .ModifyRequestOptions(o => { o.IncludeExceptionDetails = true; })
     .AddQueryType<QueryType>();
 builder.Services.AddCors();
-builder.Host.RegisterAutofacModule<MainModule>();
+
+if ("DevEnv_Main" == (Environment.GetEnvironmentVariable("DevEnv") ?? ""))
+{
+    builder.Host.RegisterAutofacModule<FakeModule>();
+}
+else
+{
+    builder.Host.RegisterAutofacModule<MainModule>();
+}
 
 var app = builder.Build();
 app.UseCors(corsPolicyBuilder =>
