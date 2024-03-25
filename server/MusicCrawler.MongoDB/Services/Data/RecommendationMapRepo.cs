@@ -22,6 +22,7 @@ public class RecommendationMapRepo : IRecommendationMapRepo
             .JoinToStr(", ");
     }
 
+    // TODO: I haven't refactored this yet.
     public void AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
     {
         if (!CollectionExists(_mongoDbProvider.database, "collection1"))
@@ -45,16 +46,35 @@ public class RecommendationMapRepo : IRecommendationMapRepo
             }
 
             keyDocument.Add("relatedKeys", relatedKeysArray);
-
-            Console.WriteLine("Inserting keyDocument:" + keyDocument);
             
             collection.InsertOne(keyDocument);
         }
     }
 
+    // TODO: I haven't refactored this yet.
     public Dictionary<ArtistKey, ArtistKey[]> GetMap()
     {
-        throw new NotImplementedException();
+        var collectionName = "collection1";
+        var collection = _mongoDbProvider.database.GetCollection<BsonDocument>(collectionName);
+    
+        var map = new Dictionary<ArtistKey, ArtistKey[]>();
+
+        var filter = Builders<BsonDocument>.Filter.Empty;
+        var documents = collection.Find(filter).ToList();
+
+        foreach (var document in documents)
+        {
+            var artistKey = new ArtistKey(document["artistKey"].AsString);
+            var relatedKeysArray = document["relatedKeys"].AsBsonArray;
+            var relatedKeys = new ArtistKey[relatedKeysArray.Count];
+            for (int i = 0; i < relatedKeysArray.Count; i++)
+            {
+                relatedKeys[i] = new ArtistKey(relatedKeysArray[i].AsString);
+            }
+            map.Add(artistKey, relatedKeys);
+        }
+
+        return map;
     }
 
     private bool CollectionExists(IMongoDatabase database, string collectionName)

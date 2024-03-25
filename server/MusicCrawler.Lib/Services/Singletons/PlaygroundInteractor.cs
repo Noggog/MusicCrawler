@@ -23,7 +23,20 @@ public class PlaygroundInteractor
                 }
             }
         });
+        
+        _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
+        {
+            {
+                new ArtistKey("artistName3"),
+                new[]
+                {
+                    new ArtistKey("artistName4"),
+                    new ArtistKey("artistName5"),
+                }
+            }
+        });
 
-        return _recommendationMapRepo.GetEntireCollectionAsString("collection1");
+        return _recommendationMapRepo.GetMap()
+            .ToLogStr();
     }
 }
