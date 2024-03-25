@@ -1,19 +1,15 @@
-﻿using MongoDB.Bson;
-using MongoDB.Driver;
-using MusicCrawler.Lib;
+﻿using MongoDB.Driver;
 
 namespace MusicCrawler.MongoDB.Services.Singletons;
 
-public class MongoDbWrapper : IRecommendationMapRepo
+public class MongoDbWrapper
 {
-    public string GetString()
-    {
-        var client = new MongoClient(Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
-        var database = client.GetDatabase("sample_mflix");
-        var collection = database.GetCollection<BsonDocument>("comments");
+    private readonly MongoClient client;
+    public readonly IMongoDatabase database;
 
-        return collection.Find(Builders<BsonDocument>.Filter.Empty).ToList()
-            .Select(x => x.ToString())
-            .JoinToStr(", ");
+    public MongoDbWrapper()
+    {
+        client = new MongoClient(Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
+        database = client.GetDatabase("sample_mflix");
     }
 }
