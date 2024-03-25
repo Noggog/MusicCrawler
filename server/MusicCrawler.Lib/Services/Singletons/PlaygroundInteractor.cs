@@ -10,19 +10,13 @@ public class PlaygroundInteractor
         var environmentString =
             Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException();
         Console.WriteLine(environmentString);
-        
+
         var client = new MongoClient(environmentString);
         var database = client.GetDatabase("sample_mflix");
         var collection = database.GetCollection<BsonDocument>("comments");
-        
 
-        return environmentString;
-
-        // var client = new MongoClient("mongodb://localhost:27017");
-        // var database = client.GetDatabase("your_database_name");
-        // var collection = database.GetCollection<BsonDocument>("your_collection_name");
-        //
-        //
-        // return collection.
+        return collection.Find(Builders<BsonDocument>.Filter.Empty).ToList()
+            .Select(x => x.ToString())
+            .JoinToStr(", ");
     }
 }

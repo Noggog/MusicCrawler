@@ -72,7 +72,7 @@ else
     container = builder.Build();
 
     var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
-    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.getString());
+    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.getString().Substring(0, 1000));
 }
 
 // TODO: Put this in some place for CLI "presenters"
