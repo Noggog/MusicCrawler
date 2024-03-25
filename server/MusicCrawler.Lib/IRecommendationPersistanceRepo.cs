@@ -1,6 +1,6 @@
 ﻿namespace MusicCrawler.Lib;
 
-public interface IRecommendationMapRepo
+public interface IRecommendationPersistanceRepo
 {
     string GetEntireCollectionAsString(string collectionName);
     Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map);

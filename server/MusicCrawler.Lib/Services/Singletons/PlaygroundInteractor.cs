@@ -2,14 +2,14 @@
 
 public class PlaygroundInteractor
 {
-    private readonly IRecommendationMapRepo _recommendationMapRepo;
+    private readonly IRecommendationPersistanceRepo _recommendationPersistanceRepo;
     private readonly RecommendationInteractor _recommendationInteractor;
 
     public PlaygroundInteractor(
-        IRecommendationMapRepo recommendationMapRepo,
+        IRecommendationPersistanceRepo recommendationPersistanceRepo,
         RecommendationInteractor recommendationInteractor)
     {
-        _recommendationMapRepo = recommendationMapRepo;
+        _recommendationPersistanceRepo = recommendationPersistanceRepo;
         _recommendationInteractor = recommendationInteractor;
     }
 

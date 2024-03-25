@@ -10,16 +10,16 @@ public class RecommendationInteractor
 {
     private readonly IRecommendationRepo _recommendationRepo;
     private readonly ILibraryQuery _libraryQuery;
-    private readonly IRecommendationMapRepo _recommendationMapRepo;
+    private readonly IRecommendationPersistanceRepo _recommendationPersistanceRepo;
 
     public RecommendationInteractor(
         IRecommendationRepo recommendationRepo,
         ILibraryQuery libraryQuery,
-        IRecommendationMapRepo recommendationMapRepo)
+        IRecommendationPersistanceRepo recommendationPersistanceRepo)
     {
         _recommendationRepo = recommendationRepo;
         _libraryQuery = libraryQuery;
-        _recommendationMapRepo = recommendationMapRepo;
+        _recommendationPersistanceRepo = recommendationPersistanceRepo;
     }
 
     public async Task<IEnumerable<Recommendation>> Recommendations()
@@ -34,9 +34,9 @@ public class RecommendationInteractor
             recommendations
                 .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
 
-        await _recommendationMapRepo.AddToMap(newRecommendations.ToMap());
+        await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap());
 
-        return (await _recommendationMapRepo.GetMap())
+        return (await _recommendationPersistanceRepo.GetMap())
             .ToRecommendations();
     }
 }
