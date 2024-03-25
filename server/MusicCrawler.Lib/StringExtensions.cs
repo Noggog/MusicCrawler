@@ -8,4 +8,12 @@ public static class StringExtensions
     {
         return JsonConvert.DeserializeObject<T>(jsonString);
     }
+
+    public static string Truncate(this string str, int maxLength)
+    {
+        if (str == null)
+            throw new ArgumentNullException(nameof(str));
+
+        return str.Length > maxLength ? str.Substring(0, maxLength) : str;
+    }
 }

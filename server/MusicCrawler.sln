@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Tests", "Music
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Backend", "MusicCrawler.Backend\MusicCrawler.Backend.csproj", "{120BC5CF-228D-40E0-B0BD-D5370B6C55B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.MongoDB", "MusicCrawler.MongoDB\MusicCrawler.MongoDB.csproj", "{CC01E447-9B0A-4EB7-A564-F5755B5B3BF8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{120BC5CF-228D-40E0-B0BD-D5370B6C55B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{120BC5CF-228D-40E0-B0BD-D5370B6C55B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{120BC5CF-228D-40E0-B0BD-D5370B6C55B5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC01E447-9B0A-4EB7-A564-F5755B5B3BF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC01E447-9B0A-4EB7-A564-F5755B5B3BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC01E447-9B0A-4EB7-A564-F5755B5B3BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC01E447-9B0A-4EB7-A564-F5755B5B3BF8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

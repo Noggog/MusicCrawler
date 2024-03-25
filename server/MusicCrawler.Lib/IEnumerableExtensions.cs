@@ -21,4 +21,12 @@ public static class IEnumerableExtensions
         return list.OrderBy(x => random.Next())
             .Take(count);
     }
+
+    public static Dictionary<ArtistKey, ArtistKey[]> ToMap(this IEnumerable<Recommendation> list)
+    {
+        return list
+            .ToDictionary(
+                keySelector: x => x.Key,
+                elementSelector: x => x.SourceArtists);
+    }
 }

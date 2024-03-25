@@ -14,12 +14,14 @@
     <ItemGroup>
         <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="9.0.0" />
         <PackageReference Include="HotChocolate.AspNetCore" Version="13.9.0" />
+        <PackageReference Include="MongoDB.Driver" Version="2.24.0" />
         <PackageReference Include="NSubstitute" Version="5.1.0" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\MusicCrawler.Fakes\MusicCrawler.Fakes.csproj" />
         <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
+        <ProjectReference Include="..\MusicCrawler.MongoDB\MusicCrawler.MongoDB.csproj" />
         <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
         <ProjectReference Include="..\MusicCrawler.Spotify\MusicCrawler.Spotify.csproj" />
     </ItemGroup>
