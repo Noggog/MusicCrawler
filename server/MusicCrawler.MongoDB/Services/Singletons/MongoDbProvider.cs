@@ -2,14 +2,13 @@
 
 namespace MusicCrawler.MongoDB.Services.Singletons;
 
-public class MongoDbProvider
+public class MongoDbProvider : IMongoDbProvider
 {
-    private readonly MongoClient client;
-    public readonly IMongoDatabase database;
+    public IMongoDatabase database { get; }
 
     public MongoDbProvider()
     {
-        client = new MongoClient(Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
+        var client = new MongoClient(Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
         database = client.GetDatabase("sample_mflix");
     }
 }

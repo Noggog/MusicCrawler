@@ -6,9 +6,9 @@ namespace MusicCrawler.MongoDB.Services.Singletons;
 
 public class RecommendationMapRepo : IRecommendationMapRepo
 {
-    private readonly MongoDbProvider _mongoDbProvider;
+    private readonly IMongoDbProvider _mongoDbProvider;
 
-    public RecommendationMapRepo(MongoDbProvider mongoDbProvider)
+    public RecommendationMapRepo(IMongoDbProvider mongoDbProvider)
     {
         _mongoDbProvider = mongoDbProvider;
     }
