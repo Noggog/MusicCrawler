@@ -21,4 +21,14 @@ public class RecommendationMapRepo : IRecommendationMapRepo
             .Select(x => x.ToString())
             .JoinToStr(", ");
     }
+
+    public void AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Dictionary<ArtistKey, ArtistKey[]> GetMap()
+    {
+        throw new NotImplementedException();
+    }
 }
