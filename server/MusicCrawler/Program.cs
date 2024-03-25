@@ -2,6 +2,7 @@
 using MusicCrawler.Fakes;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
+using MusicCrawler.MongoDB;
 using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
@@ -11,6 +12,7 @@ using MusicCrawler.Spotify.Services.Data;
 var builder = new ContainerBuilder();
 builder.RegisterModule<LibModule>();
 builder.RegisterModule<PlexModule>();
+builder.RegisterModule<MongoDbModule>();
 builder.RegisterInstance(
     new SpotifyClientInfo(
         Id: "267c94026025449b8013ddde6d959e13",
@@ -72,7 +74,7 @@ else
     container = builder.Build();
 
     var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
-    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.getString().Substring(0, 1000));
+    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.GetString().Substring(0, 1000));
 }
 
 // TODO: Put this in some place for CLI "presenters"

@@ -1,22 +1,17 @@
-﻿using MongoDB.Bson;
-using MongoDB.Driver;
-
-namespace MusicCrawler.Lib.Services.Singletons;
+﻿namespace MusicCrawler.Lib.Services.Singletons;
 
 public class PlaygroundInteractor
 {
-    public string getString()
+    private readonly IRecommendationMapRepo _recommendationMapRepo;
+
+    public PlaygroundInteractor(
+        IRecommendationMapRepo recommendationMapRepo)
     {
-        var environmentString =
-            Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException();
-        Console.WriteLine(environmentString);
+        _recommendationMapRepo = recommendationMapRepo;
+    }
 
-        var client = new MongoClient(environmentString);
-        var database = client.GetDatabase("sample_mflix");
-        var collection = database.GetCollection<BsonDocument>("comments");
-
-        return collection.Find(Builders<BsonDocument>.Filter.Empty).ToList()
-            .Select(x => x.ToString())
-            .JoinToStr(", ");
+    public string GetString()
+    {
+        return _recommendationMapRepo.GetString();
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Autofac;
 using MusicCrawler.Lib;
+using MusicCrawler.MongoDB;
 using MusicCrawler.Plex;
 using MusicCrawler.Spotify;
 using MusicCrawler.Spotify.Inputs;
@@ -13,6 +14,7 @@ public class MainModule : Module
     {
         builder.RegisterModule<LibModule>();
         builder.RegisterModule<PlexModule>();
+        builder.RegisterModule<MongoDbModule>();
         builder.RegisterModule<SpotifyModule>();
         builder.RegisterInstance(
             new SpotifyClientInfo(
