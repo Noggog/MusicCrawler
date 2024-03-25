@@ -23,11 +23,11 @@ public class RecommendationMapRepo : IRecommendationMapRepo
     }
 
     // TODO: I haven't refactored this yet.
-    public void AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
+    public async Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
     {
         if (!CollectionExists(_mongoDbProvider.database, "collection1"))
         {
-            _mongoDbProvider.database.CreateCollection("collection1");
+            await _mongoDbProvider.database.CreateCollectionAsync("collection1");
         }
 
         var collection = _mongoDbProvider.database.GetCollection<BsonDocument>("collection1");
@@ -46,17 +46,18 @@ public class RecommendationMapRepo : IRecommendationMapRepo
             }
 
             keyDocument.Add("relatedKeys", relatedKeysArray);
-            
-            collection.InsertOne(keyDocument);
+
+            await collection.InsertOneAsync(keyDocument);
         }
     }
 
     // TODO: I haven't refactored this yet.
-    public Dictionary<ArtistKey, ArtistKey[]> GetMap()
+    // TODO: Make this async.
+    public async Task<Dictionary<ArtistKey, ArtistKey[]>> GetMap()
     {
         var collectionName = "collection1";
         var collection = _mongoDbProvider.database.GetCollection<BsonDocument>(collectionName);
-    
+
         var map = new Dictionary<ArtistKey, ArtistKey[]>();
 
         var filter = Builders<BsonDocument>.Filter.Empty;
@@ -71,6 +72,7 @@ public class RecommendationMapRepo : IRecommendationMapRepo
             {
                 relatedKeys[i] = new ArtistKey(relatedKeysArray[i].AsString);
             }
+
             map.Add(artistKey, relatedKeys);
         }
 

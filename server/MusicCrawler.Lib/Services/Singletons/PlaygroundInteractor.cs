@@ -10,9 +10,9 @@ public class PlaygroundInteractor
         _recommendationMapRepo = recommendationMapRepo;
     }
 
-    public string GetString()
+    public async Task<string> GetString()
     {
-        _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
+        await _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
         {
             {
                 new ArtistKey("artistName1"),
@@ -23,8 +23,8 @@ public class PlaygroundInteractor
                 }
             }
         });
-        
-        _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
+
+        await _recommendationMapRepo.AddToMap(new Dictionary<ArtistKey, ArtistKey[]>
         {
             {
                 new ArtistKey("artistName3"),
@@ -36,7 +36,7 @@ public class PlaygroundInteractor
             }
         });
 
-        return _recommendationMapRepo.GetMap()
+        return (await _recommendationMapRepo.GetMap())
             .ToLogStr();
     }
 }

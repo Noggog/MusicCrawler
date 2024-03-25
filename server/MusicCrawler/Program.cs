@@ -81,7 +81,7 @@ else
     container = builder.Build();
 
     var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
-    Console.WriteLine("playgroundInteractor.getString: " + playgroundInteractor.GetString().Truncate(1000));
+    Console.WriteLine("playgroundInteractor.getString: " + (await playgroundInteractor.GetString()).Truncate(1000));
 }
 
 // TODO: Put this in some place for CLI "presenters"

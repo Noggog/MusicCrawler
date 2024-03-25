@@ -31,4 +31,15 @@ public static class DictionaryExtensions
     {
         return JsonConvert.SerializeObject(dictionary, Formatting.Indented);
     }
+
+
+    public static IEnumerable<Recommendation> ToRecommendations(this Dictionary<ArtistKey, ArtistKey[]> dictionary)
+    {
+        return dictionary
+            .Select(x =>
+                new Recommendation(
+                    Key: x.Key,
+                    SourceArtists: x.Value)
+            );
+    }
 }

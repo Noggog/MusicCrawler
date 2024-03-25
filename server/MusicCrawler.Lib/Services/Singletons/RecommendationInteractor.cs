@@ -10,13 +10,16 @@ public class RecommendationInteractor
 {
     private readonly IRecommendationRepo _recommendationRepo;
     private readonly ILibraryQuery _libraryQuery;
+    private readonly IRecommendationMapRepo _recommendationMapRepo;
 
     public RecommendationInteractor(
         IRecommendationRepo recommendationRepo,
-        ILibraryQuery libraryQuery)
+        ILibraryQuery libraryQuery,
+        IRecommendationMapRepo recommendationMapRepo)
     {
         _recommendationRepo = recommendationRepo;
         _libraryQuery = libraryQuery;
+        _recommendationMapRepo = recommendationMapRepo;
     }
 
     public async Task<IEnumerable<Recommendation>> Recommendations()
@@ -27,7 +30,13 @@ public class RecommendationInteractor
             artistKeys: sourceArtists
         );
         var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.Key.ArtistName).ToHashSet();
-        return recommendations
-            .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
+        var newRecommendations =
+            recommendations
+                .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
+
+        await _recommendationMapRepo.AddToMap(newRecommendations.ToMap());
+
+        return (await _recommendationMapRepo.GetMap())
+            .ToRecommendations();
     }
 }

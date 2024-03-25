@@ -3,6 +3,6 @@
 public interface IRecommendationMapRepo
 {
     string GetEntireCollectionAsString(string collectionName);
-    void AddToMap(Dictionary<ArtistKey, ArtistKey[]> map);
-    Dictionary<ArtistKey, ArtistKey[]> GetMap();
+    Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map);
+    Task<Dictionary<ArtistKey, ArtistKey[]>> GetMap();
 }
