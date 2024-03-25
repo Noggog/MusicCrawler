@@ -8,9 +8,9 @@ public class MongoDbModule : Module
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterAssemblyTypes(typeof(MongoDbWrapper).Assembly)
+        builder.RegisterAssemblyTypes(typeof(MongoDbProvider).Assembly)
             .InNamespacesOf(
-                typeof(MongoDbWrapper))
+                typeof(MongoDbProvider))
             .AsImplementedInterfaces()
             .AsSelf()
             .SingleInstance();

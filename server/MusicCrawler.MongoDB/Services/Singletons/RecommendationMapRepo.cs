@@ -6,16 +6,16 @@ namespace MusicCrawler.MongoDB.Services.Singletons;
 
 public class RecommendationMapRepo : IRecommendationMapRepo
 {
-    private readonly MongoDbWrapper _mongoDbWrapper;
+    private readonly MongoDbProvider _mongoDbProvider;
 
-    public RecommendationMapRepo(MongoDbWrapper mongoDbWrapper)
+    public RecommendationMapRepo(MongoDbProvider mongoDbProvider)
     {
-        _mongoDbWrapper = mongoDbWrapper;
+        _mongoDbProvider = mongoDbProvider;
     }
 
     public string GetString()
     {
-        return _mongoDbWrapper.database.GetCollection<BsonDocument>("comments")
+        return _mongoDbProvider.database.GetCollection<BsonDocument>("comments")
             .Find(Builders<BsonDocument>.Filter.Empty)
             .ToList()
             .Select(x => x.ToString())
