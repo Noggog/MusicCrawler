@@ -26,12 +26,12 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
     // TODO: I haven't refactored this yet.
     public async Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
     {
-        if (!CollectionExists(_mongoDbProvider.database, "collection1"))
+        if (!CollectionExists(_mongoDbProvider.database, "recommendations"))
         {
-            await _mongoDbProvider.database.CreateCollectionAsync("collection1");
+            await _mongoDbProvider.database.CreateCollectionAsync("recommendations");
         }
 
-        var collection = _mongoDbProvider.database.GetCollection<BsonDocument>("collection1");
+        var collection = _mongoDbProvider.database.GetCollection<BsonDocument>("recommendations");
 
         foreach (var kvp in map)
         {
@@ -61,7 +61,7 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
     // TODO: Make this async.
     public async Task<Dictionary<ArtistKey, ArtistKey[]>> GetMap()
     {
-        var collectionName = "collection1";
+        var collectionName = "recommendations";
         var collection = _mongoDbProvider.database.GetCollection<BsonDocument>(collectionName);
 
         var map = new Dictionary<ArtistKey, ArtistKey[]>();
