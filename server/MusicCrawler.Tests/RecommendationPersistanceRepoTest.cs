@@ -15,11 +15,6 @@ public class RecommendationPersistanceRepoTest
         // # Given
         var containerBuilder =
             FakeBaseIocContainer.fakeBaseIocContainer();
-        containerBuilder
-            .RegisterInstance(
-                new FakeMongoDbProvider())
-            .AsImplementedInterfaces()
-            .SingleInstance();
         var dictionary =
             new Dictionary<ArtistKey, ArtistKey[]>
             {

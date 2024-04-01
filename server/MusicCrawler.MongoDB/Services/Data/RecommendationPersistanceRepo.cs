@@ -1,4 +1,5 @@
-﻿using MongoDB.Bson;
+﻿using System.Text.Json;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using MusicCrawler.Lib;
 
@@ -36,19 +37,21 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
         {
             var keyDocument = new BsonDocument
             {
-                { "artistKey", kvp.Key.ToString() }
+                {
+                    "artistKey", kvp.Key.ToJson()
+                }
             };
 
             var relatedKeysArray = new BsonArray();
             foreach (var relatedKey in kvp.Value)
             {
-                relatedKeysArray.Add(relatedKey.ToString());
+                relatedKeysArray.Add(relatedKey.ToJson());
             }
 
             keyDocument.Add("relatedKeys", relatedKeysArray);
 
             await collection.ReplaceOneAsync(
-                filter: new BsonDocument("_id", kvp.Key.ToString()),
+                filter: new BsonDocument("_id", kvp.Key.ToJson()),
                 options: new ReplaceOptions { IsUpsert = true },
                 replacement: keyDocument);
         }
@@ -68,12 +71,12 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
 
         foreach (var document in documents)
         {
-            var artistKey = new ArtistKey(document["artistKey"].AsString);
+            var artistKey = JsonSerializer.Deserialize<ArtistKey>(document["artistKey"].AsString) ?? throw new Exception($"Could not deserialize: {document["artistKey"].AsString}");
             var relatedKeysArray = document["relatedKeys"].AsBsonArray;
             var relatedKeys = new ArtistKey[relatedKeysArray.Count];
             for (int i = 0; i < relatedKeysArray.Count; i++)
             {
-                relatedKeys[i] = new ArtistKey(relatedKeysArray[i].AsString);
+                relatedKeys[i] = JsonSerializer.Deserialize<ArtistKey>(relatedKeysArray[i].AsString) ?? throw new Exception($"Could not deserialize: {relatedKeysArray[i].AsString}");
             }
 
             map.Add(artistKey, relatedKeys);

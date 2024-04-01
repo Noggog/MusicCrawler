@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.MongoDB;
 using MusicCrawler.Spotify;
@@ -12,7 +13,11 @@ public static class FakeBaseIocContainer
         ContainerBuilder builder = new ContainerBuilder();
         builder.RegisterModule<LibModule>();
         builder.RegisterModule<SpotifyDataModule>();
-        builder.RegisterModule<MongoDbModule>();
+        builder.RegisterModule<MongoDbDataModule>();
+        builder
+            .RegisterInstance(new FakeMongoDbProvider())
+            .AsImplementedInterfaces()
+            .SingleInstance();
         return builder;
     }
 }

@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using MusicCrawler.MongoDB.Services.Singletons;
+using MusicCrawler.MongoDB.Services.Environment;
 using Noggog.Autofac;
 
 namespace MusicCrawler.MongoDB;
