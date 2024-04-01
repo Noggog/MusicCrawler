@@ -1,4 +1,5 @@
 ﻿using MusicCrawler.Backend;
+using MusicCrawler.Lib.Services.Singletons;
 
 // TODO: I'm not sure if all of these settings are strictly necessary..
 var builder = WebApplication.CreateBuilder();
@@ -7,7 +8,7 @@ builder.Services.AddGraphQLServer()
     .AddQueryType<QueryType>();
 builder.Services.AddCors();
 
-if ("DevEnv_Main" == (Environment.GetEnvironmentVariable("DevEnv") ?? ""))
+if ("DevEnv_Main" == new EnvironmentVariableProvider().DevEnv())
 {
     builder.Host.RegisterAutofacModule<FakeModule>();
 }

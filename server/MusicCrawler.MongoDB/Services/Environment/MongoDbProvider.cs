@@ -1,4 +1,5 @@
-﻿using MongoDB.Driver;
+using MongoDB.Driver;
+using MusicCrawler.Lib.Services.Singletons;
 
 namespace MusicCrawler.MongoDB.Services.Environment;
 
@@ -6,9 +7,9 @@ public class MongoDbProvider : IMongoDbProvider
 {
     public IMongoDatabase database { get; }
 
-    public MongoDbProvider()
+    public MongoDbProvider(EnvironmentVariableProvider environmentVariableProvider)
     {
-        var client = new MongoClient(System.Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
+        var client = new MongoClient(environmentVariableProvider.MongoURI() ?? throw new InvalidOperationException());
         database = client.GetDatabase("sample_mflix");
     }
 }
