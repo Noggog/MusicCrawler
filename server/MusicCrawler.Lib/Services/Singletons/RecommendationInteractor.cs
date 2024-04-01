@@ -37,6 +37,10 @@ public class RecommendationInteractor
         await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap().Also(x => Console.WriteLine("Adding " + x.Count + " Recommendations")));
 
         return (await _recommendationPersistanceRepo.GetMap())
-            .ToRecommendations();
+            .Select(x =>
+                new Recommendation(
+                    Key: x.Key,
+                    SourceArtists: x.Value)
+            );
     }
 }
