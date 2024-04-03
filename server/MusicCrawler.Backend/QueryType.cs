@@ -33,6 +33,13 @@ query {
     {
         return (await recommendationInteractor.Recommendations()).ToList();
     }
+
+    // TODO: GraphQL would not accept "Unit" or nothing as a response, so I am returning a boolean that always returns true. Is there a better way?
+    public async Task<Boolean> AccumulateRecommendations([Service] RecommendationInteractor recommendationInteractor)
+    {
+        await recommendationInteractor.AccumulateRecommendations();
+        return true;
+    }
 }
 
 public class QueryType : ObjectType<Query>
@@ -44,5 +51,6 @@ public class QueryType : ObjectType<Query>
             .Type<StringType>();
 
         descriptor.Field(x => x.Recommendations(default));
+        descriptor.Field(x => x.AccumulateRecommendations(default));
     }
 }

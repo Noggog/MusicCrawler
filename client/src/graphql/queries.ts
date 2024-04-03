@@ -13,3 +13,9 @@ query {
  }
 `
 
+export const ACCUMULATE_RECOMMENDATIONS = gql`
+query {
+     accumulateRecommendations
+ }
+`
+
