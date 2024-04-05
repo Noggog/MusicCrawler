@@ -1,7 +1,9 @@
 ﻿using Autofac;
 using MusicCrawler.Fakes;
+using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
+using MusicCrawler.MongoDB;
 using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;
 using MusicCrawler.Spotify;
@@ -33,6 +35,7 @@ if (args.Length > 2 && args[2] == "ManuallyVerifyRecommendationInteractor")
 else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
@@ -43,6 +46,7 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
 else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
 
@@ -55,6 +59,7 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
 else if (args.Length > 2 && args[2] == "PrintRecommendations")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     await PrintRecommendations();
@@ -62,6 +67,7 @@ else if (args.Length > 2 && args[2] == "PrintRecommendations")
 else if (args.Length > 2 && args[2] == "PrintLibrariesAndRecentlyAdded")
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
     await PrintLibrariesAndRecentlyAdded();
@@ -69,9 +75,13 @@ else if (args.Length > 2 && args[2] == "PrintLibrariesAndRecentlyAdded")
 else
 {
     builder.RegisterModule<SpotifyModule>();
+    builder.RegisterModule<MongoDbDataModule>();
+    builder.RegisterInstance(new FakeMongoDbProvider())
+        .AsImplementedInterfaces();
     container = builder.Build();
 
-    await PrintLibrariesAndRecentlyAdded();
+    var playgroundInteractor = container.Resolve<PlaygroundInteractor>();
+    Console.WriteLine("playgroundInteractor.getString: " + (await playgroundInteractor.GetString()).Truncate(1000));
 }
 
 // TODO: Put this in some place for CLI "presenters"
