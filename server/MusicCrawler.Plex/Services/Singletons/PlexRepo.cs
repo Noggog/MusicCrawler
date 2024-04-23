@@ -24,20 +24,28 @@ public class PlexRepo : ILibraryQuery
     public async Task<ArtistMetadata[]> QueryAllArtistMetadata()
     {
         var plexLibraries = await _plexApi.GetLibraries();
-        PlexLibrary plexLibrary;
-        try
+        var preferredPlexLibrary = Environment.GetEnvironmentVariable("preferredPlexLibrary");
+        PlexLibrary? plexLibrary = null;
+        if (preferredPlexLibrary == null)
         {
-            plexLibrary =
-                plexLibraries
-                    .First(it => string.Equals(it.Title, Environment.GetEnvironmentVariable("preferredPlexLibrary") ?? throw new InvalidOperationException()))
-                    .Let(it => it ?? throw new Exception("Could not find preferredPlexLibrary in plexLibraries:" + plexLibraries.JoinToStr()))
-                    .Also(it => Console.WriteLine("Successfully found preferred plexLibrary:" + it.Title));
+            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because preferredPlexLibrary was null");
         }
-        catch (Exception e)
+        else if (plexLibraries.FirstOrDefault(it => string.Equals(it.Title, preferredPlexLibrary)) == null)
         {
-            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because:\n" + e);
+            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because plexLibraries.FirstOrDefault was null");
+        }
+        else
+        {
+            plexLibrary = plexLibraries.First(it => string.Equals(it.Title, preferredPlexLibrary));
+            Console.WriteLine("Successfully found preferred plexLibrary:" + plexLibrary.Title);
+        }
+
+        if (plexLibrary == null)
+        {
             plexLibrary = plexLibraries.Where(it => it.Type == "artist").TakeRandomly(1).First();
+            Console.WriteLine("Fallback used.");
         }
+
         return (await _plexApi.GetMusicArtists(plexLibrary.Key))
             .Select(plexMusicArtist =>
                     new ArtistMetadata(
