@@ -14,4 +14,13 @@ public static class ObjectExtensions
         action(obj);
         return obj;
     }
+    
+    public static TResult Let<TInput, TResult>(this TInput obj, Func<TInput, TResult> func)
+        where TInput : class
+    {
+        if (obj == null)
+            throw new ArgumentNullException(nameof(obj));
+
+        return func(obj);
+    }
 }
