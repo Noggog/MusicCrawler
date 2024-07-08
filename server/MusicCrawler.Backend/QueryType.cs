@@ -5,30 +5,11 @@ namespace MusicCrawler.Backend;
 
 public class Query
 {
-    /**
-    * Example graphql query:
-query {
-    playground(a: 2)
-}
-     */
     public string Playground(int a)
     {
         return $"a:{a}";
     }
 
-    /**
-    * Example graphql query:
-query {
-     recommendations {
-         key {
-             artistName
-         }
-         sourceArtists {
-             artistName
-         }
-     }
- }
-     */
     public async Task<List<Recommendation>> Recommendations([Service] RecommendationInteractor recommendationInteractor)
     {
         return (await recommendationInteractor.Recommendations()).ToList();

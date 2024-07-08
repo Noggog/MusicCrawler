@@ -2,7 +2,7 @@
 
 // TODO: I'm not sure if all of these settings are strictly necessary..
 var builder = WebApplication.CreateBuilder();
-builder.Services.AddGraphQLServer()
+builder.Services.AddGraphQLServer("gql")
     .ModifyRequestOptions(o => { o.IncludeExceptionDetails = true; })
     .AddQueryType<QueryType>();
 builder.Services.AddCors();
@@ -24,6 +24,10 @@ app.UseCors(corsPolicyBuilder =>
         .AllowAnyHeader();
 });
 app.UseRouting();
-app.MapGraphQL();
+app.MapGraphQL("/gql", "gql")
+    .WithOptions(new()
+    {
+        Tool = { Enable = true }
+    });
 app.MapBananaCakePop();
 app.Run();
