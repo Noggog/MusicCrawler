@@ -38,7 +38,7 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
             var keyDocument = new BsonDocument
             {
                 {
-                    "artistKey", kvp.Key.ToJson()
+                    Keys.ArtistKey, kvp.Key.ToJson()
                 }
             };
 
@@ -48,7 +48,7 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
                 relatedKeysArray.Add(relatedKey.ToJson());
             }
 
-            keyDocument.Add("relatedKeys", relatedKeysArray);
+            keyDocument.Add(Keys.SourceArtists, relatedKeysArray);
 
             await collection.ReplaceOneAsync(
                 filter: new BsonDocument("_id", kvp.Key.ToJson()),
@@ -71,8 +71,8 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
 
         foreach (var document in documents)
         {
-            var artistKey = JsonSerializer.Deserialize<ArtistKey>(document["artistKey"].AsString) ?? throw new Exception($"Could not deserialize: {document["artistKey"].AsString}");
-            var relatedKeysArray = document["relatedKeys"].AsBsonArray;
+            var artistKey = JsonSerializer.Deserialize<ArtistKey>(document[Keys.ArtistKey].AsString) ?? throw new Exception($"Could not deserialize: {document[Keys.ArtistKey].AsString}");
+            var relatedKeysArray = document[Keys.SourceArtists].AsBsonArray;
             var relatedKeys = new ArtistKey[relatedKeysArray.Count];
             for (int i = 0; i < relatedKeysArray.Count; i++)
             {
