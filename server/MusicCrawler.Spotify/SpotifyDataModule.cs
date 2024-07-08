@@ -8,9 +8,9 @@ public class SpotifyDataModule : Module
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterAssemblyTypes(typeof(SpotifyRepo).Assembly)
+        builder.RegisterAssemblyTypes(typeof(SpotifyProvider).Assembly)
             .InNamespacesOf(
-                typeof(SpotifyRepo))
+                typeof(SpotifyProvider))
             .AsImplementedInterfaces()
             .AsSelf()
             .SingleInstance();

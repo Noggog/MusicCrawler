@@ -8,11 +8,11 @@ namespace MusicCrawler.Spotify.Services.Data;
  * requirements:
  *      https://docs.google.com/document/d/1mKoThanmaFHvZXRKpsoGgsvToyE7HyI1lqf1iSG3hkg/edit#heading=h.4fw8ke4bldgf
  */
-public class SpotifyRepo : IRecommendationRepo
+public class SpotifyProvider : IRecommendationProvider
 {
     private readonly ISpotifyApi _spotifyApi;
 
-    public SpotifyRepo(ISpotifyApi spotifyApi)
+    public SpotifyProvider(ISpotifyApi spotifyApi)
     {
         _spotifyApi = spotifyApi;
     }

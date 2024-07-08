@@ -23,7 +23,7 @@ public class RecommendationInteractorTest
             .SingleInstance();
         containerBuilder
             .RegisterInstance(
-                new FakeRecommendationRepo(
+                new FakeRecommendationProvider(
                     sourceArtistToRecommendedArtistDict: new Dictionary<ArtistKey, ArtistKey[]>
                     {
                         {

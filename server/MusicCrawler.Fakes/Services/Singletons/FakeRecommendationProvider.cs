@@ -2,11 +2,11 @@ using MusicCrawler.Lib;
 
 namespace MusicCrawler.Fakes.Services.Singletons;
 
-public class FakeRecommendationRepo : IRecommendationRepo
+public class FakeRecommendationProvider : IRecommendationProvider
 {
     private readonly Dictionary<ArtistKey, ArtistKey[]> _sourceArtistToRecommendedArtistDict;
 
-    public FakeRecommendationRepo(Dictionary<ArtistKey, ArtistKey[]> sourceArtistToRecommendedArtistDict)
+    public FakeRecommendationProvider(Dictionary<ArtistKey, ArtistKey[]> sourceArtistToRecommendedArtistDict)
     {
         _sourceArtistToRecommendedArtistDict = sourceArtistToRecommendedArtistDict;
     }

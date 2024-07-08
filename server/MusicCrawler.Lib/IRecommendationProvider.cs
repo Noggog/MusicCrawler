@@ -3,7 +3,7 @@ namespace MusicCrawler.Lib;
 /// <summary>
 /// Interface for retrieving recommendations, given specific information
 /// </summary>
-public interface IRecommendationRepo
+public interface IRecommendationProvider
 {
     Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys);
 }

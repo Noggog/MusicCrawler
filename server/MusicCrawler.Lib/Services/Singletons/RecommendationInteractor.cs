@@ -8,16 +8,16 @@ namespace MusicCrawler.Lib.Services.Singletons;
  */
 public class RecommendationInteractor
 {
-    private readonly IRecommendationRepo _recommendationRepo;
+    private readonly IRecommendationProvider _recommendationProvider;
     private readonly ILibraryQuery _libraryQuery;
     private readonly IRecommendationPersistanceRepo _recommendationPersistanceRepo;
 
     public RecommendationInteractor(
-        IRecommendationRepo recommendationRepo,
+        IRecommendationProvider recommendationProvider,
         ILibraryQuery libraryQuery,
         IRecommendationPersistanceRepo recommendationPersistanceRepo)
     {
-        _recommendationRepo = recommendationRepo;
+        _recommendationProvider = recommendationProvider;
         _libraryQuery = libraryQuery;
         _recommendationPersistanceRepo = recommendationPersistanceRepo;
     }
@@ -26,7 +26,7 @@ public class RecommendationInteractor
     {
         var currentPlexLibrary = await _libraryQuery.QueryAllArtistMetadata();
         var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.ArtistKey).ToList();
-        var recommendations = await _recommendationRepo.RecommendArtistsFrom(
+        var recommendations = await _recommendationProvider.RecommendArtistsFrom(
             artistKeys: sourceArtists
         );
         var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.ArtistKey.ArtistName).ToHashSet();

@@ -38,9 +38,9 @@ else if (args.Length > 2 && args[2] == "ManuallyVerifySpotifyApi")
     builder.RegisterModule<MongoDbModule>();
     container = builder.Build();
 
-    SpotifyRepo spotifyRepo = container.Resolve<SpotifyRepo>();
+    SpotifyProvider spotifyProvider = container.Resolve<SpotifyProvider>();
     // var result = await spotifyRepo.Recommendations("4NHQUGzhtTLFvgF5SZesLK");
-    var result = await spotifyRepo.GetArtistId("Ghengis Tron");
+    var result = await spotifyProvider.GetArtistId("Ghengis Tron");
     Console.WriteLine($"result: {result}");
 }
 else if (args.Length > 2 && args[2] == "ManuallyVerifyPlexApi")
