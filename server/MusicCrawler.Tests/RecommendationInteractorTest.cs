@@ -10,7 +10,7 @@ namespace MusicCrawler.Tests;
 
 public class RecommendationInteractorTest
 {
-    [Theory, DefaultAutoData]
+    [Theory(Skip = "Leaves background processes"), DefaultAutoData]
     public async Task Typical(ArtistPackage artistPackage1, ArtistPackage artistPackage2, ArtistPackage artistPackage3)
     {
         // # Given

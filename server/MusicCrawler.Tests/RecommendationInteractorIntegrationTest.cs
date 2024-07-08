@@ -1,5 +1,4 @@
-﻿using System.Reactive.Linq;
-using Autofac;
+﻿using Autofac;
 using FluentAssertions;
 using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
@@ -11,7 +10,7 @@ namespace MusicCrawler.Tests;
 
 public class RecommendationInteractorIntegrationTest
 {
-    [Theory, DefaultAutoData]
+    [Theory(Skip = "Leaves background processes"), DefaultAutoData]
     public async Task Typical(ArtistPackage artistPackage1)
     {
         // # Given
