@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MusicCrawler.Lib;
@@ -24,7 +24,7 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
     }
 
     // TODO: I haven't refactored this yet.
-    public async Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map)
+    public async Task AddRecommendations(IEnumerable<Recommendation> recommendations)
     {
         if (!CollectionExists(_mongoDbProvider.database, "recommendations"))
         {
@@ -33,41 +33,39 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
 
         var collection = _mongoDbProvider.database.GetCollection<BsonDocument>("recommendations");
 
-        foreach (var kvp in map)
+        foreach (var rec in recommendations)
         {
             var keyDocument = new BsonDocument
             {
                 {
-                    Keys.ArtistKey, kvp.Key.ToJson()
+                    Keys.ArtistKey, rec.ArtistKey.ToJson()
                 }
             };
 
-            var relatedKeysArray = new BsonArray();
-            foreach (var relatedKey in kvp.Value)
+            var sourceArtists = new BsonArray();
+            foreach (var sourceArtist in rec.SourceArtists)
             {
-                relatedKeysArray.Add(relatedKey.ToJson());
+                sourceArtists.Add(sourceArtist.ToJson());
             }
 
-            keyDocument.Add(Keys.SourceArtists, relatedKeysArray);
+            keyDocument.Add(Keys.SourceArtists, sourceArtists);
 
             await collection.ReplaceOneAsync(
-                filter: new BsonDocument("_id", kvp.Key.ToJson()),
+                filter: new BsonDocument("_id", rec.ArtistKey.ToJson()),
                 options: new ReplaceOptions { IsUpsert = true },
                 replacement: keyDocument);
         }
     }
 
-    // TODO: I haven't refactored this yet.
-    // TODO: Make this async.
-    public async Task<Dictionary<ArtistKey, ArtistKey[]>> GetMap()
+    public async Task<IEnumerable<Recommendation>> GetRecommendations()
     {
         var collectionName = "recommendations";
         var collection = _mongoDbProvider.database.GetCollection<BsonDocument>(collectionName);
 
-        var map = new Dictionary<ArtistKey, ArtistKey[]>();
+        var recommendations = new List<Recommendation>();
 
         var filter = Builders<BsonDocument>.Filter.Empty;
-        var documents = collection.Find(filter).ToList();
+        var documents = (await collection.FindAsync(filter)).ToList();
 
         foreach (var document in documents)
         {
@@ -79,10 +77,10 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
                 relatedKeys[i] = JsonSerializer.Deserialize<ArtistKey>(relatedKeysArray[i].AsString) ?? throw new Exception($"Could not deserialize: {relatedKeysArray[i].AsString}");
             }
 
-            map.Add(artistKey, relatedKeys);
+            recommendations.Add(new Recommendation(artistKey, relatedKeys));
         }
 
-        return map;
+        return recommendations;
     }
 
     private bool CollectionExists(IMongoDatabase database, string collectionName)

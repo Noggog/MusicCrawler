@@ -1,4 +1,4 @@
-﻿namespace MusicCrawler.Lib;
+namespace MusicCrawler.Lib;
 
 public static class IEnumerableExtensions
 {
@@ -20,13 +20,5 @@ public static class IEnumerableExtensions
         Random random = new Random();
         return list.OrderBy(x => random.Next())
             .Take(count);
-    }
-
-    public static Dictionary<ArtistKey, ArtistKey[]> ToMap(this IEnumerable<Recommendation> list)
-    {
-        return list
-            .ToDictionary(
-                keySelector: x => x.ArtistKey,
-                elementSelector: x => x.SourceArtists);
     }
 }

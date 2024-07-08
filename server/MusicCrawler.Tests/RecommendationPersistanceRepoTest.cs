@@ -1,4 +1,4 @@
-﻿using Autofac;
+using Autofac;
 using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.MongoDB.Services.Data;
@@ -15,24 +15,23 @@ public class RecommendationPersistanceRepoTest
         // # Given
         var containerBuilder =
             FakeBaseIocContainer.fakeBaseIocContainer();
-        var dictionary =
-            new Dictionary<ArtistKey, ArtistKey[]>
+        var recommendations =
+            new List<Recommendation>
             {
-                {
+                new Recommendation(
                     artistPackage1.Metadata.ArtistKey,
                     new[]
                     {
                         artistPackage2.Metadata.ArtistKey,
                         artistPackage3.Metadata.ArtistKey,
-                    }
-                }
+                    })
             };
         var sut =
             containerBuilder.Build().Resolve<RecommendationPersistanceRepo>();
         // # When
-        await sut.AddToMap(dictionary);
-        await sut.AddToMap(dictionary);
-        await sut.GetMap();
+        await sut.AddRecommendations(recommendations);
+        await sut.AddRecommendations(recommendations);
+        await sut.GetRecommendations();
         // # Then
         // There should be no exception
     }

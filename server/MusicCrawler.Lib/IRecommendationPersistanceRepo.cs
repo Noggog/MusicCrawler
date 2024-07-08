@@ -2,6 +2,6 @@
 
 public interface IRecommendationPersistanceRepo
 {
-    Task AddToMap(Dictionary<ArtistKey, ArtistKey[]> map);
-    Task<Dictionary<ArtistKey, ArtistKey[]>> GetMap();
+    Task AddRecommendations(IEnumerable<Recommendation> recommendations);
+    Task<IEnumerable<Recommendation>> GetRecommendations();
 }

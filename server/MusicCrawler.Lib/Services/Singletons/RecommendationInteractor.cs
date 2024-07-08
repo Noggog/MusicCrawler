@@ -32,15 +32,17 @@ public class RecommendationInteractor
         var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.ArtistKey.ArtistName).ToHashSet();
         var newRecommendations =
             recommendations
-                .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.ArtistKey.ArtistName));
+                .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.ArtistKey.ArtistName))
+                .ToArray();
+        Console.WriteLine($"Adding {newRecommendations.Length} Recommendations");
+            
+        await _recommendationPersistanceRepo.AddRecommendations(newRecommendations);
 
-        await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap().Also(x => Console.WriteLine("Adding " + x.Count + " Recommendations")));
-
-        return (await _recommendationPersistanceRepo.GetMap())
+        return (await _recommendationPersistanceRepo.GetRecommendations())
             .Select(x =>
                 new Recommendation(
-                    ArtistKey: x.Key,
-                    SourceArtists: x.Value)
+                    ArtistKey: x.ArtistKey,
+                    SourceArtists: x.SourceArtists)
             );
     }
 }
