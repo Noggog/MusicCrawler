@@ -25,21 +25,21 @@ public class RecommendationInteractor
     public async Task<IEnumerable<Recommendation>> Recommendations()
     {
         var currentPlexLibrary = await _libraryQuery.QueryAllArtistMetadata();
-        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.Key).ToList();
+        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.ArtistKey).ToList();
         var recommendations = await _recommendationRepo.RecommendArtistsFrom(
             artistKeys: sourceArtists
         );
-        var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.Key.ArtistName).ToHashSet();
+        var artistNamesFromLibrary = currentPlexLibrary.Select(it => it.ArtistKey.ArtistName).ToHashSet();
         var newRecommendations =
             recommendations
-                .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.Key.ArtistName));
+                .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.ArtistKey.ArtistName));
 
         await _recommendationPersistanceRepo.AddToMap(newRecommendations.ToMap().Also(x => Console.WriteLine("Adding " + x.Count + " Recommendations")));
 
         return (await _recommendationPersistanceRepo.GetMap())
             .Select(x =>
                 new Recommendation(
-                    Key: x.Key,
+                    ArtistKey: x.Key,
                     SourceArtists: x.Value)
             );
     }

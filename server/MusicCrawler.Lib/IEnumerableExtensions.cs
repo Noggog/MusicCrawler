@@ -26,7 +26,7 @@ public static class IEnumerableExtensions
     {
         return list
             .ToDictionary(
-                keySelector: x => x.Key,
+                keySelector: x => x.ArtistKey,
                 elementSelector: x => x.SourceArtists);
     }
 }

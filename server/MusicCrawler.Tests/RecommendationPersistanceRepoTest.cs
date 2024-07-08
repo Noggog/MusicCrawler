@@ -19,11 +19,11 @@ public class RecommendationPersistanceRepoTest
             new Dictionary<ArtistKey, ArtistKey[]>
             {
                 {
-                    artistPackage1.Metadata.Key,
+                    artistPackage1.Metadata.ArtistKey,
                     new[]
                     {
-                        artistPackage2.Metadata.Key,
-                        artistPackage3.Metadata.Key,
+                        artistPackage2.Metadata.ArtistKey,
+                        artistPackage3.Metadata.ArtistKey,
                     }
                 }
             };

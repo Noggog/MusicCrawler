@@ -27,11 +27,11 @@ public class RecommendationInteractorTest
                     sourceArtistToRecommendedArtistDict: new Dictionary<ArtistKey, ArtistKey[]>
                     {
                         {
-                            artistPackage1.Metadata.Key,
+                            artistPackage1.Metadata.ArtistKey,
                             new[]
                             {
-                                artistPackage2.Metadata.Key,
-                                artistPackage3.Metadata.Key,
+                                artistPackage2.Metadata.ArtistKey,
+                                artistPackage3.Metadata.ArtistKey,
                             }
                         }
                     }))
@@ -50,10 +50,10 @@ public class RecommendationInteractorTest
                 new Recommendation[]
                 {
                     new Recommendation(
-                        Key: artistPackage3.Metadata.Key,
+                        ArtistKey: artistPackage3.Metadata.ArtistKey,
                         SourceArtists: new[]
                         {
-                            artistPackage1.Metadata.Key
+                            artistPackage1.Metadata.ArtistKey
                         }
                     )
                 }.ToJson());

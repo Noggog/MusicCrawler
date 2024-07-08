@@ -28,7 +28,7 @@ public class PlexRepo : ILibraryQuery
         return (await _plexApi.GetMusicArtists(plexLibrary.Key))
             .Select(plexMusicArtist =>
                     new ArtistMetadata(
-                        Key: new ArtistKey(plexMusicArtist.Title),
+                        ArtistKey: new ArtistKey(plexMusicArtist.Title),
                         ArtistImageUrl: null) // TODO: Shouldn't just be null
             )
             .ToArray();

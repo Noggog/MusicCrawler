@@ -40,27 +40,27 @@ public class RecommendationInteractorIntegrationTest
                 new Recommendation[]
                 {
                     new Recommendation(
-                        Key: new ArtistKey(
+                        ArtistKey: new ArtistKey(
                             ArtistName: "Flagboy Giz"),
                         SourceArtists: new[]
                         {
-                            artistPackage1.Metadata.Key
+                            artistPackage1.Metadata.ArtistKey
                         }
                     ),
                     new Recommendation(
-                        Key: new ArtistKey(
+                        ArtistKey: new ArtistKey(
                             ArtistName: "The Wild Tchoupitoulas"),
                         SourceArtists: new[]
                         {
-                            artistPackage1.Metadata.Key
+                            artistPackage1.Metadata.ArtistKey
                         }
                     ),
                     new Recommendation(
-                        Key: new ArtistKey(
+                        ArtistKey: new ArtistKey(
                             ArtistName: "Lord Kossity"),
                         SourceArtists: new[]
                         {
-                            artistPackage1.Metadata.Key
+                            artistPackage1.Metadata.ArtistKey
                         }
                     )
                 }.ToJson());

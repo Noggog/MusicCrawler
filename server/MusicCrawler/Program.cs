@@ -89,7 +89,7 @@ async Task PrintRecommendations()
 {
     RecommendationInteractor recommendationInteractor = container.Resolve<RecommendationInteractor>();
     var recommendations = await recommendationInteractor.Recommendations();
-    Console.WriteLine($"Recommendations\n-{recommendations.Select(recommendation => $"{recommendation.Key.ArtistName}. Recommended from:{recommendation.SourceArtists.Select(x => x.ArtistName).JoinToStr(", ")}").JoinToStr("\n-")}");
+    Console.WriteLine($"Recommendations\n-{recommendations.Select(recommendation => $"{recommendation.ArtistKey.ArtistName}. Recommended from:{recommendation.SourceArtists.Select(x => x.ArtistName).JoinToStr(", ")}").JoinToStr("\n-")}");
 }
 
 
