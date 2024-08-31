@@ -6,7 +6,7 @@ using MusicCrawler.Lib.Services.Singletons;
 using Noggog.Testing.AutoFixture;
 using Xunit;
 
-namespace MusicCrawler.Tests;
+namespace MusicCrawler.Tests.IntegrationTests;
 
 public class RecommendationInteractorTest
 {

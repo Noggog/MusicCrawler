@@ -1,11 +1,10 @@
 using Autofac;
-using MusicCrawler.Fakes.Services.Singletons;
 using MusicCrawler.Lib;
 using MusicCrawler.MongoDB.Services.Data;
 using Noggog.Testing.AutoFixture;
 using Xunit;
 
-namespace MusicCrawler.Tests;
+namespace MusicCrawler.Tests.IntegrationTests;
 
 public class RecommendationPersistanceRepoTest
 {
