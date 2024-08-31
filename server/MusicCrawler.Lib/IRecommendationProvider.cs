@@ -5,5 +5,6 @@ namespace MusicCrawler.Lib;
 /// </summary>
 public interface IRecommendationProvider
 {
+    Task<Recommendation[]> RecommendArtistsFrom(ArtistKey artistKey);
     Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys);
 }

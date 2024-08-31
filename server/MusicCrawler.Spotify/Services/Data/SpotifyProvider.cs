@@ -31,9 +31,20 @@ public class SpotifyProvider : IRecommendationProvider
             .Id;
     }
 
-    public Task<IEnumerable<ArtistKey>> RecommendArtistsFrom(ArtistKey artist)
+    public async Task<Recommendation[]> RecommendArtistsFrom(ArtistKey artistKey)
     {
-        throw new NotImplementedException();
+        var artistId = await GetArtistId(artistKey.ArtistName);
+        var recommendedArtistsDto = await _spotifyApi.Recommendations(token: await _spotifyApi.NonUserOAuthToken(), artistId);
+        var recommendedArtists = recommendedArtistsDto.Tracks.SelectMany(track => track.Artists);
+
+        Dictionary<ArtistKey, List<ArtistKey>> returningDictionary = new();
+        foreach (var recommendedArtist in recommendedArtists)
+        {
+            returningDictionary.GetOrAdd(new ArtistKey(recommendedArtist.Name))
+                .Add(artistKey);
+        }
+        
+        return returningDictionary.Select(x => new Recommendation(x.Key, x.Value.ToArray())).ToArray();
     }
 
     public async Task<Recommendation[]> RecommendArtistsFrom(IEnumerable<ArtistKey> artistKeys)

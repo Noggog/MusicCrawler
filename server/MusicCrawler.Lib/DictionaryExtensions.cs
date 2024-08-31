@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Noggog;
+﻿using Noggog;
 
 namespace MusicCrawler.Lib;
 
@@ -12,23 +11,15 @@ public static class DictionaryExtensions
     {
         var inverseDictionary = new Dictionary<TKey, List<TValue>>();
 
-        foreach (var key in originalDictionary.Keys)
+        foreach (var kv in originalDictionary)
         {
-            if (originalDictionary.TryGetValue(key, out var values))
+            foreach (var value in kv.Value)
             {
-                foreach (var value in values)
-                {
-                    inverseDictionary.GetOrAdd(value)
-                        .Add(key);
-                }
+                inverseDictionary.GetOrAdd(value)
+                    .Add(kv.Key);
             }
         }
 
         return inverseDictionary;
-    }
-
-    public static string ToLogStr(this Dictionary<ArtistKey, ArtistKey[]> dictionary)
-    {
-        return JsonConvert.SerializeObject(dictionary, Formatting.Indented);
     }
 }
