@@ -9,7 +9,7 @@ public static class IEnumerableExtensions
     }
 
     // TODO: This might be unnecessary because it might already exist under a different name.
-    public static string JoinToStr<T>(this IEnumerable<T> enumerable, string delimiter)
+    public static string JoinToStr<T>(this IEnumerable<T> enumerable, string delimiter = ", ")
     {
         var x = enumerable.Select(x => x?.ToString());
         return String.Join(delimiter, x);
