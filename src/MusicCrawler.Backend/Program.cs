@@ -21,12 +21,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapDefaultEndpoints();
-
-app.MapGet("/artists", async (ILibraryQuery libraryQuery) =>
+app.MapGet("/artists", (ILibraryQuery libraryQuery) =>
     {
-        return await libraryQuery.QueryAllArtistMetadata();
+        return libraryQuery.QueryAllArtistMetadata();
     })
     .WithName("GetArtists");
+
+app.MapDefaultEndpoints();
 
 app.Run();

@@ -1,0 +1,43 @@
+﻿@page "/artists"
+@using MusicCrawler.Lib
+@attribute [StreamRendering]
+
+@inject ArtistApiClient ArtistApi
+
+<PageTitle>Artists</PageTitle>
+
+<h1>Artists</h1>
+
+<p>This component demonstrates showing data.</p>
+
+@if (artists == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th aria-label="Artist Name">Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var artist in artists)
+            {
+                <tr>
+                    <td>@artist.ArtistKey.ArtistName</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private ArtistMetadata[]? artists;
+
+    protected override async Task OnInitializedAsync()
+    {
+        artists = await ArtistApi.GetArtistsAsync(25);
+    }
+}

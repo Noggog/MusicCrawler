@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MusicCrawler.Backend\MusicCrawler.Backend.csproj" />
+    <ProjectReference Include="..\MusicCrawler.Frontend\MusicCrawler.Frontend.csproj" />
   </ItemGroup>
 
 </Project>
