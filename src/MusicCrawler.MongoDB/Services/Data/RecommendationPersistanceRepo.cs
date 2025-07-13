@@ -13,16 +13,7 @@ public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
     {
         _mongoDbProvider = mongoDbProvider;
     }
-
-    public string GetEntireCollectionAsString(string collectionName)
-    {
-        return _mongoDbProvider.database.GetCollection<BsonDocument>(collectionName)
-            .Find(Builders<BsonDocument>.Filter.Empty)
-            .ToList()
-            .Select(x => x.ToString())
-            .JoinToStr(", ");
-    }
-
+    
     // TODO: I haven't refactored this yet.
     public async Task AddRecommendations(IEnumerable<Recommendation> recommendations)
     {

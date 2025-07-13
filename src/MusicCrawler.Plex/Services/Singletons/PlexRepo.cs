@@ -42,7 +42,7 @@ public class PlexRepo : ILibraryQuery
 
         if (plexLibrary == null)
         {
-            plexLibrary = plexLibraries.Where(it => it.Type == "artist").TakeRandomly(1).First();
+            plexLibrary = plexLibraries.Where(it => it.Type == "artist").Take(1).First();
             Console.WriteLine("Fallback used.");
         }
 

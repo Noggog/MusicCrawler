@@ -5,6 +5,7 @@ using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Models;
 using MusicCrawler.Spotify.Services.Singletons;
+using Newtonsoft.Json;
 
 namespace MusicCrawler.Spotify.Services.Environment;
 
@@ -78,9 +79,7 @@ public class SpotifyApi : ISpotifyApi
         
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
-        return responseBody
-            .ToDto<AccessTokenResponse>()
-            ?.access_token ?? throw new NullReferenceException();
+        return JsonConvert.DeserializeObject<AccessTokenResponse>(responseBody)!.access_token;
     }
 
     /**
@@ -102,8 +101,7 @@ public class SpotifyApi : ISpotifyApi
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
         // Console.WriteLine($"--> Recommendations\n\t{responseBody}\n<--");
-        return responseBody
-            .ToDto<RecommendedArtistsDto>() ?? throw new NullReferenceException();
+        return JsonConvert.DeserializeObject<RecommendedArtistsDto>(responseBody)!;
     }
 
     /**
@@ -128,7 +126,6 @@ public class SpotifyApi : ISpotifyApi
         var responseBody = await response.Content.ReadAsStringAsync();
         // Console.WindowWidth = 200;
         // Console.WriteLine($"--> SearchArtist\n\t{responseBody}\n<--");
-        return responseBody
-            .ToDto<SearchArtistDto>() ?? throw new NullReferenceException();
+        return JsonConvert.DeserializeObject<SearchArtistDto>(responseBody)!;
     }
 }

@@ -25,7 +25,7 @@ public class RecommendationInteractor
     public async Task<IEnumerable<Recommendation>> Recommendations()
     {
         var currentPlexLibrary = await _libraryQuery.QueryAllArtistMetadata();
-        var sourceArtists = currentPlexLibrary.TakeRandomly(10).Select(x => x.ArtistKey).ToList();
+        var sourceArtists = currentPlexLibrary.Take(10).Select(x => x.ArtistKey).ToList();
         var recommendations = await _recommendationProvider.RecommendArtistsFrom(
             artistKeys: sourceArtists
         );

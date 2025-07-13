@@ -7,7 +7,7 @@ using MusicCrawler.Spotify.Inputs;
 
 namespace MusicCrawler.Backend;
 
-public class MainModule : Module
+public class MainModule : Autofac.Module
 {
     protected override void Load(ContainerBuilder builder)
     {
