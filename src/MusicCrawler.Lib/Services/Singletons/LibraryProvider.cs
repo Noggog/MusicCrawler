@@ -30,7 +30,9 @@ public class LibraryProvider : ILibraryProvider
             return JsonConvert.DeserializeObject<ArtistMetadata[]>(results)!;
         }
 
-        var ret = await _libraryQuery.QueryAllArtistMetadata();
+        var ret = (await _libraryQuery.QueryAllArtistMetadata())
+            .OrderBy(x => x.ArtistKey.ArtistName)
+            .ToArray();
         
         await _distributedCache.SetStringAsync("artistMetadata", JsonConvert.SerializeObject(ret), new DistributedCacheEntryOptions()
         {

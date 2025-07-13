@@ -10,6 +10,7 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     .WithReference(cache)
     .WaitFor(cache)
     .WithEnvironment("plexEndpoint", "https://plex.noggog.ing")
+    .WithEnvironment("preferredPlexLibrary", "Music Hub")
     .WithEnvironment("plexClientSecret", Environment.GetEnvironmentVariable("PLEX_TOKEN"));
 
 builder.AddProject<MusicCrawler_Frontend>("frontend")
