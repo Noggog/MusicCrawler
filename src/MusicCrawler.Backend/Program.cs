@@ -1,9 +1,11 @@
 ﻿using MusicCrawler.Backend;
 using MusicCrawler.Lib;
+using MusicCrawler.Lib.Services.Singletons;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("cache");
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
@@ -21,9 +23,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapGet("/artists", (ILibraryQuery libraryQuery) =>
+app.MapGet("/artists", (ILibraryProvider libraryProvider) =>
     {
-        return libraryQuery.QueryAllArtistMetadata();
+        return libraryProvider.GetAllArtistMetadata();
     })
     .WithName("GetArtists");
 

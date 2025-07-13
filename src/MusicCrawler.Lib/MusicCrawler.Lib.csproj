@@ -11,4 +11,10 @@
       <PackageReference Include="Noggog.Autofac" Version="2.73.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Reference Include="Microsoft.Extensions.Caching.Abstractions">
+        <HintPath>..\..\..\..\..\..\..\Program Files\dotnet\shared\Microsoft.AspNetCore.App\9.0.6\Microsoft.Extensions.Caching.Abstractions.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
 </Project>
