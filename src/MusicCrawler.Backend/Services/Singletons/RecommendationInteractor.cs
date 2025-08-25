@@ -12,16 +12,16 @@ public class RecommendationInteractor
 {
     private readonly IRecommendationProvider _recommendationProvider;
     private readonly ILibraryQuery _libraryQuery;
-    private readonly IRecommendationPersistanceRepo _recommendationPersistanceRepo;
+    private readonly IRecommendationPersistenceRepo _recommendationPersistenceRepo;
 
     public RecommendationInteractor(
         IRecommendationProvider recommendationProvider,
         ILibraryQuery libraryQuery,
-        IRecommendationPersistanceRepo recommendationPersistanceRepo)
+        IRecommendationPersistenceRepo recommendationPersistenceRepo)
     {
         _recommendationProvider = recommendationProvider;
         _libraryQuery = libraryQuery;
-        _recommendationPersistanceRepo = recommendationPersistanceRepo;
+        _recommendationPersistenceRepo = recommendationPersistenceRepo;
     }
 
     public async Task<IEnumerable<Recommendation>> Recommendations()
@@ -38,9 +38,9 @@ public class RecommendationInteractor
                 .ToArray();
         Console.WriteLine($"Adding {newRecommendations.Length} Recommendations");
             
-        await _recommendationPersistanceRepo.AddRecommendations(newRecommendations);
+        await _recommendationPersistenceRepo.AddRecommendations(newRecommendations);
 
-        return (await _recommendationPersistanceRepo.GetRecommendations())
+        return (await _recommendationPersistenceRepo.GetRecommendations())
             .Select(x =>
                 new Recommendation(
                     ArtistKey: x.ArtistKey,

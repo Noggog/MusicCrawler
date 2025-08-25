@@ -8,9 +8,9 @@ public class MongoDbDataModule : Module
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterAssemblyTypes(typeof(RecommendationPersistanceRepo).Assembly)
+        builder.RegisterAssemblyTypes(typeof(RecommendationPersistenceRepo).Assembly)
             .InNamespacesOf(
-                typeof(RecommendationPersistanceRepo))
+                typeof(RecommendationPersistenceRepo))
             .AsImplementedInterfaces()
             .AsSelf()
             .SingleInstance();

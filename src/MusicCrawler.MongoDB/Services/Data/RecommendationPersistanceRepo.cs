@@ -5,11 +5,11 @@ using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.MongoDB.Services.Data;
 
-public class RecommendationPersistanceRepo : IRecommendationPersistanceRepo
+public class RecommendationPersistenceRepo : IRecommendationPersistenceRepo
 {
     private readonly IMongoDbProvider _mongoDbProvider;
 
-    public RecommendationPersistanceRepo(IMongoDbProvider mongoDbProvider)
+    public RecommendationPersistenceRepo(IMongoDbProvider mongoDbProvider)
     {
         _mongoDbProvider = mongoDbProvider;
     }
