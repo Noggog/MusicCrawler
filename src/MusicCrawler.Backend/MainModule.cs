@@ -1,9 +1,10 @@
-﻿using Autofac;
-using MusicCrawler.Lib;
+using Autofac;
+using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.MongoDB;
 using MusicCrawler.Plex;
 using MusicCrawler.Spotify;
 using MusicCrawler.Spotify.Inputs;
+using Noggog.Autofac;
 
 namespace MusicCrawler.Backend;
 
@@ -11,7 +12,6 @@ public class MainModule : Autofac.Module
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterModule<LibModule>();
         builder.RegisterModule<PlexModule>();
         builder.RegisterModule<MongoDbModule>();
         builder.RegisterModule<SpotifyModule>();
@@ -24,5 +24,12 @@ public class MainModule : Autofac.Module
         builder.RegisterInstance(
             new PlexClientInfo(Environment.GetEnvironmentVariable("plexClientSecret") ?? throw new InvalidOperationException()));
         builder.RegisterType<HttpClient>().AsSelf().SingleInstance();
+        
+        builder.RegisterAssemblyTypes(typeof(LibraryProvider).Assembly)
+            .InNamespacesOf(
+                typeof(LibraryProvider))
+            .AsImplementedInterfaces()
+            .AsSelf()
+            .SingleInstance();
     }
 }

@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using MusicCrawler.Spotify.Services.Environment;
+using MusicCrawler.Spotify.Services;
 using Noggog.Autofac;
 
 namespace MusicCrawler.Spotify;

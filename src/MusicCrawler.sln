@@ -1,10 +1,8 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36212.18
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Lib", "MusicCrawler.Lib\MusicCrawler.Lib.csproj", "{578076C6-249D-4707-9491-29A7CA2893FB}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Spotify", "MusicCrawler.Spotify\MusicCrawler.Spotify.csproj", "{B3AE2A18-13DF-40E5-9F44-56147F9A7DBF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Plex", "MusicCrawler.Plex\MusicCrawler.Plex.csproj", "{D1A6E493-39A1-4F38-9A3F-151BA9988B28}"
@@ -29,10 +27,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{578076C6-249D-4707-9491-29A7CA2893FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{578076C6-249D-4707-9491-29A7CA2893FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{578076C6-249D-4707-9491-29A7CA2893FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{578076C6-249D-4707-9491-29A7CA2893FB}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B3AE2A18-13DF-40E5-9F44-56147F9A7DBF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B3AE2A18-13DF-40E5-9F44-56147F9A7DBF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3AE2A18-13DF-40E5-9F44-56147F9A7DBF}.Release|Any CPU.ActiveCfg = Release|Any CPU

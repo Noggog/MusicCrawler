@@ -1,12 +1,11 @@
 using System.Text;
 using System.Web;
-using MusicCrawler.Lib.Services.Singletons;
 using MusicCrawler.Spotify.Inputs;
 using MusicCrawler.Spotify.Models;
 using MusicCrawler.Spotify.Services.Singletons;
 using Newtonsoft.Json;
 
-namespace MusicCrawler.Spotify.Services.Environment;
+namespace MusicCrawler.Spotify.Services;
 
 /**
  * docs:

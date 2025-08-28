@@ -1,4 +1,4 @@
-﻿namespace MusicCrawler.Lib.Services.Singletons;
+﻿namespace MusicCrawler.Spotify.Services;
 
 public class RandomStringGenerator
 {

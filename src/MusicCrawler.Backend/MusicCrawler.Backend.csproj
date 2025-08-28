@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -20,7 +20,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
         <ProjectReference Include="..\MusicCrawler.MongoDB\MusicCrawler.MongoDB.csproj" />
         <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
         <ProjectReference Include="..\MusicCrawler.Spotify\MusicCrawler.Spotify.csproj" />

@@ -2,7 +2,7 @@ using MusicCrawler.Interfaces;
 using MusicCrawler.Spotify.Services.Singletons;
 using Noggog;
 
-namespace MusicCrawler.Spotify.Services.Data;
+namespace MusicCrawler.Spotify.Services;
 
 /**
  * requirements:

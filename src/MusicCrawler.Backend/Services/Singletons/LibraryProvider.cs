@@ -2,7 +2,7 @@
 using MusicCrawler.Interfaces;
 using Newtonsoft.Json;
 
-namespace MusicCrawler.Lib.Services.Singletons;
+namespace MusicCrawler.Backend.Services.Singletons;
 
 public interface ILibraryProvider
 {
