@@ -1,3 +1,5 @@
+using MusicCrawler.Interfaces;
+
 namespace MusicCrawler.Lib.Services.Singletons;
 
 /**

@@ -1,4 +1,4 @@
-﻿using MusicCrawler.Lib;
+﻿using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.Frontend;
 

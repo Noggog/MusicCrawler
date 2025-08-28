@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using MusicCrawler.Lib;
+using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.MongoDB.Services.Data;
 

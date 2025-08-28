@@ -1,4 +1,4 @@
-using MusicCrawler.Lib;
+using MusicCrawler.Interfaces;
 using MusicCrawler.Spotify.Services.Singletons;
 using Noggog;
 

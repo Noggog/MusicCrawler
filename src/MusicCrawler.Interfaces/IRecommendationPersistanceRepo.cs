@@ -1,4 +1,4 @@
-﻿namespace MusicCrawler.Lib;
+﻿namespace MusicCrawler.Interfaces;
 
 public interface IRecommendationPersistanceRepo
 {

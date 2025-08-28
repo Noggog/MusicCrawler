@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
+using MusicCrawler.Interfaces;
 using Newtonsoft.Json;
 
 namespace MusicCrawler.Lib.Services.Singletons;

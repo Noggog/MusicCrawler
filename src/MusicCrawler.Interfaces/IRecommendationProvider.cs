@@ -1,4 +1,4 @@
-namespace MusicCrawler.Lib;
+namespace MusicCrawler.Interfaces;
 
 /// <summary>
 /// Interface for retrieving recommendations, given specific information

@@ -1,5 +1,4 @@
 ﻿using MusicCrawler.Backend;
-using MusicCrawler.Lib;
 using MusicCrawler.Lib.Services.Singletons;
 
 var builder = WebApplication.CreateBuilder(args);
