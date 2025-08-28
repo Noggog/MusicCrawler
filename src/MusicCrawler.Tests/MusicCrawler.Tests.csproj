@@ -17,9 +17,4 @@
         </PackageReference>
     </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\MusicCrawler.Fakes\MusicCrawler.Fakes.csproj" />
-        <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
-    </ItemGroup>
-
 </Project>

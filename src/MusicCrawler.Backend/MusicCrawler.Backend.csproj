@@ -20,7 +20,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\MusicCrawler.Fakes\MusicCrawler.Fakes.csproj" />
         <ProjectReference Include="..\MusicCrawler.Lib\MusicCrawler.Lib.csproj" />
         <ProjectReference Include="..\MusicCrawler.MongoDB\MusicCrawler.MongoDB.csproj" />
         <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
