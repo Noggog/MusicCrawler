@@ -24,4 +24,11 @@ builder.AddProject<MusicCrawler_Frontend>("frontend")
     .WithReference(backend)
     .WaitFor(backend);
 
+
+builder.AddProject<MusicCrawler_UI>("ui")
+    .WithReference(cache)
+    .WaitFor(cache)
+    .WithReference(backend)
+    .WaitFor(backend);
+
 builder.Build().Run();

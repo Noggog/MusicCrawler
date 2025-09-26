@@ -1,0 +1,12 @@
+﻿@page "/seed"
+@rendermode InteractiveServer
+
+<h3>Live Input Example</h3>
+
+<input type="text" @bind="textValue" @bind:event="oninput" />
+
+<p>You typed: @textValue</p>
+
+@code {
+    private string textValue = string.Empty;
+}

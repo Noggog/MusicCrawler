@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Frontend", "Mu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.Interfaces", "MusicCrawler.Interfaces\MusicCrawler.Interfaces.csproj", "{45242A7F-9AFD-4385-B9E2-527E400E98B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MusicCrawler.UI", "MusicCrawler.UI\MusicCrawler.UI.csproj", "{4C609A40-41F4-4ABD-AAF1-A54208869A8B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,10 @@ Global
 		{45242A7F-9AFD-4385-B9E2-527E400E98B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{45242A7F-9AFD-4385-B9E2-527E400E98B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{45242A7F-9AFD-4385-B9E2-527E400E98B5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4C609A40-41F4-4ABD-AAF1-A54208869A8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C609A40-41F4-4ABD-AAF1-A54208869A8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4C609A40-41F4-4ABD-AAF1-A54208869A8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4C609A40-41F4-4ABD-AAF1-A54208869A8B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.WebUtilities;
 using MusicCrawler.Interfaces;
 
-namespace MusicCrawler.Frontend;
+namespace MusicCrawler.UI;
 
 public class ArtistApiClient(HttpClient httpClient)
 {

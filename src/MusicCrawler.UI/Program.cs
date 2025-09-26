@@ -1,5 +1,5 @@
-using MusicCrawler.Frontend;
-using MusicCrawler.Frontend.Components;
+using MusicCrawler.UI;
+using MusicCrawler.UI.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
