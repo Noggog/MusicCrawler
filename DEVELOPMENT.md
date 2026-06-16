@@ -10,7 +10,7 @@ MusicCrawler is a .NET 9.0 Aspire distributed application that crawls music libr
 
 - **AppHost**: Aspire orchestration host that manages the distributed application lifecycle and configures Redis cache and MongoDB
 - **MusicCrawler.Backend**: ASP.NET Core Web API that serves artist data via REST endpoints
-- **MusicCrawler.Frontend**: Blazor web application for the user interface
+- **MusicCrawler.Web**: Vite + React + TypeScript single-page app for the user interface (replaced the former Blazor frontend). Talks to the backend's REST endpoints; see "Frontend (React)" below.
 - **MusicCrawler.Interfaces**: Shared contracts and data models used across all modules
 - **ServiceDefaults**: Aspire shared project containing common telemetry and service discovery configuration
 
@@ -45,8 +45,28 @@ dotnet run --project src/AppHost
 
 # Run individual projects
 dotnet run --project src/MusicCrawler.Backend
-dotnet run --project src/MusicCrawler.Frontend
 ```
+
+### Frontend (React)
+
+The UI lives in `src/MusicCrawler.Web` (Vite + React + TypeScript).
+
+```bash
+# First time: install dependencies
+cd src/MusicCrawler.Web
+npm install
+
+# Normally the Aspire AppHost launches the Vite dev server for you
+# (registered via AddNpmApp("web", ...) in src/AppHost/Program.cs).
+
+# To run the SPA standalone (backend must be running separately):
+npm run dev      # dev server with hot reload
+npm run build    # type-check + production build to dist/
+```
+
+The dev server proxies `/api/*` to the backend. The backend URL comes from the
+`VITE_BACKEND_URL` env var (injected by the AppHost), falling back to the backend's default dev
+HTTP endpoint when run standalone — see `src/MusicCrawler.Web/vite.config.ts`.
 
 ### Testing
 ```bash
@@ -69,6 +89,35 @@ The application requires several environment variables:
 - **Redis**: Used for distributed caching
 - **MongoDB**: Primary data storage
 - **Plex Media Server**: Source music library
-- **Spotify API**: Music recommendation service
+- **Spotify API**: Music recommendation service (see deprecation note below)
 
 The Aspire AppHost automatically provisions Redis and MongoDB containers with persistent storage during development.
+
+## Known Issues / TODO
+
+### Spotify recommendations API is deprecated (blocks the discovery feature)
+
+On 2024-11-27 Spotify deprecated `/v1/recommendations`, `/v1/artists/{id}/related-artists`, and
+`/v1/audio-features`. Apps that did **not** already have extended quota access before that date now
+receive `403 Forbidden` on these endpoints, with no waitlist or replacement. The current
+recommendation path (`SpotifyApi.Recommendations` → `SpotifyProvider` → `RecommendationInteractor`)
+relies on `/v1/recommendations` and will not work for a newly-registered Spotify client.
+
+**Before building out the recommendation feature**, swap the similarity source.
+
+**Decision: use the Deezer API** (chosen 2026-06-15). Rationale: keyless (no API key/OAuth to
+manage), free, and its `/artist/{id}/related` endpoint returns related artists *plus* artist
+images — which also backfills the `ArtistImageUrl` the Plex path currently leaves `null`. Flow:
+resolve a Plex artist name via `GET https://api.deezer.com/search/artist?q={name}` → take the
+artist `id` → `GET https://api.deezer.com/artist/{id}/related`. No auth required.
+
+Implementation note: keep the existing `IRecommendationProvider` interface and add a
+`DeezerProvider` implementation alongside / replacing `SpotifyProvider`; register it in
+`MainModule`. (Spotify remains usable for search/metadata if ever needed, just not similarity.)
+
+Alternatives considered: Last.fm `artist.getSimilar` (name-based, but commercial-use license
+friction) and ListenBrainz (CC0 data, but requires MusicBrainz ID resolution).
+
+References:
+- https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api
+- https://developers.deezer.com/api/artist (see `/artist/{id}/related`)

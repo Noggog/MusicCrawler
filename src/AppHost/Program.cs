@@ -14,21 +14,16 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     .WaitFor(cache)
     .WithReference(database)
     .WaitFor(database)
-    .WithEnvironment("plexEndpoint", "https://plex.noggog.ing")
-    .WithEnvironment("preferredPlexLibrary", "Music Hub")
+    // All Plex settings come from env vars set at run time (override as needed).
+    .WithEnvironment("plexEndpoint", Environment.GetEnvironmentVariable("plexEndpoint") ?? "https://plex.noggog.ing")
+    .WithEnvironment("preferredPlexLibrary", Environment.GetEnvironmentVariable("preferredPlexLibrary") ?? "Music Hub")
     .WithEnvironment("plexClientSecret", Environment.GetEnvironmentVariable("PLEX_TOKEN"));
 
-builder.AddProject<MusicCrawler_Frontend>("frontend")
-    .WithReference(cache)
-    .WaitFor(cache)
+builder.AddNpmApp("web", "../MusicCrawler.Web", "dev")
     .WithReference(backend)
-    .WaitFor(backend);
-
-
-builder.AddProject<MusicCrawler_UI>("ui")
-    .WithReference(cache)
-    .WaitFor(cache)
-    .WithReference(backend)
-    .WaitFor(backend);
+    .WaitFor(backend)
+    .WithEnvironment("VITE_BACKEND_URL", backend.GetEndpoint("http"))
+    .WithHttpEndpoint(env: "PORT")
+    .WithExternalHttpEndpoints();
 
 builder.Build().Run();
