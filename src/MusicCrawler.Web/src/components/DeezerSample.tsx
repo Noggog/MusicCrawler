@@ -11,20 +11,22 @@ let currentAudio: HTMLAudioElement | null = null
 // album's tracks with `albumId`. Playback only ever starts from a user clicking a track.
 export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: number }) {
   const isAlbum = albumId != null
-  // Normalize both shapes to { link, tracks } so the render path is identical for artists and albums.
-  const { data, isPending, isError } = useQuery({
-    queryKey: isAlbum ? ['deezer-album', albumId] : ['deezer-play', artist],
-    queryFn: async () => {
-      if (isAlbum) {
-        const info = await getDeezerAlbumPlayInfo(albumId!)
-        return { link: info.albumLink, tracks: info.tracks }
-      }
-      const info = await getDeezerPlayInfo(artist!)
-      return info ? { link: info.artistLink, tracks: info.tracks } : null
-    },
-    enabled: isAlbum ? albumId != null : !!artist,
+  // Two queries, one enabled at a time. The artist query shares its cache entry (key + fetcher) with
+  // the feed avatar's image lookup, so expanding the player after the photo loaded is instant.
+  const artistQuery = useQuery({
+    queryKey: ['deezer-play', artist],
+    queryFn: () => getDeezerPlayInfo(artist!),
+    enabled: !isAlbum && !!artist,
     staleTime: 60 * 60 * 1000,
   })
+  const albumQuery = useQuery({
+    queryKey: ['deezer-album', albumId],
+    queryFn: () => getDeezerAlbumPlayInfo(albumId!),
+    enabled: isAlbum,
+    staleTime: 60 * 60 * 1000,
+  })
+  const { data, isPending, isError } = isAlbum ? albumQuery : artistQuery
+  const link = data ? ('albumLink' in data ? data.albumLink : data.artistLink) : null
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -67,7 +69,7 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
     <div className="deezer-sample">
       <div className="sample-head">
         <span className="sample-label">{isAlbum ? 'Album tracks' : 'Top tracks'}</span>
-        <a className="deezer-link" href={data.link} target="_blank" rel="noopener noreferrer">
+        <a className="deezer-link" href={link ?? undefined} target="_blank" rel="noopener noreferrer">
           Deezer ↗
         </a>
       </div>

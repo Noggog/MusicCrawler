@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { getMixedFeed, rate, refreshQueue, type Verdict } from '../api/discovery'
+import { getDeezerPlayInfo } from '../api/deezer'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
@@ -49,8 +50,18 @@ const rowKeyFor = (item: FeedItem) =>
 // The image a source supplied (artist photo or album art), or a coloured initial when missing.
 function FeedAvatar({ item, size }: { item: FeedItem; size: number }) {
   const label = item.album ?? item.artist.artistName
-  if (item.imageUrl) {
-    return <img className="disc-avatar" src={item.imageUrl} alt={label} width={size} height={size} />
+  const isArtist = !item.album
+  // Existing/library artists usually carry no photo of their own — attempt a Deezer lookup for one.
+  // Cached and shared with the sample player; falls back to the coloured initial on a Deezer miss.
+  const { data: deezer } = useQuery({
+    queryKey: ['deezer-play', item.artist.artistName],
+    queryFn: () => getDeezerPlayInfo(item.artist.artistName),
+    enabled: isArtist && !item.imageUrl,
+    staleTime: 60 * 60 * 1000,
+  })
+  const src = item.imageUrl ?? (isArtist ? deezer?.imageUrl ?? null : null)
+  if (src) {
+    return <img className="disc-avatar" src={src} alt={label} width={size} height={size} />
   }
   return (
     <div className="disc-avatar disc-avatar-fallback" style={{ width: size, height: size, fontSize: size / 2.5 }}>

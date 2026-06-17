@@ -10,6 +10,7 @@ export interface DeezerPreviewTrack {
 export interface DeezerPlayInfo {
   id: number
   artistLink: string
+  imageUrl: string | null
   tracks: DeezerPreviewTrack[]
 }
 

@@ -10,8 +10,9 @@ public record DeezerPreviewTrack(string Title, string PreviewUrl);
 /// <summary>What the SPA needs to sample an artist: a few 30-second previews and a link out.</summary>
 /// <param name="Id">Deezer artist id.</param>
 /// <param name="ArtistLink">Canonical deezer.com artist page (the "open wholesale" link).</param>
+/// <param name="ImageUrl">Deezer's artist photo (largest available), or null if it supplied none.</param>
 /// <param name="Tracks">The artist's top previewable tracks (biggest first), possibly empty.</param>
-public record DeezerPlayInfo(long Id, string ArtistLink, IReadOnlyList<DeezerPreviewTrack> Tracks);
+public record DeezerPlayInfo(long Id, string ArtistLink, string? ImageUrl, IReadOnlyList<DeezerPreviewTrack> Tracks);
 
 /// <summary>What the SPA needs to sample a specific album: its previewable tracks and a link out.</summary>
 /// <param name="Id">Deezer album id.</param>
@@ -50,38 +51,50 @@ public class DeezerArtistResolver
         _cache = cache;
     }
 
-    /// <summary>Full sample/link info for an artist name, or null if Deezer has no match.</summary>
+    /// <summary>Full sample/link/image info for an artist name, or null if Deezer has no match.</summary>
     public async Task<DeezerPlayInfo?> ResolvePlayInfo(string artistName)
     {
-        var id = await ResolveArtistId(artistName);
-        if (id is null)
+        var artist = await ResolveArtist(artistName);
+        if (artist is null)
         {
             return null;
         }
 
-        var tracks = await ResolveTopTracks(id.Value);
+        var tracks = await ResolveTopTracks(artist.Id);
         return new DeezerPlayInfo(
-            id.Value,
-            $"https://www.deezer.com/artist/{id.Value}",
+            artist.Id,
+            $"https://www.deezer.com/artist/{artist.Id}",
+            artist.ImageUrl,
             tracks);
     }
 
     /// <summary>The Deezer artist id for a name, or null if Deezer has no match. Cached.</summary>
-    public async Task<long?> ResolveArtistId(string artistName)
+    public async Task<long?> ResolveArtistId(string artistName) =>
+        (await ResolveArtist(artistName))?.Id;
+
+    /// <summary>The Deezer id + photo for an artist name (or null on no match). Cached as JSON so the
+    /// id and image come from one search — the "no match" case is an empty-string sentinel.</summary>
+    private async Task<CachedArtist?> ResolveArtist(string artistName)
     {
-        var key = $"deezer:artistid:{artistName.ToLowerInvariant()}";
+        var key = $"deezer:artist:{artistName.ToLowerInvariant()}";
 
         var cached = await _cache.GetStringAsync(key);
         if (cached != null)
         {
-            // Empty string is the cached "no match" sentinel — avoids re-searching unknown names.
-            return cached.Length == 0 ? null : long.Parse(cached);
+            return cached.Length == 0 ? null : JsonSerializer.Deserialize<CachedArtist>(cached);
         }
 
         var artist = await _deezer.SearchArtist(artistName);
-        await _cache.SetStringAsync(key, artist?.id.ToString() ?? "", IdCacheOptions);
-        return artist?.id;
+        var resolved = artist is null ? null : new CachedArtist(artist.id, artist.BestImageUrl);
+        await _cache.SetStringAsync(
+            key,
+            resolved is null ? "" : JsonSerializer.Serialize(resolved),
+            IdCacheOptions);
+        return resolved;
     }
+
+    /// <summary>The cached identity of a Deezer artist: its id and best photo URL.</summary>
+    private record CachedArtist(long Id, string? ImageUrl);
 
     /// <summary>
     /// Sample/link info for a specific Deezer album id. The album id is already known (it comes from
