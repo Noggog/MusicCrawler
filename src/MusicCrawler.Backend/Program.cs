@@ -267,9 +267,10 @@ app.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine
     .RequireAuthorization()
     .WithName("GetRatings");
 
-// The "to buy" list: liked non-owned artists + liked albums not yet acquired.
-app.MapGet("/discovery/purchases", async (HttpContext http, DiscoveryEngine engine) =>
-        Results.Ok(await engine.GetPurchases(http.User.GetSubject()!)))
+// The unified "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
+// aggregated for the library maintainer. Auth-gated, but not scoped to the caller.
+app.MapGet("/discovery/purchases", async (DiscoveryEngine engine) =>
+        Results.Ok(await engine.GetPurchases()))
     .RequireAuthorization()
     .WithName("GetPurchases");
 

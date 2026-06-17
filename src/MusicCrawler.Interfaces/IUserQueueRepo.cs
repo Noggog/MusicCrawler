@@ -41,6 +41,12 @@ public interface IUserQueueRepo
     /// <summary>The user's Liked candidates — the artist side of the "to buy" wishlist, newest first.</summary>
     Task<DiscoveryCandidate[]> GetLiked(string userId);
 
+    /// <summary>
+    /// Every user's Liked candidates — the artist side of the unified "to buy" list the library
+    /// maintainer acts on. Not scoped to a user; the caller dedups across users.
+    /// </summary>
+    Task<DiscoveryCandidate[]> GetAllLiked();
+
     /// <summary>Every Liked/Disliked artist rating (verdict + image), for the Ratings review page.</summary>
     Task<ArtistRating[]> GetRated(string userId);
 

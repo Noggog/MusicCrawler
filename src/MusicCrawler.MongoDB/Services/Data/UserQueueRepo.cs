@@ -218,6 +218,16 @@ public class UserQueueRepo : IUserQueueRepo
         return (await cursor.ToListAsync()).Select(ToCandidate).ToArray();
     }
 
+    public async Task<DiscoveryCandidate[]> GetAllLiked()
+    {
+        var filter = Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusLiked);
+        var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
+        {
+            Sort = Builders<BsonDocument>.Sort.Descending(FieldDecidedAt),
+        });
+        return (await cursor.ToListAsync()).Select(ToCandidate).ToArray();
+    }
+
     public Task DeletePending(string userId) =>
         Collection.DeleteManyAsync(
             Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)

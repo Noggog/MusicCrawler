@@ -243,21 +243,50 @@ public class DiscoveryEngineTests
     public async Task Purchases_lists_liked_non_owned_artists_and_still_missing_liked_albums()
     {
         _library.GetAllArtistMetadata().Returns(new[] { new ArtistMetadata(new ArtistKey("Owned Band"), null) });
-        _queue.GetLiked(User).Returns(new[]
+        _queue.GetAllLiked().Returns(new[]
         {
             new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), null, 3, new[] { "boygenius" }, 1),
             new DiscoveryCandidate(new ArtistKey("Owned Band"), null, 1, Array.Empty<string>(), 0), // owned -> excluded
         });
-        _albumRatings.GetLiked(User).Returns(new[]
+        _albumRatings.GetAllLiked().Returns(new[]
         {
             new AlbumRating(new ArtistKey("Owned Band"), new AlbumKey("New One"), "art", DiscoveryStatus.Liked),
         });
         _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
 
-        var purchases = await _sut.GetPurchases(User);
+        var purchases = await _sut.GetPurchases();
 
         purchases.Where(p => p.Kind == FeedKind.RecommendedArtist).Select(p => p.Artist.ArtistName)
             .Should().Equal("Phoebe Bridgers");
         purchases.Where(p => p.Kind == FeedKind.MissingAlbum).Select(p => p.Album).Should().Equal("New One");
+    }
+
+    [Fact]
+    public async Task Purchases_dedups_items_liked_by_multiple_users()
+    {
+        _library.GetAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
+        // Same artist liked by two users: one occurrence, strongest score, unioned sources.
+        _queue.GetAllLiked().Returns(new[]
+        {
+            new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), null, 3, new[] { "boygenius" }, 1),
+            new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), "img", 5, new[] { "Bright Eyes" }, 1),
+        });
+        // Same album liked by two users: one occurrence.
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art", DiscoveryStatus.Liked),
+            new AlbumRating(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art2", DiscoveryStatus.Liked),
+        });
+        _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
+
+        var purchases = await _sut.GetPurchases();
+
+        var artist = purchases.Single(p => p.Kind == FeedKind.RecommendedArtist);
+        artist.Artist.ArtistName.Should().Be("Phoebe Bridgers");
+        artist.Score.Should().Be(5);
+        artist.ImageUrl.Should().Be("img");
+        artist.Sources.Should().BeEquivalentTo("boygenius", "Bright Eyes");
+
+        purchases.Where(p => p.Kind == FeedKind.MissingAlbum).Select(p => p.Album).Should().Equal("Capacity");
     }
 }

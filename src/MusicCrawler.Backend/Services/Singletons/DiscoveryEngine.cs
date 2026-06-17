@@ -278,23 +278,44 @@ public class DiscoveryEngine
     }
 
     /// <summary>
-    /// The "to buy" list: liked artists not already owned, plus liked albums not yet acquired.
+    /// The unified "to buy" list: every user's liked artists not already owned, plus every user's
+    /// liked albums not yet acquired. Aggregated across all users (this is the library maintainer's
+    /// queue), deduped so an item liked by multiple users appears once. A placeholder until these
+    /// feed into an external acquisition system.
     /// </summary>
-    public async Task<FeedItem[]> GetPurchases(string userId)
+    public async Task<FeedItem[]> GetPurchases()
     {
         var owned = (await _library.GetAllArtistMetadata())
             .Select(a => a.ArtistKey.ArtistName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var ownedAlbums = await _catalog.GetOwnedAlbums();
 
-        var artists = (await _queue.GetLiked(userId))
+        // Dedup artists by name; multiple users may have liked the same one. Keep the strongest
+        // score and union the provenance sources across those users' candidates.
+        var artists = (await _queue.GetAllLiked())
             .Where(c => !owned.Contains(c.Artist.ArtistName))
-            .Select(c => new FeedItem(FeedKind.RecommendedArtist, c.Artist, null, c.ImageUrl, c.Score, c.Sources, null));
+            .GroupBy(c => c.Artist.ArtistName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new FeedItem(
+                FeedKind.RecommendedArtist,
+                g.First().Artist,
+                null,
+                g.Select(c => c.ImageUrl).FirstOrDefault(u => u != null),
+                g.Max(c => c.Score),
+                g.SelectMany(c => c.Sources).Distinct().ToArray(),
+                null));
 
-        var albums = (await _albumRatings.GetLiked(userId))
+        // Dedup albums by (artist, album) across users.
+        var albums = (await _albumRatings.GetAllLiked())
             .Where(r => !AlbumIsOwned(ownedAlbums, r.Artist.ArtistName, r.Album.AlbumName))
-            .Select(r => new FeedItem(
-                FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, 0, Array.Empty<string>(), null));
+            .GroupBy(r => (r.Artist.ArtistName.ToLowerInvariant(), r.Album.AlbumName.ToLowerInvariant()))
+            .Select(g => new FeedItem(
+                FeedKind.MissingAlbum,
+                g.First().Artist,
+                g.First().Album.AlbumName,
+                g.Select(r => r.AlbumArt).FirstOrDefault(a => a != null),
+                0,
+                Array.Empty<string>(),
+                null));
 
         return artists.Concat(albums).ToArray();
     }

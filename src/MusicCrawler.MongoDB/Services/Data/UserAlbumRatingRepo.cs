@@ -86,6 +86,9 @@ public class UserAlbumRatingRepo : IUserAlbumRatingRepo
         Query(Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
               & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusLiked));
 
+    public Task<AlbumRating[]> GetAllLiked() =>
+        Query(Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusLiked));
+
     private async Task<AlbumRating[]> Query(FilterDefinition<BsonDocument> filter)
     {
         var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
