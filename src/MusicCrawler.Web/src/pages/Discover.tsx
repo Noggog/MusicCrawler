@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -41,6 +41,11 @@ const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'Recomme
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
+// Stable identity for a feed row, shared by render and the rate mutation so a rated row can be
+// marked in place. Albums key on artist+album; artists on kind+name.
+const rowKeyFor = (item: FeedItem) =>
+  item.album ? `${item.artist.artistName}::${item.album}` : `${item.kind}:${item.artist.artistName}`
+
 // The image a source supplied (artist photo or album art), or a coloured initial when missing.
 function FeedAvatar({ item, size }: { item: FeedItem; size: number }) {
   const label = item.album ?? item.artist.artistName
@@ -75,9 +80,19 @@ export default function Discover() {
   const [seed, setSeed] = useState(newSeed)
   // Artists whose Deezer player is expanded (kept collapsed by default so we don't mount many iframes).
   const [playing, setPlaying] = useState<Set<string>>(new Set())
+  // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
+  // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
+  const [rated, setRated] = useState<Map<string, Verdict>>(new Map())
 
   // Keep a stable, sorted kinds list so the query key (and the server's interleave) are deterministic.
   const kinds = ALL_KINDS.filter((k) => shown.has(k))
+
+  // A natural refresh (page, shuffle, or category change refetches the feed) clears the in-place
+  // marks so the freshly-fetched list — which already excludes the rated items — starts clean.
+  const kindsKey = kinds.join(',')
+  useEffect(() => {
+    setRated(new Map())
+  }, [page, seed, kindsKey])
 
   const togglePlay = (key: string) =>
     setPlaying((prev) => {
@@ -123,11 +138,27 @@ export default function Discover() {
 
   const rateMutation = useMutation({
     mutationFn: ({ item, verdict }: { item: FeedItem; verdict: Verdict }) => rate(item, verdict),
-    onSuccess: invalidate,
+    // Mark the row in place immediately and leave the feed query alone — invalidating it here is
+    // what made the list re-interleave and jump. The mark drops away on the next natural refresh.
+    onMutate: ({ item, verdict }) => {
+      setRated((prev) => new Map(prev).set(rowKeyFor(item), verdict))
+    },
+    onError: (_err, { item }) => {
+      setRated((prev) => {
+        const next = new Map(prev)
+        next.delete(rowKeyFor(item))
+        return next
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+    },
   })
   const rebuild = useMutation({
     mutationFn: refreshQueue,
     onSuccess: () => {
+      setRated(new Map())
       setPage(0)
       invalidate()
     },
@@ -229,8 +260,9 @@ export default function Discover() {
             const isPlaying = playing.has(rowKey)
             // Artists sample by name; albums sample by their Deezer id (when we have one).
             const canPlay = isAlbum ? !!item.deezerAlbumId : true
+            const verdict = rated.get(rowKey)
             return (
-              <div className="disc-row-wrap" key={rowKey}>
+              <div className={verdict ? 'disc-row-wrap rated' : 'disc-row-wrap'} key={rowKey}>
                 <div className="disc-row">
                   <FeedAvatar item={item} size={56} />
                   <div className="disc-row-main">
@@ -252,22 +284,30 @@ export default function Discover() {
                         {isPlaying ? '▾' : '▶'}
                       </button>
                     )}
-                    <button
-                      className="disc-btn up"
-                      title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
-                      disabled={busy}
-                      onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
-                    >
-                      👍
-                    </button>
-                    <button
-                      className="disc-btn down"
-                      title="Not interested"
-                      disabled={busy}
-                      onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
-                    >
-                      👎
-                    </button>
+                    {verdict ? (
+                      <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
+                        {verdict === 'up' ? '👍 Added' : '👎 Dismissed'}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          className="disc-btn up"
+                          title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
+                          disabled={rebuild.isPending}
+                          onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
+                        >
+                          👍
+                        </button>
+                        <button
+                          className="disc-btn down"
+                          title="Not interested"
+                          disabled={rebuild.isPending}
+                          onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
+                        >
+                          👎
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 {isPlaying && (isAlbum
