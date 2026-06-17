@@ -21,6 +21,11 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // BFF auth paths must reach the backend verbatim (no /api strip): the OIDC login/logout
+      // redirects and the callback all run on the SPA origin so the session cookie lands here.
+      '/auth': { target: backendUrl, changeOrigin: true, secure: false },
+      '/signin-oidc': { target: backendUrl, changeOrigin: true, secure: false },
+      '/signout-callback-oidc': { target: backendUrl, changeOrigin: true, secure: false },
     },
   },
 })

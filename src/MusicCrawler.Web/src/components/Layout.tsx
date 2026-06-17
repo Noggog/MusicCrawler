@@ -1,8 +1,34 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../auth/AuthContext'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'nav-link active' : 'nav-link'
+
+function AuthBox() {
+  const { user, isLoading, login, logout } = useAuth()
+
+  if (isLoading) {
+    return <div className="auth-box"><span className="auth-name">…</span></div>
+  }
+
+  if (!user) {
+    return (
+      <div className="auth-box">
+        <button className="auth-btn" onClick={() => login()}>Log in</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-box">
+      <span className="auth-name" title={user.email ?? undefined}>
+        {user.displayName ?? user.username ?? user.email ?? 'Signed in'}
+      </span>
+      <button className="auth-btn" onClick={() => logout()}>Log out</button>
+    </div>
+  )
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -23,6 +49,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           )}
         </nav>
+        <AuthBox />
       </aside>
       <main className="content">{children}</main>
     </div>

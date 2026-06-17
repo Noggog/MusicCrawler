@@ -28,3 +28,11 @@ export interface UnifiedRelations {
   artist: ArtistKey
   related: UnifiedRelatedArtist[]
 }
+
+// The signed-in user, as returned by GET /auth/me (the BFF). Null when not authenticated.
+export interface CurrentUser {
+  subject: string
+  username: string | null
+  email: string | null
+  displayName: string | null
+}

@@ -23,6 +23,8 @@ body {
   background: #1a1a2e;
   color: #fff;
   padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -160,4 +162,55 @@ body {
   border-radius: 10px;
   padding: 0.05rem 0.5rem;
   font-size: 0.7rem;
+}
+
+/* Auth box pinned to the bottom of the sidebar. */
+.auth-box {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.auth-name {
+  font-size: 0.85rem;
+  color: #cfcfe6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-btn {
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.auth-btn:hover {
+  background: #4338ca;
+}
+
+.seed-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #c9a227;
+  padding: 0;
+}
+
+.seed-btn.seeded {
+  color: #e0b400;
+}
+
+.seed-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

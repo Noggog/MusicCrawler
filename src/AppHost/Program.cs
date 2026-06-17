@@ -14,6 +14,14 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     .WaitFor(cache)
     .WithReference(database)
     .WaitFor(database)
+    // BFF auth against the existing Authentik instance. The issuer/client id/secret are secrets,
+    // so they're forwarded from host env vars (set them in local.secrets.env) rather than committed.
+    // BFF_PUBLIC_ORIGIN is the browser-facing SPA origin the OIDC callback returns through.
+    .WithEnvironment("OIDC_AUTHORITY", Environment.GetEnvironmentVariable("OIDC_AUTHORITY"))
+    .WithEnvironment("OIDC_CLIENT_ID", Environment.GetEnvironmentVariable("OIDC_CLIENT_ID"))
+    .WithEnvironment("OIDC_CLIENT_SECRET", Environment.GetEnvironmentVariable("OIDC_CLIENT_SECRET"))
+    .WithEnvironment("BFF_PUBLIC_ORIGIN",
+        Environment.GetEnvironmentVariable("BFF_PUBLIC_ORIGIN") ?? "http://localhost:5173")
     // MongoDbProvider reads the connection string from the "MONGO_URI" env var; feed it
     // the Aspire-provisioned MongoDB connection string (otherwise it's null -> 500s).
     .WithEnvironment("MONGO_URI", database)

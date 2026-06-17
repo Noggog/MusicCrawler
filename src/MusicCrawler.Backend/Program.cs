@@ -1,4 +1,8 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using MusicCrawler.Backend;
+using MusicCrawler.Backend.Services.Auth;
 using MusicCrawler.Backend.Services.Background;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Interfaces;
@@ -51,6 +55,9 @@ builder.Services.AddCors(options =>
 // Syncs the artist catalog from Plex on startup, then daily.
 builder.Services.AddHostedService<CatalogSyncService>();
 
+// BFF auth: cookie session + OIDC (Keycloak) code flow. See BffAuthentication.
+builder.AddBffAuthentication();
+
 builder.Host.RegisterAutofacModule<MainModule>();
 
 var app = builder.Build();
@@ -69,6 +76,46 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors(spaCorsPolicy);
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+// --- BFF auth endpoints (reached by the browser through the Vite proxy, verbatim) ---
+// Start login: triggers the OIDC challenge, returning to a local returnUrl afterward.
+app.MapGet("/auth/login", (string? returnUrl) =>
+    {
+        // Only allow local return paths (no open redirect).
+        var target = returnUrl is not null && returnUrl.StartsWith('/') ? returnUrl : "/";
+        return Results.Challenge(
+            new AuthenticationProperties { RedirectUri = target },
+            new[] { OpenIdConnectDefaults.AuthenticationScheme });
+    })
+    .WithName("Login");
+
+// Sign out of both the local cookie and the IdP session.
+app.MapGet("/auth/logout", () =>
+        Results.SignOut(
+            new AuthenticationProperties { RedirectUri = "/" },
+            new[] { CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme }))
+    .WithName("Logout");
+
+// Current user (200 with profile, or 401 if not signed in) — the SPA polls this to know auth state.
+app.MapGet("/auth/me", (HttpContext http) =>
+    {
+        var user = http.User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            return Results.Unauthorized();
+        }
+        return Results.Ok(new
+        {
+            subject = user.GetSubject(),
+            username = user.FindFirst("preferred_username")?.Value,
+            email = user.FindFirst("email")?.Value,
+            displayName = user.FindFirst("name")?.Value,
+        });
+    })
+    .WithName("Me");
 
 app.MapGet("/artists", (ILibraryProvider libraryProvider) =>
     {
@@ -93,6 +140,29 @@ app.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor in
         return interactor.GetRelated(new ArtistKey(artist), forceRefresh: refresh ?? false);
     })
     .WithName("GetRelated");
+
+// --- Per-user seeds (the taste anchors the recommendation engine grows from) ---
+// artist is a query param (handles '/' in names); all require an authenticated user.
+app.MapGet("/seeds", async (HttpContext http, IUserSeedRepo seeds) =>
+        Results.Ok(await seeds.GetSeeds(http.User.GetSubject()!)))
+    .RequireAuthorization()
+    .WithName("GetSeeds");
+
+app.MapPut("/seeds", async (string artist, HttpContext http, IUserSeedRepo seeds) =>
+    {
+        await seeds.AddSeed(http.User.GetSubject()!, artist);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("AddSeed");
+
+app.MapDelete("/seeds", async (string artist, HttpContext http, IUserSeedRepo seeds) =>
+    {
+        await seeds.RemoveSeed(http.User.GetSubject()!, artist);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("RemoveSeed");
 
 app.MapDefaultEndpoints();
 
