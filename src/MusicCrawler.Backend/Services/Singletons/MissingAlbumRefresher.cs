@@ -1,3 +1,4 @@
+using System.Text;
 using MusicCrawler.Deezer.Services;
 using MusicCrawler.Interfaces;
 
@@ -60,19 +61,23 @@ public class MissingAlbumRefresher
                 continue;
             }
 
-            var owned = ownedAlbums.TryGetValue(name, out var set)
-                ? set
-                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Compare on a normalized form so punctuation/casing differences between Plex and Deezer
+            // (e.g. a typographic vs. straight apostrophe in "so the flies don't come") don't make an
+            // owned album look missing. The original Deezer title is still what we persist/display.
+            var owned = (ownedAlbums.TryGetValue(name, out var set) ? set : Enumerable.Empty<string>())
+                .Select(NormalizeTitle)
+                .ToHashSet(StringComparer.Ordinal);
 
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             var missing = new List<MissingAlbum>();
             foreach (var album in await _deezer.GetAlbums(deezerId.Value))
             {
                 var title = album.title;
-                if (string.IsNullOrWhiteSpace(title)
+                var key = NormalizeTitle(title);
+                if (string.IsNullOrEmpty(key)
                     || !string.Equals(album.record_type, AlbumRecordType, StringComparison.OrdinalIgnoreCase)
-                    || owned.Contains(title)
-                    || !seen.Add(title))
+                    || owned.Contains(key)
+                    || !seen.Add(key))
                 {
                     continue;
                 }
@@ -88,5 +93,47 @@ public class MissingAlbumRefresher
             "Missing-album sync: scanned {Scanned} owned artist(s), {Missing} missing album(s) total",
             scanned, missingTotal);
         return new MissingAlbumSyncResult(scanned, missingTotal);
+    }
+
+    /// <summary>
+    /// Canonical form for matching album titles across sources: trimmed, lower-cased, with curly
+    /// quotes/apostrophes and en/em dashes folded to ASCII and internal whitespace collapsed — so a
+    /// title that differs only in typography (Plex's "Don't" vs. Deezer's "Don't") still matches.
+    /// </summary>
+    private static string NormalizeTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder(title.Length);
+        var lastWasSpace = false;
+        foreach (var ch in title.Trim())
+        {
+            var c = ch switch
+            {
+                '‘' or '’' or 'ʼ' or '′' => '\'', // curly/modifier apostrophes, prime
+                '“' or '”' => '"',                          // curly double quotes
+                '–' or '—' => '-',                          // en/em dash
+                _ => char.ToLowerInvariant(ch),
+            };
+
+            if (char.IsWhiteSpace(c))
+            {
+                if (!lastWasSpace)
+                {
+                    sb.Append(' ');
+                }
+                lastWasSpace = true;
+            }
+            else
+            {
+                sb.Append(c);
+                lastWasSpace = false;
+            }
+        }
+
+        return sb.ToString().Trim();
     }
 }
