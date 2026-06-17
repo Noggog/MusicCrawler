@@ -13,15 +13,18 @@ public class RecommendationInteractor
     private readonly IRecommendationProvider _recommendationProvider;
     private readonly ILibraryQuery _libraryQuery;
     private readonly IRecommendationPersistenceRepo _recommendationPersistenceRepo;
+    private readonly ILogger<RecommendationInteractor> _logger;
 
     public RecommendationInteractor(
         IRecommendationProvider recommendationProvider,
         ILibraryQuery libraryQuery,
-        IRecommendationPersistenceRepo recommendationPersistenceRepo)
+        IRecommendationPersistenceRepo recommendationPersistenceRepo,
+        ILogger<RecommendationInteractor> logger)
     {
         _recommendationProvider = recommendationProvider;
         _libraryQuery = libraryQuery;
         _recommendationPersistenceRepo = recommendationPersistenceRepo;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<Recommendation>> Recommendations()
@@ -36,7 +39,7 @@ public class RecommendationInteractor
             recommendations
                 .Where(recommendedArtist => !artistNamesFromLibrary.Contains(recommendedArtist.ArtistKey.ArtistName))
                 .ToArray();
-        Console.WriteLine($"Adding {newRecommendations.Length} Recommendations");
+        _logger.LogInformation("Adding {Count} recommendations", newRecommendations.Length);
             
         await _recommendationPersistenceRepo.AddRecommendations(newRecommendations);
 

@@ -11,11 +11,16 @@ public class CatalogRefresher
 {
     private readonly ILibraryQuery _libraryQuery;
     private readonly IArtistCatalogRepo _catalog;
+    private readonly ILogger<CatalogRefresher> _logger;
 
-    public CatalogRefresher(ILibraryQuery libraryQuery, IArtistCatalogRepo catalog)
+    public CatalogRefresher(
+        ILibraryQuery libraryQuery,
+        IArtistCatalogRepo catalog,
+        ILogger<CatalogRefresher> logger)
     {
         _libraryQuery = libraryQuery;
         _catalog = catalog;
+        _logger = logger;
     }
 
     public async Task<CatalogSyncResult> Refresh()
@@ -23,8 +28,9 @@ public class CatalogRefresher
         var artists = await _libraryQuery.QueryAllArtistMetadata();
         var syncedAt = DateTimeOffset.UtcNow;
         var result = await _catalog.SyncFromLibrary(artists, syncedAt);
-        Console.WriteLine(
-            $"Catalog refresh: {result.Upserted} upserted, {result.MarkedAbsent} marked absent, {result.TotalPresent} present");
+        _logger.LogInformation(
+            "Catalog refresh: {Upserted} upserted, {MarkedAbsent} marked absent, {TotalPresent} present",
+            result.Upserted, result.MarkedAbsent, result.TotalPresent);
         return result;
     }
 }

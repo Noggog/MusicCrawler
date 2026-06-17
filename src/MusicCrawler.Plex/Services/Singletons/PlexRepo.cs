@@ -1,14 +1,17 @@
-﻿using MusicCrawler.Interfaces;
+﻿using Microsoft.Extensions.Logging;
+using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.Plex.Services.Singletons;
 
 public class PlexRepo : ILibraryQuery
 {
     private readonly PlexApi _plexApi;
+    private readonly ILogger<PlexRepo> _logger;
 
-    public PlexRepo(PlexApi plexApi)
+    public PlexRepo(PlexApi plexApi, ILogger<PlexRepo> logger)
     {
         _plexApi = plexApi;
+        _logger = logger;
     }
 
     public Task<ArtistPackage> QueryArtistPackage(ArtistKey artistKey)
@@ -28,22 +31,24 @@ public class PlexRepo : ILibraryQuery
         PlexLibrary? plexLibrary = null;
         if (preferredPlexLibrary == null)
         {
-            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because PLEX_LIBRARY was null");
+            _logger.LogWarning("PLEX_LIBRARY not set; falling back to the first artist-type library.");
         }
         else if (plexLibraries.FirstOrDefault(it => string.Equals(it.Title, preferredPlexLibrary)) == null)
         {
-            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because plexLibraries.FirstOrDefault was null");
+            _logger.LogWarning(
+                "Preferred Plex library {Library} not found; falling back to the first artist-type library.",
+                preferredPlexLibrary);
         }
         else
         {
             plexLibrary = plexLibraries.First(it => string.Equals(it.Title, preferredPlexLibrary));
-            Console.WriteLine("Successfully found preferred plexLibrary:" + plexLibrary.Title);
+            _logger.LogInformation("Using preferred Plex library {Library}.", plexLibrary.Title);
         }
 
         if (plexLibrary == null)
         {
             plexLibrary = plexLibraries.Where(it => it.Type == "artist").Take(1).First();
-            Console.WriteLine("Fallback used.");
+            _logger.LogWarning("Fell back to artist-type Plex library {Library}.", plexLibrary.Title);
         }
 
         return (await _plexApi.GetMusicArtists(plexLibrary.Key))

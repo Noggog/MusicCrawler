@@ -18,16 +18,20 @@ export default function Artists() {
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem' }}>
         <h1>Artists</h1>
-        <button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-          {refresh.isPending ? 'Refreshing…' : 'Refresh from Plex'}
-        </button>
+        {/* The catalog auto-syncs on startup and daily; this manual trigger is a dev-only
+            convenience and is compiled out of production builds. */}
+        {import.meta.env.DEV && (
+          <button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+            {refresh.isPending ? 'Refreshing…' : 'Refresh from Plex (dev)'}
+          </button>
+        )}
       </div>
 
-      {refresh.isError && (
+      {import.meta.env.DEV && refresh.isError && (
         <p className="error">Refresh failed: {(refresh.error as Error).message}</p>
       )}
 
-      {refresh.isSuccess && (
+      {import.meta.env.DEV && refresh.isSuccess && (
         <p>
           <em>
             Synced: {refresh.data.upserted} from Plex, {refresh.data.markedAbsent} removed,{' '}

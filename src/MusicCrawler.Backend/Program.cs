@@ -1,4 +1,5 @@
 using MusicCrawler.Backend;
+using MusicCrawler.Backend.Services.Background;
 using MusicCrawler.Backend.Services.Singletons;
 using Serilog;
 using Serilog.Events;
@@ -45,6 +46,9 @@ builder.Services.AddCors(options =>
     options.AddPolicy(spaCorsPolicy, policy =>
         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
+
+// Syncs the artist catalog from Plex on startup, then daily.
+builder.Services.AddHostedService<CatalogSyncService>();
 
 builder.Host.RegisterAutofacModule<MainModule>();
 
