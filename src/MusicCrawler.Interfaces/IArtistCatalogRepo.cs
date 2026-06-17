@@ -24,6 +24,19 @@ public interface IArtistCatalogRepo
     /// and only sets the image when one is supplied. Returns the number of docs updated.
     /// </summary>
     Task<int> BackfillImages(IReadOnlyList<ArtistMetadata> artists);
+
+    /// <summary>
+    /// Stores the owned album titles for each artist (from the same Plex pull as the artist list),
+    /// so the missing-album diff can run against the local catalog. Only touches artists already
+    /// present — never creates phantom entries.
+    /// </summary>
+    Task SyncAlbums(IReadOnlyList<ArtistAlbums> artistAlbums);
+
+    /// <summary>
+    /// The owned album titles per artist, keyed by artist name (case-insensitive). Used by the
+    /// missing-album diff and to hide ratings for albums that have since been acquired.
+    /// </summary>
+    Task<Dictionary<string, HashSet<string>>> GetOwnedAlbums();
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);

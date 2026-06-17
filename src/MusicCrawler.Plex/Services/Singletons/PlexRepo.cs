@@ -26,6 +26,34 @@ public class PlexRepo : ILibraryQuery
 
     public async Task<ArtistMetadata[]> QueryAllArtistMetadata()
     {
+        var plexLibrary = await ResolveLibrary();
+        return (await _plexApi.GetMusicArtists(plexLibrary.Key))
+            .Select(plexMusicArtist =>
+                    new ArtistMetadata(
+                        ArtistKey: new ArtistKey(plexMusicArtist.Title),
+                        ArtistImageUrl: null) // TODO: Shouldn't just be null
+            )
+            .ToArray();
+    }
+
+    public async Task<ArtistAlbums[]> QueryAllAlbums()
+    {
+        var plexLibrary = await ResolveLibrary();
+        return (await _plexApi.GetMusicAlbums(plexLibrary.Key))
+            .Where(a => !string.IsNullOrWhiteSpace(a.ParentTitle) && !string.IsNullOrWhiteSpace(a.Title))
+            .GroupBy(a => a.ParentTitle, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ArtistAlbums(
+                new ArtistKey(g.Key),
+                g.Select(a => a.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Resolves the music library to read from: the one named by <c>PLEX_LIBRARY</c> when it
+    /// matches, otherwise the first artist-type library. Logs which path it took.
+    /// </summary>
+    private async Task<PlexLibrary> ResolveLibrary()
+    {
         var plexLibraries = await _plexApi.GetLibraries();
         var preferredPlexLibrary = Environment.GetEnvironmentVariable("PLEX_LIBRARY");
         PlexLibrary? plexLibrary = null;
@@ -51,12 +79,6 @@ public class PlexRepo : ILibraryQuery
             _logger.LogWarning("Fell back to artist-type Plex library {Library}.", plexLibrary.Title);
         }
 
-        return (await _plexApi.GetMusicArtists(plexLibrary.Key))
-            .Select(plexMusicArtist =>
-                    new ArtistMetadata(
-                        ArtistKey: new ArtistKey(plexMusicArtist.Title),
-                        ArtistImageUrl: null) // TODO: Shouldn't just be null
-            )
-            .ToArray();
+        return plexLibrary;
     }
 }

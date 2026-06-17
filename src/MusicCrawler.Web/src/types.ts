@@ -46,6 +46,39 @@ export interface DiscoveryPage {
   totalPending: number
 }
 
+// Mirror FeedKind / DiscoveryStatus / FeedItem / DiscoveryFeedPage / RatedItem (Discovery.cs).
+export type FeedKind = 'RecommendedArtist' | 'MissingAlbum' | 'LibraryArtist'
+export type DiscoveryStatus = 'Pending' | 'Liked' | 'Disliked'
+
+// One thing to react to in the discovery feed. `album` is set only for MissingAlbum items;
+// `score`/`sources` rank and explain recommended artists (0/empty otherwise).
+export interface FeedItem {
+  kind: FeedKind
+  artist: ArtistKey
+  album: string | null
+  imageUrl: string | null
+  score: number
+  sources: string[]
+}
+
+// A paged feed section for a single FeedKind.
+export interface DiscoveryFeedPage {
+  kind: FeedKind
+  items: FeedItem[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+// A rating the user has made, for the Ratings review page.
+export interface RatedItem {
+  kind: FeedKind
+  artist: ArtistKey
+  album: string | null
+  imageUrl: string | null
+  verdict: DiscoveryStatus
+}
+
 // The signed-in user, as returned by GET /auth/me (the BFF). Null when not authenticated.
 export interface CurrentUser {
   subject: string

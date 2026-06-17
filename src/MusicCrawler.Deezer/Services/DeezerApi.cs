@@ -54,6 +54,14 @@ public class DeezerApi : IDeezerApi
         return result?.data.ToArray() ?? Array.Empty<DeezerTrack>();
     }
 
+    public async Task<DeezerAlbum[]> GetAlbums(long artistId)
+    {
+        // limit=300 comfortably covers any discography in one page (Deezer's default page is 25).
+        var url = $"{_endpointInfo.BaseUri}/artist/{artistId}/albums?limit=300";
+        var result = await Get<DeezerAlbumList>(url);
+        return result?.data.ToArray() ?? Array.Empty<DeezerAlbum>();
+    }
+
     private async Task<T?> Get<T>(string url) where T : class
     {
         try

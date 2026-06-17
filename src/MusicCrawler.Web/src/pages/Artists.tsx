@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists, refreshCatalog } from '../api/artists'
-import { getSeeds, addSeed, removeSeed } from '../api/seeds'
+import { clearRating, getRatings, rate, type Verdict } from '../api/discovery'
+import type { DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
+
+const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
 export default function Artists() {
   const queryClient = useQueryClient()
@@ -12,18 +15,39 @@ export default function Artists() {
     queryFn: getArtists,
   })
 
-  // Seeds are per-user, so only fetch them when signed in.
-  const { data: seeds } = useQuery({
-    queryKey: ['seeds'],
-    queryFn: getSeeds,
+  // Ratings are per-user; fetch them only when signed in so we can show each band's verdict.
+  const { data: ratings } = useQuery({
+    queryKey: ['ratings'],
+    queryFn: getRatings,
     enabled: !!user,
   })
-  const seedSet = new Set(seeds ?? [])
 
-  const toggleSeed = useMutation({
-    mutationFn: ({ artist, seeded }: { artist: string; seeded: boolean }) =>
-      seeded ? removeSeed(artist) : addSeed(artist),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['seeds'] }),
+  // artist name -> current verdict (artist ratings only; albums live on the Ratings/Discover pages).
+  const verdictByArtist = new Map<string, DiscoveryStatus>()
+  for (const r of ratings ?? []) {
+    if (!r.album) verdictByArtist.set(r.artist.artistName, r.verdict)
+  }
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['ratings'] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['purchases'] })
+  }
+
+  // Thumbing an artist. Clicking the verdict that's already set clears it back to neutral.
+  const rateArtist = useMutation({
+    mutationFn: ({ artist, verdict, current }: { artist: string; verdict: Verdict; current?: DiscoveryStatus }) => {
+      const item: FeedItem = {
+        kind: 'LibraryArtist',
+        artist: { artistName: artist },
+        album: null,
+        imageUrl: null,
+        score: 0,
+        sources: [],
+      }
+      return current === verdictStatus(verdict) ? clearRating(item) : rate(item, verdict)
+    },
+    onSuccess: invalidate,
   })
 
   const refresh = useMutation({
@@ -46,7 +70,7 @@ export default function Artists() {
 
       {user && (
         <p>
-          <em>Click the star to mark an artist as a seed for recommendations. {seedSet.size} seeded.</em>
+          <em>Thumb the bands you own — 👍 feeds your recommendations, 👎 marks them off-taste.</em>
         </p>
       )}
 
@@ -77,26 +101,36 @@ export default function Artists() {
         <table className="table">
           <thead>
             <tr>
-              {user && <th style={{ width: '2.5rem' }}></th>}
+              {user && <th style={{ width: '5rem' }}></th>}
               <th>Name</th>
             </tr>
           </thead>
           <tbody>
             {artists.map((artist) => {
               const name = artist.artistKey.artistName
-              const seeded = seedSet.has(name)
+              const verdict = verdictByArtist.get(name)
               return (
                 <tr key={name}>
                   {user && (
                     <td>
-                      <button
-                        className={seeded ? 'seed-btn seeded' : 'seed-btn'}
-                        title={seeded ? 'Remove seed' : 'Add as seed'}
-                        disabled={toggleSeed.isPending}
-                        onClick={() => toggleSeed.mutate({ artist: name, seeded })}
-                      >
-                        {seeded ? '★' : '☆'}
-                      </button>
+                      <div className="rate-cell">
+                        <button
+                          className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
+                          title={verdict === 'Liked' ? 'Clear rating' : 'Thumbs up'}
+                          disabled={rateArtist.isPending}
+                          onClick={() => rateArtist.mutate({ artist: name, verdict: 'up', current: verdict })}
+                        >
+                          👍
+                        </button>
+                        <button
+                          className={verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
+                          title={verdict === 'Disliked' ? 'Clear rating' : 'Thumbs down'}
+                          disabled={rateArtist.isPending}
+                          onClick={() => rateArtist.mutate({ artist: name, verdict: 'down', current: verdict })}
+                        >
+                          👎
+                        </button>
+                      </div>
                     </td>
                   )}
                   <td>{name}</td>

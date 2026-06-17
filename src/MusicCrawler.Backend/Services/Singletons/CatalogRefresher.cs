@@ -28,9 +28,16 @@ public class CatalogRefresher
         var artists = await _libraryQuery.QueryAllArtistMetadata();
         var syncedAt = DateTimeOffset.UtcNow;
         var result = await _catalog.SyncFromLibrary(artists, syncedAt);
+
+        // Owned albums come from the same Plex library; store them so the missing-album diff has a
+        // local source of truth (and only after the artist upsert, so the docs exist to attach to).
+        var albums = await _libraryQuery.QueryAllAlbums();
+        await _catalog.SyncAlbums(albums);
+
         _logger.LogInformation(
-            "Catalog refresh: {Upserted} upserted, {MarkedAbsent} marked absent, {TotalPresent} present",
-            result.Upserted, result.MarkedAbsent, result.TotalPresent);
+            "Catalog refresh: {Upserted} upserted, {MarkedAbsent} marked absent, {TotalPresent} present, " +
+            "{AlbumArtists} artists with albums",
+            result.Upserted, result.MarkedAbsent, result.TotalPresent, albums.Length);
         return result;
     }
 }

@@ -20,4 +20,7 @@ public interface IDeezerApi
     /// Empty if none/error.
     /// </summary>
     Task<DeezerTrack[]> GetTopTracks(long artistId, int limit);
+
+    /// <summary>The artist's albums (their discography). Empty if none/error.</summary>
+    Task<DeezerAlbum[]> GetAlbums(long artistId);
 }

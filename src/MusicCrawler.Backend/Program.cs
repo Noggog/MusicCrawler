@@ -52,8 +52,12 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
 
-// Syncs the artist catalog from Plex on startup, then daily.
+// Syncs the artist catalog (artists + their albums) from Plex on startup, then daily.
 builder.Services.AddHostedService<CatalogSyncService>();
+
+// Diffs each owned artist's Deezer discography against the library to find missing albums; runs
+// shortly after startup (so the catalog is populated first), then daily.
+builder.Services.AddHostedService<AlbumSyncService>();
 
 // BFF auth: cookie session + OIDC (Keycloak) code flow. See BffAuthentication.
 builder.AddBffAuthentication();
@@ -151,62 +155,109 @@ app.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver
     })
     .WithName("ResolveDeezerArtist");
 
-// --- Per-user seeds (the taste anchors the recommendation engine grows from) ---
-// artist is a query param (handles '/' in names); all require an authenticated user.
-app.MapGet("/seeds", async (HttpContext http, IUserSeedRepo seeds) =>
-        Results.Ok(await seeds.GetSeeds(http.User.GetSubject()!)))
-    .RequireAuthorization()
-    .WithName("GetSeeds");
-
-app.MapPut("/seeds", async (string artist, HttpContext http, IUserSeedRepo seeds) =>
+// The missing-album sync job (Deezer discography diff per owned artist). Heavy, so it's a dev-only
+// manual trigger; in production it runs on the daily AlbumSyncService schedule.
+app.MapPost("/albums/missing/refresh", (MissingAlbumRefresher refresher) =>
     {
-        await seeds.AddSeed(http.User.GetSubject()!, artist);
-        return Results.NoContent();
+        return refresher.Refresh();
+    })
+    .WithName("RefreshMissingAlbums");
+
+// --- Discovery: the per-user feed + ratings over the similarity graph (DiscoveryEngine) ---
+// All require an authenticated user. artist/album are query params (handles '/' in names),
+// pageSize is clamped to keep paging sane.
+
+// A paged feed section for one category: RecommendedArtist | LibraryArtist | MissingAlbum.
+app.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, string? kind, int? page, int? pageSize) =>
+    {
+        var feedKind = Enum.TryParse<FeedKind>(kind, ignoreCase: true, out var parsed)
+            ? parsed
+            : FeedKind.RecommendedArtist;
+        return Results.Ok(await engine.GetFeed(
+            http.User.GetSubject()!, feedKind, Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100)));
     })
     .RequireAuthorization()
-    .WithName("AddSeed");
+    .WithName("GetDiscoveryFeed");
 
-app.MapDelete("/seeds", async (string artist, HttpContext http, IUserSeedRepo seeds) =>
+// A single mixed feed across the selected categories (comma-separated `kinds`), round-robin
+// interleaved + shuffled by `seed` so the order is stable across pages. This is what the Discover
+// page uses; the per-kind endpoint above remains for any single-category view.
+app.MapGet("/discovery/mixed", async (
+        HttpContext http, DiscoveryEngine engine, string? kinds, int? page, int? pageSize, int? seed) =>
     {
-        await seeds.RemoveSeed(http.User.GetSubject()!, artist);
-        return Results.NoContent();
+        var requested = (kinds ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(k => Enum.TryParse<FeedKind>(k, ignoreCase: true, out var fk) ? (FeedKind?)fk : null)
+            .Where(k => k.HasValue)
+            .Select(k => k!.Value)
+            .Distinct()
+            .ToArray();
+        if (requested.Length == 0)
+        {
+            requested = new[] { FeedKind.RecommendedArtist, FeedKind.MissingAlbum, FeedKind.LibraryArtist };
+        }
+        return Results.Ok(await engine.GetMixedFeed(
+            http.User.GetSubject()!, requested,
+            Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100), seed ?? 0));
     })
     .RequireAuthorization()
-    .WithName("RemoveSeed");
+    .WithName("GetMixedDiscoveryFeed");
 
-// --- Discovery: the per-user swipe loop over the similarity graph (DiscoveryEngine) ---
-// All require an authenticated user; the queue is built lazily from the user's seeds on first read.
-// artist is a query param (handles '/' in names), pageSize is clamped to keep paging sane.
-app.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, int? page, int? pageSize) =>
-        Results.Ok(await engine.GetQueue(http.User.GetSubject()!, Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100))))
-    .RequireAuthorization()
-    .WithName("GetDiscoveryQueue");
-
-// Rebuild the pending queue from the current seeds (keeps likes/dislikes) — use after editing seeds.
-app.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine, int? page, int? pageSize) =>
-        Results.Ok(await engine.Rebuild(http.User.GetSubject()!, Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100))))
+// Rebuild the pending recommendations from the current liked artists (keeps ratings).
+app.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine) =>
+    {
+        await engine.Rebuild(http.User.GetSubject()!);
+        return Results.NoContent();
+    })
     .RequireAuthorization()
     .WithName("RefreshDiscoveryQueue");
 
-// Thumbs-up: like the artist, grow the frontier, and add it to the "to buy" wishlist.
-app.MapPost("/discovery/like", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+// Rate an artist or (when album is supplied) a missing album. verdict = "up" (Liked) | "down" (Disliked).
+app.MapPost("/discovery/rate", async (
+        string artist, string? album, string? albumArt, string verdict,
+        HttpContext http, DiscoveryEngine engine) =>
     {
-        await engine.Like(http.User.GetSubject()!, artist);
+        var status = verdict.Equals("up", StringComparison.OrdinalIgnoreCase)
+            ? DiscoveryStatus.Liked
+            : DiscoveryStatus.Disliked;
+        var userId = http.User.GetSubject()!;
+        if (string.IsNullOrEmpty(album))
+        {
+            await engine.RateArtist(userId, artist, status);
+        }
+        else
+        {
+            await engine.RateAlbum(userId, artist, album, albumArt, status);
+        }
         return Results.NoContent();
     })
     .RequireAuthorization()
-    .WithName("LikeCandidate");
+    .WithName("RateCandidate");
 
-// Thumbs-down: prune the artist from the queue (never shown or expanded again).
-app.MapPost("/discovery/dislike", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+// Clear a rating, returning the artist/album to the feed.
+app.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
     {
-        await engine.Dislike(http.User.GetSubject()!, artist);
+        var userId = http.User.GetSubject()!;
+        if (string.IsNullOrEmpty(album))
+        {
+            await engine.ClearArtistRating(userId, artist);
+        }
+        else
+        {
+            await engine.ClearAlbumRating(userId, artist, album);
+        }
         return Results.NoContent();
     })
     .RequireAuthorization()
-    .WithName("DislikeCandidate");
+    .WithName("ClearRating");
 
-// The "to buy" wishlist: every artist the user has thumbed-up.
+// Every rating the user has made, for the review page (albums that now exist are filtered out).
+app.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine) =>
+        Results.Ok(await engine.GetRatings(http.User.GetSubject()!)))
+    .RequireAuthorization()
+    .WithName("GetRatings");
+
+// The "to buy" list: liked non-owned artists + liked albums not yet acquired.
 app.MapGet("/discovery/purchases", async (HttpContext http, DiscoveryEngine engine) =>
         Results.Ok(await engine.GetPurchases(http.User.GetSubject()!)))
     .RequireAuthorization()

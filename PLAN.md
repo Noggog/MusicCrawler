@@ -7,9 +7,10 @@
 
 A music-discovery tool that works like a **tree search** over artists:
 
-1. Sync the artists that exist in a user's Plex library.
-2. The user marks library artists they **like** → these are *seeds*.
-3. The system recommends related artists, surfaced **one at a time** to swipe on.
+1. Sync the artists (and their albums) that exist in a user's Plex library.
+2. The user thumbs **up/down** library artists they already own. A thumbs-up is a
+   *taste anchor* (what used to be a "seed"); thumbs-down means "not my taste".
+3. The system recommends related artists, surfaced to thumb on.
 4. **Thumbs down** = dead end (prune the branch).
    **Thumbs up** = (a) the artist's related artists join the recommendation pool
    (grow the branch), and (b) the artist is added to a **purchase list** to be
@@ -17,6 +18,31 @@ A music-discovery tool that works like a **tree search** over artists:
 
 The frontier of "what to recommend next" continuously grows from approvals and
 shrinks from rejections — always surfacing fresh artists rooted in the user's taste.
+
+### Ratings replace seeds (2026-06-17)
+
+There is no separate "seed" concept. Everything the user reacts to — owned
+artists, recommended artists, and missing albums — is a **rating** (👍/👎). A
+👍 on an *owned* artist is exactly what a seed was: a taste anchor the frontier
+grows from. The Artists page is just the list of owned artists with thumbs (no
+more star toggle), and a dedicated **Ratings** page lets the user review and
+adjust every rating after the fact.
+
+### Discovery feed = three toggleable categories (2026-06-17)
+
+The Discover area surfaces three kinds of things to react to. Checkboxes pick
+which categories are shown; each is its own paged section:
+
+1. **Recommended artists** — new artists not in the library, grown from the
+   user's 👍'd artists along the similarity graph (the original behaviour). 👍 =
+   queue to buy + grow the frontier; 👎 = prune.
+2. **Missing albums** — albums that exist on Deezer for an artist the user
+   **already owns** but that aren't in the library. 👍 = queue the album to buy;
+   👎 = not interested. Keeps owned bands current. A missing album drops out of
+   the feed (and out of Ratings) automatically once it appears in the library.
+3. **Unrated owned artists** — library artists the user hasn't thumbed yet. This
+   is the alternative to seed-starring: thumbing owned bands feeds the
+   recommendation frontier. Computed as *catalog minus already-rated*.
 
 ## Core architectural principle: self-sufficient sections
 
@@ -54,13 +80,23 @@ External services are *refreshable inputs*, not runtime dependencies.
 Each is independently buildable and testable.
 
 ### 1. Library Catalog
-- **Store:** `artists` — name, image, Plex key, lastSeenAt. **Global / shared** —
-  one Plex server, THE library.
-- **Sync job:** "Refresh from Plex" — upserts the catalog on demand / schedule;
-  flags artists no longer present.
-- **Daily reads** (`GET /artists`, seed-picking) hit this store, not Plex.
-- _Current code:_ `GET /artists` hits Plex live with a 30s Redis cache
-  (`LibraryProvider` / `PlexRepo`). Convert to DB-backed + a sync job.
+- **Store:** `artists` — name, image, lastSeenAt, **owned `albums`** (album
+  titles pulled from Plex). **Global / shared** — one Plex server, THE library.
+- **Sync job:** `CatalogRefresher` ("Refresh from Plex") — upserts artists *and*
+  their owned albums on startup / daily; flags artists no longer present.
+- **Daily reads** (`GET /artists`, the missing-album diff) hit this store, not Plex.
+- _Built:_ DB-backed `LibraryProvider` over `ArtistCatalogRepo`; the album column
+  and `PlexApi.GetAlbums`/`PlexRepo.QueryAllAlbums` are the 2026-06-17 addition.
+
+### 1b. Missing Albums (global)
+- **Store:** `missingAlbums` — one doc per (owned artist, album-on-Deezer-not-owned),
+  with album art. **Global / shared** (a fact about the library, not a user).
+- **Sync job:** `MissingAlbumRefresher` / `AlbumSyncService` — for each owned
+  artist, resolve its Deezer id, pull its discography (`record_type == "album"`),
+  diff against the owned album titles, and `ReplaceForArtist` the misses. Albums
+  that have since been acquired drop out on the next run.
+- Heavy (one Deezer discography call per owned artist), so it is its own daily job
+  separate from the cheap Plex catalog refresh.
 
 ### 2. Similarity Graph (recommendation ingestion)
 - **Store:** `relatedArtists` — edges `artist → [related]`, tagged with source
@@ -71,16 +107,23 @@ Each is independently buildable and testable.
   `IRecommendationProvider`; register in `MainModule`.
 
 ### 3. User Taste State (per user)
-- **Store:** `seeds` (liked library artists) and `decisions` (thumbs up/down per
-  recommended artist), scoped by Authentik user id.
-- _Current code:_ none. `RecommendationInteractor` currently hardcodes "first 10
-  library artists" as seeds — replace with real seeds.
+- **Stores (scoped by Authentik user id):**
+  - `userQueue` — per (user, artist) ratings *and* the precomputed recommendation
+    queue. Status Pending (recommended, awaiting a swipe) / Liked / Disliked. A
+    Liked artist is a taste anchor (the old "seed"); score/sources/depth rank the
+    pending recommended ones.
+  - `userAlbumRatings` — per (user, artist, album) verdict on a missing album.
+- **No `seeds` store** — removed 2026-06-17. The frontier = the user's Liked
+  artists (owned or recommended-then-liked). Bootstrapping: a brand-new user
+  thumbs owned artists (feed category 3), which seeds the frontier.
+- _Built:_ `IUserQueueRepo`/`UserQueueRepo`; `IUserAlbumRatingRepo` is the
+  2026-06-17 addition. `IUserSeedRepo` deleted.
 
 ### 4. Tree-Search Engine
 - **Store:** per-user `recommendationQueue` — the materialized, ranked list of
   pending cards. The swipe UI only ever reads from here (instant, offline-from-sources).
 - Queue computation (per user):
-  - frontier = seeds + approved artists
+  - frontier = the user's **Liked artists** (owned taste anchors + approved recs)
   - expand via the stored similarity graph
   - exclude already-in-library, rejected (dead ends), already-decided
   - rank by how many frontier artists point to a candidate (more = stronger)
@@ -102,11 +145,13 @@ Each is independently buildable and testable.
   becomes `in-library` and it drops off the list).
 
 ### 6. Web UI (React + Vite)
-- Seed-picking over the catalog.
-- One-at-a-time swipe review (with "why recommended").
-- Purchase list view.
-- Settings: connect Plex account/token.
-- _Current code:_ Home + a read-only Artists table.
+- **Artists** — owned-artist list with 👍/👎 per row (replaces the seed star).
+- **Discover** — three category-checkbox sections (recommended artists, missing
+  albums, unrated owned artists); list ⇄ swipe; "why recommended".
+- **Ratings** — review/adjust every rating (artists + albums); albums that now
+  exist are hidden (no longer interesting). Re-thumb or clear back to the feed.
+- **To Buy** — purchase list: non-owned Liked artists + still-missing Liked albums.
+- _Built:_ Home, Artists, Discover, To Buy, dev Related view.
 
 ## Phased build order
 
@@ -118,6 +163,10 @@ Each phase is shippable on its own.
 3. **Authentik OIDC login + per-user seeds** — identity, then mark library artists as liked.
 4. **Tree-search engine + swipe UI** — the core discovery loop.
 5. **Purchase list store + status tracking** — downloader push wired later behind an interface.
+6. **Richer discovery feed (2026-06-17, in progress)** — seeds→ratings unification;
+   three toggleable feed categories (recommended artists, missing albums, unrated
+   owned artists); the album sync pipeline (Plex albums + Deezer discography diff →
+   `missingAlbums`); and a Ratings review page. Artists page gets 👍/👎.
 
 ## Open questions
 

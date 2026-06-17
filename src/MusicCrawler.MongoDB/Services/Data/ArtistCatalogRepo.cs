@@ -11,6 +11,7 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
     private const string FieldImageUrl = "imageUrl";
     private const string FieldLastSeenAt = "lastSeenAt";
     private const string FieldPresent = "present";
+    private const string FieldAlbums = "albums";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -94,6 +95,52 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
 
         var result = await Collection.BulkWriteAsync(writes);
         return (int)result.ModifiedCount;
+    }
+
+    public async Task SyncAlbums(IReadOnlyList<ArtistAlbums> artistAlbums)
+    {
+        var writes = new List<WriteModel<BsonDocument>>();
+        foreach (var entry in artistAlbums)
+        {
+            writes.Add(new UpdateOneModel<BsonDocument>(
+                Builders<BsonDocument>.Filter.Eq("_id", entry.Artist.ArtistName),
+                Builders<BsonDocument>.Update.Set(FieldAlbums, new BsonArray(entry.Albums)))
+            {
+                // Albums come from the same Plex pull as the artist list, so the doc already exists;
+                // never create phantom entries for an artist not in the catalog.
+                IsUpsert = false,
+            });
+        }
+
+        if (writes.Count == 0) return;
+        await Collection.BulkWriteAsync(writes);
+    }
+
+    public async Task<Dictionary<string, HashSet<string>>> GetOwnedAlbums()
+    {
+        var cursor = await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq(FieldPresent, true),
+            new FindOptions<BsonDocument>
+            {
+                Projection = Builders<BsonDocument>.Projection.Include(FieldName).Include(FieldAlbums),
+            });
+
+        var result = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var doc in await cursor.ToListAsync())
+        {
+            var name = doc.TryGetValue(FieldName, out var n) && !n.IsBsonNull ? n.AsString : doc["_id"].AsString;
+            var albums = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (doc.TryGetValue(FieldAlbums, out var a) && a.IsBsonArray)
+            {
+                foreach (var item in a.AsBsonArray.Where(x => !x.IsBsonNull))
+                {
+                    albums.Add(item.AsString);
+                }
+            }
+            result[name] = albums;
+        }
+
+        return result;
     }
 
     public async Task<CatalogArtist[]> GetAllPresent()

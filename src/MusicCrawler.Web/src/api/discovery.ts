@@ -1,44 +1,85 @@
-// Per-user discovery queue (the swipe loop). All calls require an authenticated session (cookie
-// sent automatically, same-origin). artist goes in the query string so names with '/' work.
-import type { DiscoveryCandidate, DiscoveryPage } from '../types'
+// Per-user discovery feed + ratings. All calls require an authenticated session (cookie sent
+// automatically, same-origin). artist/album go in the query string so names with '/' work.
+import type { DiscoveryFeedPage, FeedItem, FeedKind, RatedItem } from '../types'
 
-export async function getQueue(page = 0, pageSize = 20): Promise<DiscoveryPage> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+export type Verdict = 'up' | 'down'
+
+// A paged feed section for one category (recommended artists, missing albums, unrated owned artists).
+export async function getFeed(kind: FeedKind, page = 0, pageSize = 20): Promise<DiscoveryFeedPage> {
+  const params = new URLSearchParams({ kind, page: String(page), pageSize: String(pageSize) })
   const res = await fetch(`/api/discovery?${params}`)
   if (!res.ok) {
-    throw new Error(`Failed to load discovery queue: ${res.status} ${res.statusText}`)
+    throw new Error(`Failed to load ${kind} feed: ${res.status} ${res.statusText}`)
   }
-  return (await res.json()) as DiscoveryPage
+  return (await res.json()) as DiscoveryFeedPage
 }
 
-// Rebuild the pending queue from the current seeds (keeps likes/dislikes). Use after editing seeds.
-export async function refreshQueue(page = 0, pageSize = 20): Promise<DiscoveryPage> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-  const res = await fetch(`/api/discovery/refresh?${params}`, { method: 'POST' })
+// A single mixed feed across the selected categories, round-robin interleaved + shuffled by `seed`
+// (same seed → same order across pages). Each item carries its own `kind`.
+export async function getMixedFeed(
+  kinds: FeedKind[],
+  page = 0,
+  pageSize = 20,
+  seed = 0,
+): Promise<DiscoveryFeedPage> {
+  const params = new URLSearchParams({
+    kinds: kinds.join(','),
+    page: String(page),
+    pageSize: String(pageSize),
+    seed: String(seed),
+  })
+  const res = await fetch(`/api/discovery/mixed?${params}`)
   if (!res.ok) {
-    throw new Error(`Failed to rebuild discovery queue: ${res.status} ${res.statusText}`)
+    throw new Error(`Failed to load discovery feed: ${res.status} ${res.statusText}`)
   }
-  return (await res.json()) as DiscoveryPage
+  return (await res.json()) as DiscoveryFeedPage
 }
 
-export async function likeCandidate(artist: string): Promise<void> {
-  const res = await fetch(`/api/discovery/like?${new URLSearchParams({ artist })}`, { method: 'POST' })
+// Rebuild the pending recommendations from the current liked artists (keeps ratings).
+export async function refreshQueue(): Promise<void> {
+  const res = await fetch('/api/discovery/refresh', { method: 'POST' })
   if (!res.ok) {
-    throw new Error(`Failed to like ${artist}: ${res.status} ${res.statusText}`)
+    throw new Error(`Failed to rebuild recommendations: ${res.status} ${res.statusText}`)
   }
 }
 
-export async function dislikeCandidate(artist: string): Promise<void> {
-  const res = await fetch(`/api/discovery/dislike?${new URLSearchParams({ artist })}`, { method: 'POST' })
+// Thumb an artist or — when album is supplied — a missing album.
+export async function rate(item: FeedItem | RatedItem, verdict: Verdict): Promise<void> {
+  const params = new URLSearchParams({ artist: item.artist.artistName, verdict })
+  if (item.album) {
+    params.set('album', item.album)
+    if (item.imageUrl) params.set('albumArt', item.imageUrl)
+  }
+  const res = await fetch(`/api/discovery/rate?${params}`, { method: 'POST' })
   if (!res.ok) {
-    throw new Error(`Failed to dislike ${artist}: ${res.status} ${res.statusText}`)
+    throw new Error(`Failed to rate ${item.artist.artistName}: ${res.status} ${res.statusText}`)
   }
 }
 
-export async function getPurchases(): Promise<DiscoveryCandidate[]> {
+// Clear a rating, returning the artist/album to the feed.
+export async function clearRating(item: FeedItem | RatedItem): Promise<void> {
+  const params = new URLSearchParams({ artist: item.artist.artistName })
+  if (item.album) params.set('album', item.album)
+  const res = await fetch(`/api/discovery/rate?${params}`, { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(`Failed to clear rating for ${item.artist.artistName}: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Every rating the user has made, for the review page (albums that now exist are filtered out).
+export async function getRatings(): Promise<RatedItem[]> {
+  const res = await fetch('/api/discovery/ratings')
+  if (!res.ok) {
+    throw new Error(`Failed to load ratings: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as RatedItem[]
+}
+
+// The "to buy" list: liked non-owned artists + liked albums not yet acquired.
+export async function getPurchases(): Promise<FeedItem[]> {
   const res = await fetch('/api/discovery/purchases')
   if (!res.ok) {
     throw new Error(`Failed to load wishlist: ${res.status} ${res.statusText}`)
   }
-  return (await res.json()) as DiscoveryCandidate[]
+  return (await res.json()) as FeedItem[]
 }

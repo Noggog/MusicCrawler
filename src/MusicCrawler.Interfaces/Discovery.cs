@@ -36,3 +36,56 @@ public record DiscoveryPage(
     int Page,
     int PageSize,
     long TotalPending);
+
+/// <summary>
+/// The category a discovery-feed item belongs to. The feed is split into these so the UI can show
+/// each as its own checkbox-toggleable, independently-paged section.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum FeedKind
+{
+    /// <summary>A new artist not in the library, grown from the user's liked artists.</summary>
+    RecommendedArtist,
+
+    /// <summary>An album on Deezer for an owned artist that isn't in the library yet.</summary>
+    MissingAlbum,
+
+    /// <summary>An owned library artist the user hasn't thumbed yet.</summary>
+    LibraryArtist,
+}
+
+/// <summary>
+/// One thing to react to in the discovery feed. <paramref name="Album"/> is set only for
+/// <see cref="FeedKind.MissingAlbum"/>; <paramref name="Score"/>/<paramref name="Sources"/> rank
+/// and explain recommended artists (0/empty for the other kinds).
+/// </summary>
+public record FeedItem(
+    FeedKind Kind,
+    ArtistKey Artist,
+    string? Album,
+    string? ImageUrl,
+    double Score,
+    IReadOnlyList<string> Sources);
+
+/// <summary>A paged feed section for a single <see cref="FeedKind"/>.</summary>
+public record DiscoveryFeedPage(
+    FeedKind Kind,
+    IReadOnlyList<FeedItem> Items,
+    int Page,
+    int PageSize,
+    long Total);
+
+/// <summary>
+/// A rating the user has made, for the Ratings review page. <paramref name="Album"/> is set for
+/// album ratings; <paramref name="Kind"/> is the effective category (an owned rated artist is
+/// <see cref="FeedKind.LibraryArtist"/>, a non-owned one <see cref="FeedKind.RecommendedArtist"/>).
+/// </summary>
+public record RatedItem(
+    FeedKind Kind,
+    ArtistKey Artist,
+    string? Album,
+    string? ImageUrl,
+    DiscoveryStatus Verdict);
+
+/// <summary>An artist-level rating row (verdict + image) read back from the per-user queue.</summary>
+public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus Status);

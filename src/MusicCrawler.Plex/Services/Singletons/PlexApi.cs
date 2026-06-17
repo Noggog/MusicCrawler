@@ -38,6 +38,17 @@ public class PlexApi
         return data["MediaContainer"]["Metadata"].ToObject<PlexMusicArtist[]>();
     }
 
+    public async Task<PlexMusicAlbum[]> GetMusicAlbums(int library)
+    {
+        // type=9 is the album metadata type; parentTitle carries the owning artist's name.
+        string url = $"{_endpointInfo.BaseUri}/library/sections/{library}/all?type=9";
+        _logger.LogDebug("Plex GetMusicAlbums from library {Library}: {Url}", library, url);
+        var response = await httpClient.GetStringAsync(url);
+        var data = JObject.Parse(response);
+        var metadata = data["MediaContainer"]?["Metadata"];
+        return metadata?.ToObject<PlexMusicAlbum[]>() ?? Array.Empty<PlexMusicAlbum>();
+    }
+
     public async Task<PlexRecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
     {
         string url = $"{_endpointInfo.BaseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
@@ -65,4 +76,11 @@ public record PlexMusicArtist
     public string Key { get; set; }
     public string Guid { get; set; }
     public string Title { get; set; }
+}
+
+public record PlexMusicAlbum
+{
+    public int RatingKey { get; set; }
+    public string Title { get; set; }       // album title
+    public string ParentTitle { get; set; } // owning artist's name
 }

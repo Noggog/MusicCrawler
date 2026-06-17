@@ -131,18 +131,80 @@ public class UserQueueRepo : IUserQueueRepo
         return await Collection.CountDocumentsAsync(filter);
     }
 
-    public async Task<DiscoveryCandidate?> SetVerdict(string userId, string artistName, DiscoveryStatus status)
+    public async Task<DiscoveryCandidate?> Rate(string userId, string artistName, DiscoveryStatus status, string? imageUrl)
     {
-        var update = Builders<BsonDocument>.Update
-            .Set(FieldStatus, status.ToString())
-            .Set(FieldDecidedAt, DateTimeOffset.UtcNow.UtcDateTime);
+        var now = DateTimeOffset.UtcNow.UtcDateTime;
+        var updates = new List<UpdateDefinition<BsonDocument>>
+        {
+            // Seed immutable fields on first sight so an owned artist with no prior candidate row
+            // (rated straight from the library/Artists page) gets a valid doc; depth 0 means its
+            // neighbours expand to depth 1, exactly like an old seed.
+            Builders<BsonDocument>.Update.SetOnInsert(FieldUserId, userId),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldArtist, artistName),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldAddedAt, now),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldScore, 0.0),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldDepth, 0),
+            Builders<BsonDocument>.Update.Set(FieldStatus, status.ToString()),
+            Builders<BsonDocument>.Update.Set(FieldDecidedAt, now),
+        };
+        if (imageUrl != null)
+        {
+            updates.Add(Builders<BsonDocument>.Update.Set(FieldImageUrl, imageUrl));
+        }
 
         var doc = await Collection.FindOneAndUpdateAsync(
             Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName)),
-            update,
-            new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After });
+            Builders<BsonDocument>.Update.Combine(updates),
+            new FindOneAndUpdateOptions<BsonDocument>
+            {
+                IsUpsert = true,
+                ReturnDocument = ReturnDocument.After,
+            });
 
         return doc == null ? null : ToCandidate(doc);
+    }
+
+    public Task ClearVerdict(string userId, string artistName) =>
+        Collection.DeleteOneAsync(Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName)));
+
+    public async Task<string[]> GetLikedArtistNames(string userId)
+    {
+        var filter = Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
+                     & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusLiked);
+        var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
+        {
+            Projection = Builders<BsonDocument>.Projection.Include(FieldArtist),
+        });
+
+        var names = new List<string>();
+        foreach (var doc in await cursor.ToListAsync())
+        {
+            if (doc.TryGetValue(FieldArtist, out var a) && !a.IsBsonNull)
+            {
+                names.Add(a.AsString);
+            }
+        }
+        return names.ToArray();
+    }
+
+    public async Task<ArtistRating[]> GetRated(string userId)
+    {
+        var filter = Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
+                     & Builders<BsonDocument>.Filter.Ne(FieldStatus, StatusPending);
+        var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
+        {
+            Sort = Builders<BsonDocument>.Sort.Descending(FieldDecidedAt),
+        });
+
+        return (await cursor.ToListAsync()).Select(doc =>
+        {
+            var c = ToCandidate(doc);
+            var status = doc.TryGetValue(FieldStatus, out var s) && !s.IsBsonNull
+                && Enum.TryParse<DiscoveryStatus>(s.AsString, out var parsed)
+                ? parsed
+                : DiscoveryStatus.Pending;
+            return new ArtistRating(c.Artist, c.ImageUrl, status);
+        }).ToArray();
     }
 
     public async Task<DiscoveryCandidate[]> GetLiked(string userId)

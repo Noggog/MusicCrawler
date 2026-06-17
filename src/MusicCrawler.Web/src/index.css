@@ -196,23 +196,10 @@ body {
   background: #4338ca;
 }
 
-.seed-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  color: #c9a227;
-  padding: 0;
-}
-
-.seed-btn.seeded {
-  color: #e0b400;
-}
-
-.seed-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+/* Per-row 👍/👎 cell on the Artists table. */
+.rate-cell {
+  display: inline-flex;
+  gap: 0.35rem;
 }
 
 /* --- Discovery (swipe loop) --- */
@@ -364,6 +351,82 @@ body {
 .disc-btn.play.active {
   border-color: #4f46e5;
   color: #4f46e5;
+}
+
+/* Selected verdict (Ratings page + Artists thumbs). */
+.disc-btn.up.active {
+  border-color: #16a34a;
+  background: #e9f8ee;
+}
+
+.disc-btn.down.active {
+  border-color: #b00020;
+  background: #fdeaed;
+}
+
+/* --- Discovery feed categories --- */
+.feed-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.feed-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #55556b;
+  cursor: pointer;
+}
+
+.feed-section {
+  margin-bottom: 2rem;
+}
+
+.feed-section-title {
+  font-size: 1.1rem;
+  margin: 0 0 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.feed-count {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+  background: #4f46e5;
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+}
+
+/* Per-card "what is this" badge. */
+.feed-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 0.08rem 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
+.feed-badge-RecommendedArtist {
+  color: #3730a3;
+  background: #e7e6fb;
+}
+
+.feed-badge-MissingAlbum {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.feed-badge-LibraryArtist {
+  color: #4f5b1f;
+  background: #eef3d6;
 }
 
 /* Deezer 30-second preview sample player: top-5 tracks + link out. */
