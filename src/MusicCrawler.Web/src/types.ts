@@ -9,3 +9,10 @@ export interface ArtistMetadata {
   artistKey: ArtistKey
   artistImageUrl: string | null
 }
+
+// Mirrors CatalogSyncResult (IArtistCatalogRepo.cs) — returned by POST /catalog/refresh.
+export interface CatalogSyncResult {
+  upserted: number
+  markedAbsent: number
+  totalPresent: number
+}

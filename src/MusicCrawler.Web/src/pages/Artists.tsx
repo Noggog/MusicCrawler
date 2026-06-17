@@ -1,15 +1,40 @@
-import { useQuery } from '@tanstack/react-query'
-import { getArtists } from '../api/artists'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { getArtists, refreshCatalog } from '../api/artists'
 
 export default function Artists() {
+  const queryClient = useQueryClient()
+
   const { data: artists, isPending, isError, error } = useQuery({
     queryKey: ['artists'],
     queryFn: getArtists,
   })
 
+  const refresh = useMutation({
+    mutationFn: refreshCatalog,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artists'] }),
+  })
+
   return (
     <section>
-      <h1>Artists</h1>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem' }}>
+        <h1>Artists</h1>
+        <button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+          {refresh.isPending ? 'Refreshing…' : 'Refresh from Plex'}
+        </button>
+      </div>
+
+      {refresh.isError && (
+        <p className="error">Refresh failed: {(refresh.error as Error).message}</p>
+      )}
+
+      {refresh.isSuccess && (
+        <p>
+          <em>
+            Synced: {refresh.data.upserted} from Plex, {refresh.data.markedAbsent} removed,{' '}
+            {refresh.data.totalPresent} in catalog.
+          </em>
+        </p>
+      )}
 
       {isPending && <p><em>Loading…</em></p>}
 
@@ -17,7 +42,11 @@ export default function Artists() {
         <p className="error">Failed to load artists: {(error as Error).message}</p>
       )}
 
-      {artists && (
+      {artists && artists.length === 0 && (
+        <p><em>Catalog is empty — hit “Refresh from Plex” to populate it.</em></p>
+      )}
+
+      {artists && artists.length > 0 && (
         <table className="table">
           <thead>
             <tr>

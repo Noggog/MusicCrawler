@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.Caching.Distributed;
 using MusicCrawler.Interfaces;
-using Newtonsoft.Json;
 
 namespace MusicCrawler.Backend.Services.Singletons;
 
@@ -9,37 +7,24 @@ public interface ILibraryProvider
     Task<ArtistMetadata[]> GetAllArtistMetadata();
 }
 
+/// <summary>
+/// Serves the artist library for daily reads from the local catalog store — not from
+/// Plex. Keeping reads off the live Plex path is what lets the app stay usable when
+/// Plex is offline; the catalog is refreshed separately by <see cref="CatalogRefresher"/>.
+/// </summary>
 public class LibraryProvider : ILibraryProvider
 {
-    private readonly IDistributedCache _distributedCache;
-    private readonly ILibraryQuery _libraryQuery;
+    private readonly IArtistCatalogRepo _catalog;
 
-    public LibraryProvider(
-        IDistributedCache distributedCache,
-        ILibraryQuery libraryQuery)
+    public LibraryProvider(IArtistCatalogRepo catalog)
     {
-        _distributedCache = distributedCache;
-        _libraryQuery = libraryQuery;
+        _catalog = catalog;
     }
-    
+
     public async Task<ArtistMetadata[]> GetAllArtistMetadata()
     {
-        var results = await _distributedCache.GetStringAsync("artistMetadata");
-
-        if (results != null)
-        {
-            return JsonConvert.DeserializeObject<ArtistMetadata[]>(results)!;
-        }
-
-        var ret = (await _libraryQuery.QueryAllArtistMetadata())
-            .OrderBy(x => x.ArtistKey.ArtistName)
+        return (await _catalog.GetAllPresent())
+            .Select(x => new ArtistMetadata(x.ArtistKey, x.ArtistImageUrl))
             .ToArray();
-        
-        await _distributedCache.SetStringAsync("artistMetadata", JsonConvert.SerializeObject(ret), new DistributedCacheEntryOptions()
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)
-        });
-
-        return ret;
     }
 }

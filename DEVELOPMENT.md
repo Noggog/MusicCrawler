@@ -79,10 +79,24 @@ dotnet test src/MusicCrawler.Tests --verbosity normal
 
 ## Configuration
 
-The application requires several environment variables:
-- `PLEX_TOKEN`: Plex authentication token (set in AppHost configuration)
-- Plex endpoint and preferred library are configured in AppHost/Program.cs
-- Spotify client credentials are hardcoded in MainModule (should be externalized)
+Set these in the shell before `dotnet run --project src/AppHost`. The AppHost forwards
+them to the backend explicitly via `WithEnvironment` (Aspire does **not** auto-propagate
+AppHost env vars to child services).
+
+| Env var | Required? | Purpose |
+|---|---|---|
+| `PLEX_TOKEN` | **Yes** | Plex authentication token |
+| `PLEX_ENDPOINT` | **Yes** | Plex server base URL (backend throws if unset) |
+| `PLEX_LIBRARY` | No | Which Plex library to crawl; if unset, falls back to the first artist-type library |
+| `MONGO_URI` | No (auto) | Mongo connection string |
+
+There are no hardcoded defaults — every value comes from the environment.
+
+Notes:
+- `MONGO_URI` is supplied by the AppHost from the provisioned MongoDB resource's
+  connection string — you don't set it yourself when running via the AppHost.
+- Spotify client credentials are still hardcoded in `MainModule` (should be externalized;
+  the Spotify path is deprecated anyway — see Known Issues).
 
 ## Infrastructure Dependencies
 

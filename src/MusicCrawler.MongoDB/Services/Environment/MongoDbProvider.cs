@@ -8,7 +8,7 @@ public class MongoDbProvider : IMongoDbProvider
 
     public MongoDbProvider()
     {
-        var client = new MongoClient(System.Environment.GetEnvironmentVariable("mongoURI") ?? throw new InvalidOperationException());
+        var client = new MongoClient(System.Environment.GetEnvironmentVariable("MONGO_URI") ?? throw new InvalidOperationException());
         database = client.GetDatabase("MusicCrawler");
     }
 }

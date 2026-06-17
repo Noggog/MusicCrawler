@@ -24,11 +24,11 @@ public class PlexRepo : ILibraryQuery
     public async Task<ArtistMetadata[]> QueryAllArtistMetadata()
     {
         var plexLibraries = await _plexApi.GetLibraries();
-        var preferredPlexLibrary = Environment.GetEnvironmentVariable("preferredPlexLibrary");
+        var preferredPlexLibrary = Environment.GetEnvironmentVariable("PLEX_LIBRARY");
         PlexLibrary? plexLibrary = null;
         if (preferredPlexLibrary == null)
         {
-            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because preferredPlexLibrary was null");
+            Console.WriteLine("Warning. Could not find preferred library. Falling back to random artist library because PLEX_LIBRARY was null");
         }
         else if (plexLibraries.FirstOrDefault(it => string.Equals(it.Title, preferredPlexLibrary)) == null)
         {

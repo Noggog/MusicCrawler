@@ -6,4 +6,6 @@ public record ArtistKey(string ArtistName);
 
 public record ArtistMetadata(ArtistKey ArtistKey, string? ArtistImageUrl);
 
+public record CatalogArtist(ArtistKey ArtistKey, string? ArtistImageUrl, DateTimeOffset LastSeenAt);
+
 public record ArtistPackage(ArtistMetadata Metadata, Album[] Albums);

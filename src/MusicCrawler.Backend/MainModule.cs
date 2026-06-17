@@ -20,9 +20,9 @@ public class MainModule : Autofac.Module
                 Id: "267c94026025449b8013ddde6d959e13",
                 Secret: "92c88db9315545e38989ca8cc4cad2ad"));
         builder.RegisterInstance(
-            new PlexEndpointInfo(Environment.GetEnvironmentVariable("plexEndpoint") ?? throw new InvalidOperationException()));
+            new PlexEndpointInfo(Environment.GetEnvironmentVariable("PLEX_ENDPOINT") ?? throw new InvalidOperationException()));
         builder.RegisterInstance(
-            new PlexClientInfo(Environment.GetEnvironmentVariable("plexClientSecret") ?? throw new InvalidOperationException()));
+            new PlexClientInfo(Environment.GetEnvironmentVariable("PLEX_TOKEN") ?? throw new InvalidOperationException()));
         builder.RegisterType<HttpClient>().AsSelf().SingleInstance();
         
         builder.RegisterAssemblyTypes(typeof(LibraryProvider).Assembly)
