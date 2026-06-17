@@ -16,6 +16,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/artists" className={navClass}>
             Artists
           </NavLink>
+          {/* Dev-only debug view for the similarity graph; compiled out of production builds. */}
+          {import.meta.env.DEV && (
+            <NavLink to="/related" className={navClass}>
+              Related (dev)
+            </NavLink>
+          )}
         </nav>
       </aside>
       <main className="content">{children}</main>

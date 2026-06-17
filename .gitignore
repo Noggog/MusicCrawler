@@ -394,3 +394,6 @@ next-env.d.ts
 
 # Claude Code files
 .claude
+
+# Local dev secrets
+local.secrets.env

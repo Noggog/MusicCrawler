@@ -1,6 +1,7 @@
 using MusicCrawler.Backend;
 using MusicCrawler.Backend.Services.Background;
 using MusicCrawler.Backend.Services.Singletons;
+using MusicCrawler.Interfaces;
 using Serilog;
 using Serilog.Events;
 
@@ -82,6 +83,16 @@ app.MapPost("/catalog/refresh", (CatalogRefresher refresher) =>
         return refresher.Refresh();
     })
     .WithName("RefreshCatalog");
+
+// Related artists, unified across every similarity source. Ingests from Deezer on a cache
+// miss/stale entry (persisting into the graph); pass ?refresh=true to force a re-fetch.
+// The artist is a query param (not a path segment) so names with '/' (e.g. "AC/DC") work —
+// an encoded slash in a path segment is rejected by ASP.NET routing by default.
+app.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor interactor) =>
+    {
+        return interactor.GetRelated(new ArtistKey(artist), forceRefresh: refresh ?? false);
+    })
+    .WithName("GetRelated");
 
 app.MapDefaultEndpoints();
 

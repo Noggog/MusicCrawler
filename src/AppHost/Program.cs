@@ -21,7 +21,12 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     // Aspire does not auto-propagate AppHost env vars to children, so these are explicit.
     .WithEnvironment("PLEX_ENDPOINT", Environment.GetEnvironmentVariable("PLEX_ENDPOINT"))
     .WithEnvironment("PLEX_LIBRARY", Environment.GetEnvironmentVariable("PLEX_LIBRARY"))
-    .WithEnvironment("PLEX_TOKEN", Environment.GetEnvironmentVariable("PLEX_TOKEN"));
+    .WithEnvironment("PLEX_TOKEN", Environment.GetEnvironmentVariable("PLEX_TOKEN"))
+    // Deezer similarity-graph knobs (both optional; the backend defaults them when unset):
+    //   DEEZER_BASE_URI       override the public Deezer API endpoint
+    //   RELATED_STALENESS_DAYS how long a stored edge set is considered fresh (default 30)
+    .WithEnvironment("DEEZER_BASE_URI", Environment.GetEnvironmentVariable("DEEZER_BASE_URI"))
+    .WithEnvironment("RELATED_STALENESS_DAYS", Environment.GetEnvironmentVariable("RELATED_STALENESS_DAYS"));
 
 builder.AddNpmApp("web", "../MusicCrawler.Web", "dev")
     .WithReference(backend)

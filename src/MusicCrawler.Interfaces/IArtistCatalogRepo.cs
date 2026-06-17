@@ -16,6 +16,14 @@ public interface IArtistCatalogRepo
     /// (kept, not deleted, so taste state can still reference it).
     /// </summary>
     Task<CatalogSyncResult> SyncFromLibrary(IReadOnlyList<ArtistMetadata> artists, DateTimeOffset syncedAt);
+
+    /// <summary>
+    /// Fills in <c>ArtistImageUrl</c> for artists already in the catalog (e.g. from a Deezer
+    /// ingestion pass, since the Plex sync supplies no images). Only artists that already exist
+    /// are touched — this never creates phantom catalog entries for artists outside the library,
+    /// and only sets the image when one is supplied. Returns the number of docs updated.
+    /// </summary>
+    Task<int> BackfillImages(IReadOnlyList<ArtistMetadata> artists);
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);

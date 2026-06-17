@@ -16,3 +16,15 @@ export interface CatalogSyncResult {
   markedAbsent: number
   totalPresent: number
 }
+
+// Mirror UnifiedRelatedArtist / UnifiedRelations (RelatedArtist.cs) — returned by GET /related/{artist}.
+export interface UnifiedRelatedArtist {
+  artistKey: ArtistKey
+  imageUrl: string | null
+  sources: string[]
+}
+
+export interface UnifiedRelations {
+  artist: ArtistKey
+  related: UnifiedRelatedArtist[]
+}

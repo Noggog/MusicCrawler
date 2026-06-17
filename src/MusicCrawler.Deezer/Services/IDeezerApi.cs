@@ -1,0 +1,17 @@
+using MusicCrawler.Deezer.Models;
+
+namespace MusicCrawler.Deezer.Services;
+
+/// <summary>
+/// Thin client over the keyless Deezer public API. Both calls degrade gracefully (return
+/// null / empty) on a miss or transport error rather than throwing, so ingestion can keep
+/// going when Deezer is flaky.
+/// </summary>
+public interface IDeezerApi
+{
+    /// <summary>Resolve an artist name to its Deezer artist (strongest match), or null if none.</summary>
+    Task<DeezerArtist?> SearchArtist(string artistName);
+
+    /// <summary>Deezer's "related artists" for the given artist id (empty if none/error).</summary>
+    Task<DeezerArtist[]> GetRelated(long artistId);
+}

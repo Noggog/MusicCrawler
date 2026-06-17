@@ -73,6 +73,29 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             TotalPresent: (int)totalPresent);
     }
 
+    public async Task<int> BackfillImages(IReadOnlyList<ArtistMetadata> artists)
+    {
+        var writes = new List<WriteModel<BsonDocument>>();
+        foreach (var artist in artists)
+        {
+            if (artist.ArtistImageUrl == null) continue;
+
+            writes.Add(new UpdateOneModel<BsonDocument>(
+                Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistKey.ArtistName),
+                Builders<BsonDocument>.Update.Set(FieldImageUrl, artist.ArtistImageUrl))
+            {
+                // Never create entries for artists outside the library — only fill images on
+                // artists already cataloged by a Plex sync.
+                IsUpsert = false,
+            });
+        }
+
+        if (writes.Count == 0) return 0;
+
+        var result = await Collection.BulkWriteAsync(writes);
+        return (int)result.ModifiedCount;
+    }
+
     public async Task<CatalogArtist[]> GetAllPresent()
     {
         var collection = Collection;
