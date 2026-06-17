@@ -164,6 +164,44 @@ app.MapDelete("/seeds", async (string artist, HttpContext http, IUserSeedRepo se
     .RequireAuthorization()
     .WithName("RemoveSeed");
 
+// --- Discovery: the per-user swipe loop over the similarity graph (DiscoveryEngine) ---
+// All require an authenticated user; the queue is built lazily from the user's seeds on first read.
+// artist is a query param (handles '/' in names), pageSize is clamped to keep paging sane.
+app.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, int? page, int? pageSize) =>
+        Results.Ok(await engine.GetQueue(http.User.GetSubject()!, Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100))))
+    .RequireAuthorization()
+    .WithName("GetDiscoveryQueue");
+
+// Rebuild the pending queue from the current seeds (keeps likes/dislikes) — use after editing seeds.
+app.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine, int? page, int? pageSize) =>
+        Results.Ok(await engine.Rebuild(http.User.GetSubject()!, Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100))))
+    .RequireAuthorization()
+    .WithName("RefreshDiscoveryQueue");
+
+// Thumbs-up: like the artist, grow the frontier, and add it to the "to buy" wishlist.
+app.MapPost("/discovery/like", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+    {
+        await engine.Like(http.User.GetSubject()!, artist);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("LikeCandidate");
+
+// Thumbs-down: prune the artist from the queue (never shown or expanded again).
+app.MapPost("/discovery/dislike", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+    {
+        await engine.Dislike(http.User.GetSubject()!, artist);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("DislikeCandidate");
+
+// The "to buy" wishlist: every artist the user has thumbed-up.
+app.MapGet("/discovery/purchases", async (HttpContext http, DiscoveryEngine engine) =>
+        Results.Ok(await engine.GetPurchases(http.User.GetSubject()!)))
+    .RequireAuthorization()
+    .WithName("GetPurchases");
+
 app.MapDefaultEndpoints();
 
 app.Run();

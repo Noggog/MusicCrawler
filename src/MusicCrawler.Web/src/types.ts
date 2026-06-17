@@ -29,6 +29,23 @@ export interface UnifiedRelations {
   related: UnifiedRelatedArtist[]
 }
 
+// Mirror DiscoveryCandidate / DiscoveryPage (Discovery.cs) — the per-user swipe queue.
+// `sources` is the provenance shown in the UI ("via boygenius, Snail Mail").
+export interface DiscoveryCandidate {
+  artist: ArtistKey
+  imageUrl: string | null
+  score: number
+  sources: string[]
+  depth: number
+}
+
+export interface DiscoveryPage {
+  items: DiscoveryCandidate[]
+  page: number
+  pageSize: number
+  totalPending: number
+}
+
 // The signed-in user, as returned by GET /auth/me (the BFF). Null when not authenticated.
 export interface CurrentUser {
   subject: string

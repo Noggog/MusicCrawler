@@ -42,6 +42,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/artists" className={navClass}>
             Artists
           </NavLink>
+          <NavLink to="/discover" className={navClass}>
+            Discover
+          </NavLink>
+          <NavLink to="/purchases" className={navClass}>
+            To Buy
+          </NavLink>
           {/* Dev-only debug view for the similarity graph; compiled out of production builds. */}
           {import.meta.env.DEV && (
             <NavLink to="/related" className={navClass}>
