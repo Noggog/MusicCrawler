@@ -171,8 +171,8 @@ public class DiscoveryEngineTests
     {
         _missing.GetAll().Returns(new[]
         {
-            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Dragon New Warm Mountain"), "art1"),
-            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art2"),
+            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Dragon New Warm Mountain"), "art1", 101),
+            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art2", 102),
         });
         _albumRatings.GetDecidedKeys(User).Returns(new HashSet<string> { AlbumRatingKey.For("Big Thief", "Capacity") });
 

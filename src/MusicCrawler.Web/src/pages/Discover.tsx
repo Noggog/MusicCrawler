@@ -17,8 +17,8 @@ const PAGE_SIZE = 20
 // on each card so it's obvious what action a card is asking for.
 const CATEGORIES: { kind: FeedKind; label: string; badge: string }[] = [
   { kind: 'RecommendedArtist', label: 'New recommended artists', badge: 'Consider new artist' },
-  { kind: 'MissingAlbum', label: 'Missing albums', badge: 'Add missing album?' },
-  { kind: 'LibraryArtist', label: 'Owned artists to rate', badge: 'Mark existing artist' },
+  { kind: 'MissingAlbum', label: 'Missing albums', badge: 'Add missing album' },
+  { kind: 'LibraryArtist', label: 'Existing artists to rate', badge: 'Mark existing artist' },
 ]
 
 const BADGE: Record<FeedKind, string> = Object.fromEntries(
@@ -26,6 +26,8 @@ const BADGE: Record<FeedKind, string> = Object.fromEntries(
 ) as Record<FeedKind, string>
 
 const ALL_KINDS = CATEGORIES.map((c) => c.kind)
+// LibraryArtist starts unchecked — it's a less common action than discovering new artists/albums.
+const DEFAULT_KINDS = CATEGORIES.filter((c) => c.kind !== 'LibraryArtist').map((c) => c.kind)
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
@@ -58,7 +60,7 @@ function Provenance({ sources }: { sources: string[] }) {
 export default function Discover() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const [shown, setShown] = useState<Set<FeedKind>>(() => new Set<FeedKind>(ALL_KINDS))
+  const [shown, setShown] = useState<Set<FeedKind>>(() => new Set<FeedKind>(DEFAULT_KINDS))
   const [page, setPage] = useState(0)
   const [seed, setSeed] = useState(newSeed)
   // Artists whose Deezer player is expanded (kept collapsed by default so we don't mount many iframes).
@@ -181,6 +183,8 @@ export default function Discover() {
             const isAlbum = !!item.album
             const rowKey = isAlbum ? `${name}::${item.album}` : `${item.kind}:${name}`
             const isPlaying = playing.has(rowKey)
+            // Artists sample by name; albums sample by their Deezer id (when we have one).
+            const canPlay = isAlbum ? !!item.deezerAlbumId : true
             return (
               <div className="disc-row-wrap" key={rowKey}>
                 <div className="disc-row">
@@ -195,7 +199,7 @@ export default function Discover() {
                     )}
                   </div>
                   <div className="disc-actions">
-                    {!isAlbum && (
+                    {canPlay && (
                       <button
                         className={isPlaying ? 'disc-btn play active' : 'disc-btn play'}
                         title={isPlaying ? 'Hide Deezer player' : 'Listen on Deezer'}
@@ -222,7 +226,9 @@ export default function Discover() {
                     </button>
                   </div>
                 </div>
-                {isPlaying && !isAlbum && <DeezerSample artist={name} />}
+                {isPlaying && (isAlbum
+                  ? <DeezerSample albumId={item.deezerAlbumId!} />
+                  : <DeezerSample artist={name} />)}
               </div>
             )
           })}

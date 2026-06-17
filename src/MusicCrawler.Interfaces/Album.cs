@@ -11,7 +11,7 @@ public record ArtistAlbums(ArtistKey Artist, IReadOnlyList<string> Albums);
 /// candidate to acquire so an owned band stays current. A global fact about the library (not
 /// per-user); the per-user verdict on it lives in <see cref="AlbumRating"/>.
 /// </summary>
-public record MissingAlbum(ArtistKey Artist, AlbumKey Album, string? AlbumArt);
+public record MissingAlbum(ArtistKey Artist, AlbumKey Album, string? AlbumArt, long DeezerAlbumId);
 
 /// <summary>
 /// Canonical (artist, album) identity used to match a user's album verdict against a missing album.

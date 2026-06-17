@@ -23,4 +23,7 @@ public interface IDeezerApi
 
     /// <summary>The artist's albums (their discography). Empty if none/error.</summary>
     Task<DeezerAlbum[]> GetAlbums(long artistId);
+
+    /// <summary>An album's tracks (for their ~30s preview URLs), in track order. Empty if none/error.</summary>
+    Task<DeezerTrack[]> GetAlbumTracks(long albumId);
 }

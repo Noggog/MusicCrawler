@@ -92,7 +92,7 @@ public class DiscoveryEngine
         // Pull the whole pending set (modest in practice); paging/mixing happens above.
         var pageData = await _queue.GetPending(userId, 0, int.MaxValue);
         return pageData.Items
-            .Select(c => new FeedItem(FeedKind.RecommendedArtist, c.Artist, null, c.ImageUrl, c.Score, c.Sources))
+            .Select(c => new FeedItem(FeedKind.RecommendedArtist, c.Artist, null, c.ImageUrl, c.Score, c.Sources, null))
             .ToList();
     }
 
@@ -104,7 +104,7 @@ public class DiscoveryEngine
         return (await _library.GetAllArtistMetadata())
             .Where(a => !decided.Contains(a.ArtistKey.ArtistName))
             .OrderBy(a => a.ArtistKey.ArtistName, StringComparer.OrdinalIgnoreCase)
-            .Select(a => new FeedItem(FeedKind.LibraryArtist, a.ArtistKey, null, a.ArtistImageUrl, 0, Array.Empty<string>()))
+            .Select(a => new FeedItem(FeedKind.LibraryArtist, a.ArtistKey, null, a.ArtistImageUrl, 0, Array.Empty<string>(), null))
             .ToList();
     }
 
@@ -114,7 +114,7 @@ public class DiscoveryEngine
         return (await _missing.GetAll())
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
             .Select(m => new FeedItem(
-                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>()))
+                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))
             .ToList();
     }
 
@@ -219,12 +219,12 @@ public class DiscoveryEngine
 
         var artists = (await _queue.GetLiked(userId))
             .Where(c => !owned.Contains(c.Artist.ArtistName))
-            .Select(c => new FeedItem(FeedKind.RecommendedArtist, c.Artist, null, c.ImageUrl, c.Score, c.Sources));
+            .Select(c => new FeedItem(FeedKind.RecommendedArtist, c.Artist, null, c.ImageUrl, c.Score, c.Sources, null));
 
         var albums = (await _albumRatings.GetLiked(userId))
             .Where(r => !AlbumIsOwned(ownedAlbums, r.Artist.ArtistName, r.Album.AlbumName))
             .Select(r => new FeedItem(
-                FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, 0, Array.Empty<string>()));
+                FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, 0, Array.Empty<string>(), null));
 
         return artists.Concat(albums).ToArray();
     }

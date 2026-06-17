@@ -44,6 +44,7 @@ export default function Artists() {
         imageUrl: null,
         score: 0,
         sources: [],
+        deezerAlbumId: null,
       }
       return current === verdictStatus(verdict) ? clearRating(item) : rate(item, verdict)
     },

@@ -77,7 +77,7 @@ public class MissingAlbumRefresher
                     continue;
                 }
 
-                missing.Add(new MissingAlbum(artist.ArtistKey, new AlbumKey(title), album.BestCoverUrl));
+                missing.Add(new MissingAlbum(artist.ArtistKey, new AlbumKey(title), album.BestCoverUrl, album.id));
             }
 
             await _missing.ReplaceForArtist(name, missing);

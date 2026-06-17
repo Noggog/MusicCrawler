@@ -155,6 +155,12 @@ app.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver
     })
     .WithName("ResolveDeezerArtist");
 
+// Deezer play info for a specific album id: its previewable tracks plus the deezer.com album link.
+// Used to sample "missing album" cards. Public Deezer metadata, so no auth; cached server-side.
+app.MapGet("/deezer/album", async (long id, DeezerArtistResolver resolver) =>
+        Results.Ok(await resolver.ResolveAlbumPlayInfo(id)))
+    .WithName("ResolveDeezerAlbum");
+
 // The missing-album sync job (Deezer discography diff per owned artist). Heavy, so it's a dev-only
 // manual trigger; in production it runs on the daily AlbumSyncService schedule.
 app.MapPost("/albums/missing/refresh", (MissingAlbumRefresher refresher) =>

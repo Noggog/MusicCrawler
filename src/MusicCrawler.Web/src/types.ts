@@ -59,6 +59,8 @@ export interface FeedItem {
   imageUrl: string | null
   score: number
   sources: string[]
+  // Deezer album id for MissingAlbum items (lets the UI sample/link the album); null otherwise.
+  deezerAlbumId: number | null
 }
 
 // A paged feed section for a single FeedKind.

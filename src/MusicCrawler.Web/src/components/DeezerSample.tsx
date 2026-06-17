@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getDeezerPlayInfo } from '../api/deezer'
+import { getDeezerAlbumPlayInfo, getDeezerPlayInfo } from '../api/deezer'
 
 // Only one preview should play at a time across the whole page; track the active element so
 // starting a new one pauses the previous (e.g. expanding a second row in the list view).
 let currentAudio: HTMLAudioElement | null = null
 
-// Plays an artist's top-5 30-second Deezer previews in a plain <audio> (no iframe/login/cookies,
-// works on mobile) and links out to the full Deezer artist page. Playback only ever starts from a
-// user clicking a track — never automatically.
-export function DeezerSample({ artist }: { artist: string }) {
+// Plays 30-second Deezer previews in a plain <audio> (no iframe/login/cookies, works on mobile) and
+// links out to the full Deezer page. Sample an artist's top tracks with `artist`, or a specific
+// album's tracks with `albumId`. Playback only ever starts from a user clicking a track.
+export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: number }) {
+  const isAlbum = albumId != null
+  // Normalize both shapes to { link, tracks } so the render path is identical for artists and albums.
   const { data, isPending, isError } = useQuery({
-    queryKey: ['deezer-play', artist],
-    queryFn: () => getDeezerPlayInfo(artist),
+    queryKey: isAlbum ? ['deezer-album', albumId] : ['deezer-play', artist],
+    queryFn: async () => {
+      if (isAlbum) {
+        const info = await getDeezerAlbumPlayInfo(albumId!)
+        return { link: info.albumLink, tracks: info.tracks }
+      }
+      const info = await getDeezerPlayInfo(artist!)
+      return info ? { link: info.artistLink, tracks: info.tracks } : null
+    },
+    enabled: isAlbum ? albumId != null : !!artist,
     staleTime: 60 * 60 * 1000,
   })
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -56,8 +66,8 @@ export function DeezerSample({ artist }: { artist: string }) {
   return (
     <div className="deezer-sample">
       <div className="sample-head">
-        <span className="sample-label">Top tracks</span>
-        <a className="deezer-link" href={data.artistLink} target="_blank" rel="noopener noreferrer">
+        <span className="sample-label">{isAlbum ? 'Album tracks' : 'Top tracks'}</span>
+        <a className="deezer-link" href={data.link} target="_blank" rel="noopener noreferrer">
           Deezer ↗
         </a>
       </div>

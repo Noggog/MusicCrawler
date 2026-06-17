@@ -55,8 +55,9 @@ public enum FeedKind
 }
 
 /// <summary>
-/// One thing to react to in the discovery feed. <paramref name="Album"/> is set only for
-/// <see cref="FeedKind.MissingAlbum"/>; <paramref name="Score"/>/<paramref name="Sources"/> rank
+/// One thing to react to in the discovery feed. <paramref name="Album"/> and
+/// <paramref name="DeezerAlbumId"/> are set only for <see cref="FeedKind.MissingAlbum"/> (the id lets
+/// the UI sample/link the album on Deezer); <paramref name="Score"/>/<paramref name="Sources"/> rank
 /// and explain recommended artists (0/empty for the other kinds).
 /// </summary>
 public record FeedItem(
@@ -65,7 +66,8 @@ public record FeedItem(
     string? Album,
     string? ImageUrl,
     double Score,
-    IReadOnlyList<string> Sources);
+    IReadOnlyList<string> Sources,
+    long? DeezerAlbumId);
 
 /// <summary>A paged feed section for a single <see cref="FeedKind"/>.</summary>
 public record DiscoveryFeedPage(

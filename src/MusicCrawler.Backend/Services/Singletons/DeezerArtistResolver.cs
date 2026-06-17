@@ -13,6 +13,12 @@ public record DeezerPreviewTrack(string Title, string PreviewUrl);
 /// <param name="Tracks">The artist's top previewable tracks (biggest first), possibly empty.</param>
 public record DeezerPlayInfo(long Id, string ArtistLink, IReadOnlyList<DeezerPreviewTrack> Tracks);
 
+/// <summary>What the SPA needs to sample a specific album: its previewable tracks and a link out.</summary>
+/// <param name="Id">Deezer album id.</param>
+/// <param name="AlbumLink">Canonical deezer.com album page.</param>
+/// <param name="Tracks">The album's previewable tracks (track order), possibly empty.</param>
+public record DeezerAlbumPlayInfo(long Id, string AlbumLink, IReadOnlyList<DeezerPreviewTrack> Tracks);
+
 /// <summary>
 /// Resolves an artist name to Deezer playback info: the artist id, its page link, and a 30-second
 /// preview MP3 from the artist's top track. A plain &lt;audio&gt; element plays that preview with no
@@ -75,6 +81,41 @@ public class DeezerArtistResolver
         var artist = await _deezer.SearchArtist(artistName);
         await _cache.SetStringAsync(key, artist?.id.ToString() ?? "", IdCacheOptions);
         return artist?.id;
+    }
+
+    /// <summary>
+    /// Sample/link info for a specific Deezer album id. The album id is already known (it comes from
+    /// the missing-album record), so this never misses — the link is always valid; the track list may
+    /// be empty if Deezer has no previews. Previews are cached briefly since they can rotate.
+    /// </summary>
+    public async Task<DeezerAlbumPlayInfo> ResolveAlbumPlayInfo(long albumId)
+    {
+        var tracks = await ResolveAlbumTracks(albumId);
+        return new DeezerAlbumPlayInfo(albumId, $"https://www.deezer.com/album/{albumId}", tracks);
+    }
+
+    private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveAlbumTracks(long albumId)
+    {
+        var key = $"deezer:albumtracks:{albumId}";
+
+        var cached = await _cache.GetStringAsync(key);
+        if (cached != null)
+        {
+            return cached.Length == 0
+                ? Array.Empty<DeezerPreviewTrack>()
+                : JsonSerializer.Deserialize<DeezerPreviewTrack[]>(cached) ?? Array.Empty<DeezerPreviewTrack>();
+        }
+
+        var tracks = (await _deezer.GetAlbumTracks(albumId))
+            .Where(t => !string.IsNullOrEmpty(t.preview) && !string.IsNullOrEmpty(t.title))
+            .Select(t => new DeezerPreviewTrack(t.title!, t.preview!))
+            .ToArray();
+
+        await _cache.SetStringAsync(
+            key,
+            tracks.Length == 0 ? "" : JsonSerializer.Serialize(tracks),
+            TopTracksCacheOptions);
+        return tracks;
     }
 
     private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveTopTracks(long artistId)
