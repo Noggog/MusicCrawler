@@ -50,8 +50,23 @@ public enum FeedKind
     /// <summary>An album on Deezer for an owned artist that isn't in the library yet.</summary>
     MissingAlbum,
 
-    /// <summary>An owned library artist the user hasn't thumbed yet.</summary>
+    /// <summary>
+    /// An owned library artist the user hasn't thumbed yet (either section, used for the Ratings
+    /// classification and the legacy single-kind endpoint).
+    /// </summary>
     LibraryArtist,
+
+    /// <summary>
+    /// An owned, unrated artist that a <em>liked</em> artist recommends — worth rating because the
+    /// frontier already vouches for it. Carries the liked artists that point at it as provenance.
+    /// </summary>
+    RecommendedLibraryArtist,
+
+    /// <summary>
+    /// An owned, unrated artist nothing in the frontier recommends yet — rating it seeds the graph
+    /// (a fresh taste anchor to grow recommendations from).
+    /// </summary>
+    SeedLibraryArtist,
 }
 
 /// <summary>

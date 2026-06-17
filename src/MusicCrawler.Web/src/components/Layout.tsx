@@ -37,13 +37,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="brand">MusicCrawler</div>
         <nav className="nav">
           <NavLink to="/" className={navClass} end>
-            Home
+            Discover
           </NavLink>
           <NavLink to="/artists" className={navClass}>
             Artists
-          </NavLink>
-          <NavLink to="/discover" className={navClass}>
-            Discover
           </NavLink>
           <NavLink to="/ratings" className={navClass}>
             Ratings

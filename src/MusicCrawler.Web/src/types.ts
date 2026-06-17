@@ -47,7 +47,12 @@ export interface DiscoveryPage {
 }
 
 // Mirror FeedKind / DiscoveryStatus / FeedItem / DiscoveryFeedPage / RatedItem (Discovery.cs).
-export type FeedKind = 'RecommendedArtist' | 'MissingAlbum' | 'LibraryArtist'
+export type FeedKind =
+  | 'RecommendedArtist'
+  | 'MissingAlbum'
+  | 'LibraryArtist'
+  | 'RecommendedLibraryArtist'
+  | 'SeedLibraryArtist'
 export type DiscoveryStatus = 'Pending' | 'Liked' | 'Disliked'
 
 // One thing to react to in the discovery feed. `album` is set only for MissingAlbum items;

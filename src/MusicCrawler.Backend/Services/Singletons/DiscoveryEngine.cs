@@ -82,6 +82,8 @@ public class DiscoveryEngine
     {
         FeedKind.RecommendedArtist => RecommendedItems(userId),
         FeedKind.LibraryArtist => LibraryItems(userId),
+        FeedKind.RecommendedLibraryArtist => LibraryItemsBySection(userId, recommended: true),
+        FeedKind.SeedLibraryArtist => LibraryItemsBySection(userId, recommended: false),
         FeedKind.MissingAlbum => MissingAlbumItems(userId),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown feed kind"),
     };
@@ -106,6 +108,74 @@ public class DiscoveryEngine
             .OrderBy(a => a.ArtistKey.ArtistName, StringComparer.OrdinalIgnoreCase)
             .Select(a => new FeedItem(FeedKind.LibraryArtist, a.ArtistKey, null, a.ArtistImageUrl, 0, Array.Empty<string>(), null))
             .ToList();
+    }
+
+    /// <summary>
+    /// One section of the owned-unrated artists, split by whether a <em>liked</em> artist recommends
+    /// them. <paramref name="recommended"/>=true yields artists the frontier already vouches for
+    /// (sorted by how many liked artists point at them, with that provenance attached);
+    /// =false yields the rest — fresh artists to rate that would seed new recommendations.
+    /// </summary>
+    private async Task<List<FeedItem>> LibraryItemsBySection(string userId, bool recommended)
+    {
+        var decided = await _queue.GetDecidedArtists(userId);
+        var owned = (await _library.GetAllArtistMetadata())
+            .Where(a => !decided.Contains(a.ArtistKey.ArtistName))
+            .ToList();
+        var byLiked = await OwnedRecommendedByLiked(userId, owned);
+
+        if (recommended)
+        {
+            return owned
+                .Where(a => byLiked.ContainsKey(a.ArtistKey.ArtistName))
+                .OrderByDescending(a => byLiked[a.ArtistKey.ArtistName].Count)
+                .ThenBy(a => a.ArtistKey.ArtistName, StringComparer.OrdinalIgnoreCase)
+                .Select(a => new FeedItem(
+                    FeedKind.RecommendedLibraryArtist, a.ArtistKey, null, a.ArtistImageUrl,
+                    byLiked[a.ArtistKey.ArtistName].Count, byLiked[a.ArtistKey.ArtistName].ToArray(), null))
+                .ToList();
+        }
+
+        return owned
+            .Where(a => !byLiked.ContainsKey(a.ArtistKey.ArtistName))
+            .OrderBy(a => a.ArtistKey.ArtistName, StringComparer.OrdinalIgnoreCase)
+            .Select(a => new FeedItem(
+                FeedKind.SeedLibraryArtist, a.ArtistKey, null, a.ArtistImageUrl, 0, Array.Empty<string>(), null))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Of the given owned artists, those at least one <em>liked</em> artist recommends — mapped to the
+    /// liked artists that point at them (provenance). Computed live from the similarity graph (the
+    /// same edges the frontier expansion walks), so there's nothing to precompute or keep in sync.
+    /// Liked artists' related edges are already cached from expansion, so this is graph reads, no fetch.
+    /// </summary>
+    private async Task<Dictionary<string, List<string>>> OwnedRecommendedByLiked(
+        string userId, IReadOnlyList<ArtistMetadata> owned)
+    {
+        var ownedSet = owned.Select(a => a.ArtistKey.ArtistName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sources = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var likedArtist in await _queue.GetLikedArtistNames(userId))
+        {
+            var unified = await _related.GetRelated(new ArtistKey(likedArtist));
+            foreach (var rel in unified.Related)
+            {
+                var name = rel.ArtistKey.ArtistName;
+                if (!ownedSet.Contains(name))
+                {
+                    continue;
+                }
+
+                if (!sources.TryGetValue(name, out var srcs))
+                {
+                    sources[name] = srcs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+                srcs.Add(likedArtist);
+            }
+        }
+
+        return sources.ToDictionary(kv => kv.Key, kv => kv.Value.ToList(), StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task<List<FeedItem>> MissingAlbumItems(string userId)

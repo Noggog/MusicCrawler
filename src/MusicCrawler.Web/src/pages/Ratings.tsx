@@ -16,9 +16,14 @@ function Avatar({ item }: { item: RatedItem }) {
   )
 }
 
+// Ratings only ever come back as RecommendedArtist / LibraryArtist / MissingAlbum (the engine
+// collapses owned rated artists to LibraryArtist), but the union covers the discover-only sections
+// too, so map them to the same "Owned artist" label to satisfy the exhaustive record.
 const KIND_LABEL: Record<RatedItem['kind'], string> = {
   RecommendedArtist: 'Artist',
   LibraryArtist: 'Owned artist',
+  RecommendedLibraryArtist: 'Owned artist',
+  SeedLibraryArtist: 'Owned artist',
   MissingAlbum: 'Album',
 }
 
@@ -67,7 +72,7 @@ export default function Ratings() {
       <p className="disc-sub">
         <em>
           Everything you’ve thumbed. Flip a verdict or clear it to send it back to{' '}
-          <Link to="/discover">Discover</Link>. Albums you’ve since acquired drop off automatically.
+          <Link to="/">Discover</Link>. Albums you’ve since acquired drop off automatically.
         </em>
       </p>
 
@@ -77,7 +82,7 @@ export default function Ratings() {
       {data && items.length === 0 && (
         <p>
           <em>
-            No ratings yet. Thumb some artists or albums on the <Link to="/discover">Discover</Link>{' '}
+            No ratings yet. Thumb some artists or albums on the <Link to="/">Discover</Link>{' '}
             page (or rate bands on the <Link to="/artists">Artists</Link> page).
           </em>
         </p>

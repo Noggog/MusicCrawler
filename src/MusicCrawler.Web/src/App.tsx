@@ -1,6 +1,5 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
-import Home from './pages/Home'
 import Artists from './pages/Artists'
 import Discover from './pages/Discover'
 import Ratings from './pages/Ratings'
@@ -11,9 +10,10 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Discover />} />
+        {/* Discover used to live here; keep old links/bookmarks working. */}
+        <Route path="/discover" element={<Navigate to="/" replace />} />
         <Route path="/artists" element={<Artists />} />
-        <Route path="/discover" element={<Discover />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/purchases" element={<Purchases />} />
         {/* Dev-only debug view for the Deezer similarity graph. */}

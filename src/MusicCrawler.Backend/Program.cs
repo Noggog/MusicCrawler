@@ -200,7 +200,11 @@ app.MapGet("/discovery/mixed", async (
             .ToArray();
         if (requested.Length == 0)
         {
-            requested = new[] { FeedKind.RecommendedArtist, FeedKind.MissingAlbum, FeedKind.LibraryArtist };
+            requested = new[]
+            {
+                FeedKind.RecommendedArtist, FeedKind.MissingAlbum,
+                FeedKind.RecommendedLibraryArtist, FeedKind.SeedLibraryArtist,
+            };
         }
         return Results.Ok(await engine.GetMixedFeed(
             http.User.GetSubject()!, requested,

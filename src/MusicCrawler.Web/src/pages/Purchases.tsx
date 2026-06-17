@@ -47,7 +47,7 @@ export default function Purchases() {
       {data && items.length === 0 && (
         <p>
           <em>
-            Nothing here yet. Thumbs-up artists or albums on the <Link to="/discover">Discover</Link>{' '}
+            Nothing here yet. Thumbs-up artists or albums on the <Link to="/">Discover</Link>{' '}
             page to queue them.
           </em>
         </p>

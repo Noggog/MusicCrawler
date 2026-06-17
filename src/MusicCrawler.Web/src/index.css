@@ -381,6 +381,20 @@ body {
   cursor: pointer;
 }
 
+/* "Recommended Artists" parent with its indented "Existing" / "New" sub-toggles. */
+.feed-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.feed-subfilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-left: 1.4rem;
+}
+
 .feed-section {
   margin-bottom: 2rem;
 }

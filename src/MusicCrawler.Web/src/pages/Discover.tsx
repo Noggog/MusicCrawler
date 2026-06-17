@@ -13,21 +13,31 @@ import { DeezerSample } from '../components/DeezerSample'
 
 const PAGE_SIZE = 20
 
-// The categories that can take part in the mixed feed, with the checkbox label and the badge shown
-// on each card so it's obvious what action a card is asking for.
-const CATEGORIES: { kind: FeedKind; label: string; badge: string }[] = [
-  { kind: 'RecommendedArtist', label: 'New recommended artists', badge: 'Consider new artist' },
-  { kind: 'MissingAlbum', label: 'Missing albums', badge: 'Add missing album' },
-  { kind: 'LibraryArtist', label: 'Existing artists to rate', badge: 'Mark existing artist' },
+// The badge shown on each card so it's obvious what action a card is asking for, keyed by kind.
+const BADGE: Record<FeedKind, string> = {
+  RecommendedArtist: 'Consider new artist',
+  MissingAlbum: 'Add missing album',
+  RecommendedLibraryArtist: 'Rate existing artist',
+  SeedLibraryArtist: 'Seed: rate existing artist',
+  LibraryArtist: 'Mark existing artist',
+}
+
+// The filter tree. "Recommended Artists" groups the two recommended sections (existing owned vs.
+// brand-new), each individually toggleable; the standalone rows sit beside it.
+const RECOMMENDED_KINDS: FeedKind[] = ['RecommendedLibraryArtist', 'RecommendedArtist']
+const FILTER_GROUP: { label: string; kind: FeedKind }[] = [
+  { label: 'Existing', kind: 'RecommendedLibraryArtist' },
+  { label: 'New', kind: 'RecommendedArtist' },
+]
+const STANDALONE_FILTERS: { label: string; kind: FeedKind }[] = [
+  { label: 'Missing albums', kind: 'MissingAlbum' },
+  { label: 'Unknown existing artists', kind: 'SeedLibraryArtist' },
 ]
 
-const BADGE: Record<FeedKind, string> = Object.fromEntries(
-  CATEGORIES.map((c) => [c.kind, c.badge]),
-) as Record<FeedKind, string>
-
-const ALL_KINDS = CATEGORIES.map((c) => c.kind)
-// LibraryArtist starts unchecked — it's a less common action than discovering new artists/albums.
-const DEFAULT_KINDS = CATEGORIES.filter((c) => c.kind !== 'LibraryArtist').map((c) => c.kind)
+const ALL_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
+// Default to the recommended sections (new + existing owned) plus missing albums. The seed section
+// (owned artists nothing recommends yet) stays off until opted in — it's noisier and less targeted.
+const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist']
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
@@ -80,6 +90,19 @@ export default function Discover() {
     setShown((prev) => {
       const next = new Set(prev)
       next.has(kind) ? next.delete(kind) : next.add(kind)
+      return next
+    })
+    setPage(0)
+  }
+
+  // The parent "Recommended Artists" checkbox: clear both children if all are on, else turn both on.
+  const recommendedAllOn = RECOMMENDED_KINDS.every((k) => shown.has(k))
+  const recommendedSomeOn = RECOMMENDED_KINDS.some((k) => shown.has(k))
+  const toggleRecommendedGroup = () => {
+    setShown((prev) => {
+      const next = new Set(prev)
+      const turnOff = RECOMMENDED_KINDS.every((k) => next.has(k))
+      RECOMMENDED_KINDS.forEach((k) => (turnOff ? next.delete(k) : next.add(k)))
       return next
     })
     setPage(0)
@@ -142,7 +165,28 @@ export default function Discover() {
       </div>
 
       <div className="feed-filters">
-        {CATEGORIES.map((c) => (
+        <div className="feed-filter-group">
+          <label className="feed-filter">
+            <input
+              type="checkbox"
+              checked={recommendedAllOn}
+              ref={(el) => {
+                if (el) el.indeterminate = recommendedSomeOn && !recommendedAllOn
+              }}
+              onChange={toggleRecommendedGroup}
+            />
+            Recommended Artists
+          </label>
+          <div className="feed-subfilters">
+            {FILTER_GROUP.map((c) => (
+              <label key={c.kind} className="feed-filter">
+                <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        {STANDALONE_FILTERS.map((c) => (
           <label key={c.kind} className="feed-filter">
             <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
             {c.label}

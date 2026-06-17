@@ -167,6 +167,45 @@ public class DiscoveryEngineTests
     }
 
     [Fact]
+    public async Task Library_sections_split_owned_artists_by_whether_a_liked_artist_recommends_them()
+    {
+        _library.GetAllArtistMetadata().Returns(new[]
+        {
+            new ArtistMetadata(new ArtistKey("Big Thief"), "bt-img"), // recommended by a liked artist
+            new ArtistMetadata(new ArtistKey("Alex G"), null),        // nobody recommends -> seed
+        });
+        _queue.GetLikedArtistNames(User).Returns(new[] { "boygenius" });
+        Relates("boygenius", ("Big Thief", null, 1));
+
+        var recommended = await _sut.GetFeed(User, FeedKind.RecommendedLibraryArtist, 0, 20);
+        var seed = await _sut.GetFeed(User, FeedKind.SeedLibraryArtist, 0, 20);
+
+        var rec = recommended.Items.Single();
+        rec.Artist.ArtistName.Should().Be("Big Thief");
+        rec.Kind.Should().Be(FeedKind.RecommendedLibraryArtist);
+        rec.Sources.Should().Equal("boygenius"); // provenance: who vouched for it
+
+        seed.Items.Select(i => i.Artist.ArtistName).Should().Equal("Alex G");
+        seed.Items.Single().Kind.Should().Be(FeedKind.SeedLibraryArtist);
+    }
+
+    [Fact]
+    public async Task Library_sections_exclude_already_rated_owned_artists()
+    {
+        _library.GetAllArtistMetadata().Returns(new[]
+        {
+            new ArtistMetadata(new ArtistKey("Big Thief"), null),
+            new ArtistMetadata(new ArtistKey("Alex G"), null),
+        });
+        _queue.GetDecidedArtists(User).Returns(new HashSet<string>(new[] { "Alex G" }, StringComparer.OrdinalIgnoreCase));
+
+        var seed = await _sut.GetFeed(User, FeedKind.SeedLibraryArtist, 0, 20);
+
+        // Alex G was rated, so it's gone; Big Thief has no recommender, so it lands in the seed section.
+        seed.Items.Select(i => i.Artist.ArtistName).Should().Equal("Big Thief");
+    }
+
+    [Fact]
     public async Task Missing_album_feed_excludes_albums_the_user_already_decided()
     {
         _missing.GetAll().Returns(new[]
