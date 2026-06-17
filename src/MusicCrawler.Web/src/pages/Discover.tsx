@@ -14,6 +14,7 @@ import {
 } from '../api/discovery'
 import type { DiscoveryCandidate } from '../types'
 import { useAuth } from '../auth/AuthContext'
+import { DeezerSample } from '../components/DeezerSample'
 
 const PAGE_SIZE = 20
 
@@ -50,6 +51,16 @@ export default function Discover() {
   const { user } = useAuth()
   const [mode, setMode] = useState<ViewMode>('list')
   const [page, setPage] = useState(0)
+  // Artists whose Deezer player is expanded in the list view (kept collapsed by default so we
+  // don't mount 20 iframes at once).
+  const [playing, setPlaying] = useState<Set<string>>(new Set())
+
+  const togglePlay = (artist: string) =>
+    setPlaying((prev) => {
+      const next = new Set(prev)
+      next.has(artist) ? next.delete(artist) : next.add(artist)
+      return next
+    })
 
   // Swipe mode always works the top of the queue, so it pins to page 0.
   const activePage = mode === 'swipe' ? 0 : page
@@ -153,33 +164,47 @@ export default function Discover() {
       {mode === 'list' && total > 0 && (
         <>
           <div className={isFetching ? 'disc-list fetching' : 'disc-list'}>
-            {items.map((c) => (
-              <div className="disc-row" key={c.artist.artistName}>
-                <Avatar candidate={c} size={56} />
-                <div className="disc-row-main">
-                  <div className="disc-name">{c.artist.artistName}</div>
-                  <Provenance sources={c.sources} />
+            {items.map((c) => {
+              const name = c.artist.artistName
+              const isPlaying = playing.has(name)
+              return (
+                <div className="disc-row-wrap" key={name}>
+                  <div className="disc-row">
+                    <Avatar candidate={c} size={56} />
+                    <div className="disc-row-main">
+                      <div className="disc-name">{name}</div>
+                      <Provenance sources={c.sources} />
+                    </div>
+                    <div className="disc-actions">
+                      <button
+                        className={isPlaying ? 'disc-btn play active' : 'disc-btn play'}
+                        title={isPlaying ? 'Hide Deezer player' : 'Listen on Deezer'}
+                        onClick={() => togglePlay(name)}
+                      >
+                        {isPlaying ? '▾' : '▶'}
+                      </button>
+                      <button
+                        className="disc-btn up"
+                        title="Queue to buy & find more like this"
+                        disabled={busy}
+                        onClick={() => like.mutate(name)}
+                      >
+                        👍
+                      </button>
+                      <button
+                        className="disc-btn down"
+                        title="Not interested"
+                        disabled={busy}
+                        onClick={() => dislike.mutate(name)}
+                      >
+                        👎
+                      </button>
+                    </div>
+                  </div>
+                  {isPlaying && <DeezerSample artist={name} />}
                 </div>
-                <div className="disc-actions">
-                  <button
-                    className="disc-btn up"
-                    title="Queue to buy & find more like this"
-                    disabled={busy}
-                    onClick={() => like.mutate(c.artist.artistName)}
-                  >
-                    👍
-                  </button>
-                  <button
-                    className="disc-btn down"
-                    title="Not interested"
-                    disabled={busy}
-                    onClick={() => dislike.mutate(c.artist.artistName)}
-                  >
-                    👎
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {pageCount > 1 && (
@@ -207,6 +232,7 @@ export default function Discover() {
             <Avatar candidate={current} size={220} />
             <div className="disc-card-name">{current.artist.artistName}</div>
             <Provenance sources={current.sources} />
+            <DeezerSample artist={current.artist.artistName} />
           </div>
           <div className="disc-swipe-actions">
             <button className="disc-btn down big" disabled={busy} onClick={() => dislike.mutate(current.artist.artistName)}>

@@ -46,6 +46,14 @@ public class DeezerApi : IDeezerApi
         return result?.data.ToArray() ?? Array.Empty<DeezerArtist>();
     }
 
+    public async Task<DeezerTrack[]> GetTopTracks(long artistId, int limit)
+    {
+        // Deezer orders /top by popularity, so these come back biggest-first.
+        var url = $"{_endpointInfo.BaseUri}/artist/{artistId}/top?limit={limit}";
+        var result = await Get<DeezerTrackList>(url);
+        return result?.data.ToArray() ?? Array.Empty<DeezerTrack>();
+    }
+
     private async Task<T?> Get<T>(string url) where T : class
     {
         try

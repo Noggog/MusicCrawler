@@ -141,6 +141,16 @@ app.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor in
     })
     .WithName("GetRelated");
 
+// Deezer play info for an artist: a 30-second preview MP3 to sample plus the deezer.com artist
+// link. The SPA plays the preview in a plain <audio> (no login/cookies, unlike the embed widget).
+// Public Deezer metadata, so no auth; cached server-side.
+app.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver) =>
+    {
+        var info = await resolver.ResolvePlayInfo(artist);
+        return info is null ? Results.NotFound() : Results.Ok(info);
+    })
+    .WithName("ResolveDeezerArtist");
+
 // --- Per-user seeds (the taste anchors the recommendation engine grows from) ---
 // artist is a query param (handles '/' in names); all require an authenticated user.
 app.MapGet("/seeds", async (HttpContext http, IUserSeedRepo seeds) =>

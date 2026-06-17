@@ -278,6 +278,12 @@ body {
   max-width: 640px;
 }
 
+.disc-row-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .disc-list.fetching {
   opacity: 0.6;
 }
@@ -351,6 +357,111 @@ body {
   border-color: #b00020;
 }
 
+.disc-btn.play {
+  font-size: 0.85rem;
+}
+
+.disc-btn.play.active {
+  border-color: #4f46e5;
+  color: #4f46e5;
+}
+
+/* Deezer 30-second preview sample player: top-5 tracks + link out. */
+.deezer-sample {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: #f0f0f7;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #55556b;
+}
+
+.deezer-sample.muted {
+  flex-direction: row;
+  justify-content: center;
+  color: #9a9ab0;
+}
+
+.sample-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.sample-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8888a0;
+}
+
+.sample-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sample-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sample-btn {
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sample-btn:hover {
+  background: #4338ca;
+}
+
+.sample-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sample-title.active {
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.sample-title.muted {
+  color: #9a9ab0;
+}
+
+.deezer-link {
+  flex-shrink: 0;
+  color: #4f46e5;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.deezer-link:hover {
+  text-decoration: underline;
+}
+
 .disc-btn:disabled {
   opacity: 0.5;
   cursor: default;
@@ -402,7 +513,8 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  width: 280px;
+  width: 340px;
+  max-width: 100%;
 }
 
 .disc-card .disc-avatar {
