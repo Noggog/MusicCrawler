@@ -48,6 +48,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/purchases" className={navClass}>
             To Buy
           </NavLink>
+          <NavLink to="/cleanup" className={navClass}>
+            Cleanup
+          </NavLink>
           {/* Dev-only debug view for the similarity graph; compiled out of production builds. */}
           {import.meta.env.DEV && (
             <NavLink to="/related" className={navClass}>

@@ -143,6 +143,52 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
         return result;
     }
 
+    public async Task<string[]> FindCombinedArtistNames()
+    {
+        var filter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq(FieldPresent, true),
+            Builders<BsonDocument>.Filter.Regex(FieldName, new BsonRegularExpression(";")));
+        var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
+        {
+            Projection = Builders<BsonDocument>.Projection.Include(FieldName),
+        });
+
+        return (await cursor.ToListAsync())
+            .Select(d => d.TryGetValue(FieldName, out var n) && !n.IsBsonNull ? n.AsString : d["_id"].AsString)
+            .ToArray();
+    }
+
+    public async Task SplitCombinedArtist(string combinedName, IReadOnlyList<string> parts, DateTimeOffset syncedAt)
+    {
+        var syncedAtUtc = syncedAt.UtcDateTime;
+
+        // Carry the combined doc's albums onto each split artist (same fan-out a Plex sync would do).
+        var combined = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", combinedName))).FirstOrDefaultAsync();
+        var albums = combined != null && combined.TryGetValue(FieldAlbums, out var a) && a.IsBsonArray
+            ? a.AsBsonArray.Where(x => !x.IsBsonNull).Select(x => x.AsString).ToArray()
+            : Array.Empty<string>();
+
+        var writes = new List<WriteModel<BsonDocument>>(parts.Count + 1);
+        foreach (var part in parts)
+        {
+            var update = Builders<BsonDocument>.Update
+                .Set(FieldName, part)
+                .Set(FieldLastSeenAt, syncedAtUtc)
+                .Set(FieldPresent, true);
+            if (albums.Length > 0)
+            {
+                update = update.AddToSetEach(FieldAlbums, albums);
+            }
+
+            writes.Add(new UpdateOneModel<BsonDocument>(
+                Builders<BsonDocument>.Filter.Eq("_id", part), update) { IsUpsert = true });
+        }
+
+        writes.Add(new DeleteOneModel<BsonDocument>(Builders<BsonDocument>.Filter.Eq("_id", combinedName)));
+        await Collection.BulkWriteAsync(writes);
+    }
+
     public async Task<CatalogArtist[]> GetAllPresent()
     {
         var collection = Collection;

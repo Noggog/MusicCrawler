@@ -37,6 +37,19 @@ public interface IArtistCatalogRepo
     /// missing-album diff and to hide ratings for albums that have since been acquired.
     /// </summary>
     Task<Dictionary<string, HashSet<string>>> GetOwnedAlbums();
+
+    /// <summary>
+    /// Names of present catalog artists that encode multiple artists joined by ';' (a Plex
+    /// multi-value artifact, e.g. "Nina Simone;Hot Chip") — candidates for cleanup.
+    /// </summary>
+    Task<string[]> FindCombinedArtistNames();
+
+    /// <summary>
+    /// Splits a ';'-joined catalog artist into one present doc per <paramref name="parts"/> name
+    /// (each inheriting the combined doc's albums), then deletes the combined doc. Idempotent:
+    /// parts that already exist keep their data and just absorb any albums.
+    /// </summary>
+    Task SplitCombinedArtist(string combinedName, IReadOnlyList<string> parts, DateTimeOffset syncedAt);
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);

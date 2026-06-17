@@ -437,6 +437,18 @@ body {
   border-radius: 4px;
   padding: 0.08rem 0.4rem;
   margin-bottom: 0.2rem;
+  /* Neutral default; the per-kind modifiers below override colour where one applies. */
+  color: #555;
+  background: #ececed;
+}
+
+.cleanup-list {
+  margin-top: 0.75rem;
+}
+
+.cleanup-done {
+  color: #166534;
+  font-weight: 600;
 }
 
 .feed-badge-RecommendedArtist {

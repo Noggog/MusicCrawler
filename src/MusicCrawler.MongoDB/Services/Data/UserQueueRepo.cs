@@ -233,6 +233,33 @@ public class UserQueueRepo : IUserQueueRepo
             Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
             & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusPending));
 
+    public async Task<CombinedArtistVerdict[]> FindCombinedRatings()
+    {
+        var filter = Builders<BsonDocument>.Filter.Regex(FieldArtist, new BsonRegularExpression(";"));
+        var cursor = await Collection.FindAsync(filter);
+
+        var result = new List<CombinedArtistVerdict>();
+        foreach (var doc in await cursor.ToListAsync())
+        {
+            var userId = doc.TryGetValue(FieldUserId, out var u) && !u.IsBsonNull ? u.AsString : null;
+            var artist = doc.TryGetValue(FieldArtist, out var a) && !a.IsBsonNull ? a.AsString : null;
+            if (userId == null || artist == null)
+            {
+                continue;
+            }
+
+            var status = doc.TryGetValue(FieldStatus, out var s) && !s.IsBsonNull
+                         && Enum.TryParse<DiscoveryStatus>(s.AsString, out var parsed)
+                ? parsed
+                : DiscoveryStatus.Pending;
+            var imageUrl = doc.TryGetValue(FieldImageUrl, out var img) && !img.IsBsonNull ? img.AsString : null;
+
+            result.Add(new CombinedArtistVerdict(userId, artist, status, imageUrl));
+        }
+
+        return result.ToArray();
+    }
+
     private static DiscoveryCandidate ToCandidate(BsonDocument doc)
     {
         var artist = doc.TryGetValue(FieldArtist, out var a) && !a.IsBsonNull ? a.AsString : "";

@@ -1,5 +1,8 @@
 namespace MusicCrawler.Interfaces;
 
+/// <summary>A queue row whose artist name encodes multiple artists joined by ';' — cleanup input.</summary>
+public record CombinedArtistVerdict(string UserId, string Artist, DiscoveryStatus Status, string? ImageUrl);
+
 /// <summary>
 /// Per-user discovery queue: the precomputed swipe candidates the tree-search engine grows from a
 /// user's seeds. One document per (user, artist); a candidate is Pending until swiped, then Liked
@@ -52,4 +55,10 @@ public interface IUserQueueRepo
 
     /// <summary>Clears pending candidates (keeps Liked/Disliked) so the queue can be rebuilt from likes.</summary>
     Task DeletePending(string userId);
+
+    /// <summary>
+    /// Every row across all users whose artist name encodes multiple artists joined by ';' — the
+    /// artist side of the combined-name cleanup. Includes Pending rows (cleanup just drops those).
+    /// </summary>
+    Task<CombinedArtistVerdict[]> FindCombinedRatings();
 }

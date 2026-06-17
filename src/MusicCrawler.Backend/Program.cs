@@ -135,6 +135,19 @@ app.MapPost("/catalog/refresh", (CatalogRefresher refresher) =>
     })
     .WithName("RefreshCatalog");
 
+// Maintenance: clean up Plex's ';'-joined multi-artist names (e.g. "Nina Simone;Hot Chip") that
+// leaked into the catalog and user ratings before ingestion-time splitting. GET previews the work;
+// POST resolves it (splits catalog docs, re-attributes ratings). Auth-gated — the maintainer's tool.
+app.MapGet("/maintenance/combined-artists", async (LibraryCleanupService cleanup) =>
+        Results.Ok(await cleanup.Scan()))
+    .RequireAuthorization()
+    .WithName("ScanCombinedArtists");
+
+app.MapPost("/maintenance/combined-artists/resolve", async (LibraryCleanupService cleanup) =>
+        Results.Ok(await cleanup.Resolve()))
+    .RequireAuthorization()
+    .WithName("ResolveCombinedArtists");
+
 // Related artists, unified across every similarity source. Ingests from Deezer on a cache
 // miss/stale entry (persisting into the graph); pass ?refresh=true to force a re-fetch.
 // The artist is a query param (not a path segment) so names with '/' (e.g. "AC/DC") work —

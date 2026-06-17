@@ -89,6 +89,34 @@ public class UserAlbumRatingRepo : IUserAlbumRatingRepo
     public Task<AlbumRating[]> GetAllLiked() =>
         Query(Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusLiked));
 
+    public async Task<CombinedAlbumVerdict[]> FindCombinedRatings()
+    {
+        var filter = Builders<BsonDocument>.Filter.Regex(FieldArtist, new BsonRegularExpression(";"));
+        var cursor = await Collection.FindAsync(filter);
+
+        var result = new List<CombinedAlbumVerdict>();
+        foreach (var doc in await cursor.ToListAsync())
+        {
+            var userId = doc.TryGetValue(FieldUserId, out var u) && !u.IsBsonNull ? u.AsString : null;
+            var artist = doc.TryGetValue(FieldArtist, out var a) && !a.IsBsonNull ? a.AsString : null;
+            var album = doc.TryGetValue(FieldAlbum, out var al) && !al.IsBsonNull ? al.AsString : null;
+            if (userId == null || artist == null || album == null)
+            {
+                continue;
+            }
+
+            var art = doc.TryGetValue(FieldAlbumArt, out var art2) && !art2.IsBsonNull ? art2.AsString : null;
+            var status = doc.TryGetValue(FieldStatus, out var s) && !s.IsBsonNull
+                         && Enum.TryParse<DiscoveryStatus>(s.AsString, out var parsed)
+                ? parsed
+                : DiscoveryStatus.Pending;
+
+            result.Add(new CombinedAlbumVerdict(userId, artist, album, art, status));
+        }
+
+        return result.ToArray();
+    }
+
     private async Task<AlbumRating[]> Query(FilterDefinition<BsonDocument> filter)
     {
         var cursor = await Collection.FindAsync(filter, new FindOptions<BsonDocument>
