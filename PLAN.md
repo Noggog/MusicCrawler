@@ -149,12 +149,25 @@ Each is independently buildable and testable.
   across users), flips arrivals to `in-library`, and prunes pending rows nobody wants
   any more (ordered rows are kept — in flight). Runs on each read of the list and after
   each catalog/album sync, so the loop closes without a page visit.
-- **Integration job (stubbed):** `IDownloader` is the pluggable seam; `NoOpDownloader`
-  logs + accepts, so "Order" advances an item to `sent` today. Real target (Lidarr?)
-  drops in later without touching the list or UI.
-- **Endpoints:** `GET /purchases` (active = pending + sent), `POST /purchases/order`,
-  `POST /purchases/unsend`, `DELETE /purchases` (all by `?id=`). Frontend Purchases.tsx
-  splits Pending / Ordered with Order / Undo / ✕ actions.
+- **Downloader (built 2026-06-17):** `IDownloader` is the pluggable seam.
+  `StreamripDownloader` shells out to **streamrip** (Deezer ARL, configured in streamrip
+  itself — credential never enters this app) to grab **albums only** (artists stay as
+  wishlist reminders). `DownloadService` is a slow background drainer — one item at a time,
+  configurable per-item delay + inter-batch pause — that keeps under Deezer's anti-tooling
+  radar; it marks items `sent` on success, `failed` on error. The catalog sync closes the
+  loop (file lands in Plex → reconcile → `in-library`). Disabled (NoOpDownloader, drainer
+  idle) unless `DEEZER_DOWNLOADS_ENABLED`. Env knobs: `MUSIC_DOWNLOAD_DIR`, `STREAMRIP_BIN`,
+  `DEEZER_QUALITY`, `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE`, `DOWNLOAD_ITEM_DELAY_SECONDS`,
+  `DOWNLOAD_BATCH_INTERVAL_MINUTES`.
+  - _Why not Lidarr / a Deezer playlist:_ Deezer closed new API app registration, so the
+    official playlist-write (OAuth) is unavailable; the ARL drives the unofficial API that
+    streamrip uses. Lidarr's Deezer plugins exist but are flagged ban-risky and add a
+    moving part; a direct, throttled, server-controlled grab was preferred.
+- **Endpoints:** `GET /purchases` (active = pending + sent + failed), `POST /purchases/order`,
+  `POST /purchases/unsend`, `POST /purchases/retry`, `DELETE /purchases` (all by `?id=`).
+  Frontend Purchases.tsx splits Failed / Albums-queued / Ordered / Artists-wishlist with
+  Order / Undo / Retry / ✕ actions. `PurchaseItem` carries `DeezerAlbumId` (from the
+  missing-album set) so the downloader resolves the album URL without DB joins at grab time.
 
 ### 6. Web UI (React + Vite)
 - **Artists** — owned-artist list with 👍/👎 per row (replaces the seed star).
@@ -184,7 +197,10 @@ Each phase is shippable on its own.
 
 ## Open questions
 
-- **Downloader target** (Phase 5): TBD; the interface keeps it swappable.
+- **Downloader target** (Phase 5): _decided 2026-06-17_ — direct, throttled streamrip
+  (Deezer ARL), albums only. Open follow-up: let liked **artists** expand into their albums
+  so new-artist discovery can be acquired too (today only owned artists' missing albums
+  download). streamrip CLI invocation is untested against a live install.
 - **Graph refresh policy:** how stale before re-fetching a Deezer artist's related list.
 - **Replenisher cadence:** how often the periodic queue job runs, and whether
   decisions trigger it (debounced) in addition to the schedule.

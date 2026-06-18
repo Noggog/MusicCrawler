@@ -20,6 +20,7 @@ public class PurchaseService
     private readonly IUserAlbumRatingRepo _albumRatings;
     private readonly ILibraryProvider _library;
     private readonly IArtistCatalogRepo _catalog;
+    private readonly IMissingAlbumRepo _missing;
     private readonly IDownloader _downloader;
     private readonly ILogger<PurchaseService> _logger;
 
@@ -29,6 +30,7 @@ public class PurchaseService
         IUserAlbumRatingRepo albumRatings,
         ILibraryProvider library,
         IArtistCatalogRepo catalog,
+        IMissingAlbumRepo missing,
         IDownloader downloader,
         ILogger<PurchaseService> logger)
     {
@@ -37,13 +39,14 @@ public class PurchaseService
         _albumRatings = albumRatings;
         _library = library;
         _catalog = catalog;
+        _missing = missing;
         _downloader = downloader;
         _logger = logger;
     }
 
     /// <summary>
-    /// The active acquisition list — pending + sent, newest first (in-library items have dropped off).
-    /// Reconciles first so the page is always current.
+    /// The active acquisition list — everything except items already in the library (so pending, sent
+    /// and failed all show), newest first. Reconciles first so the page is always current.
     /// </summary>
     public async Task<PurchaseItem[]> GetActive()
     {
@@ -77,6 +80,9 @@ public class PurchaseService
     /// <summary>Moves an ordered item back to <see cref="PurchaseStatus.Pending"/> (undo an order).</summary>
     public Task<bool> Unsend(string id) => _purchases.SetStatus(id, PurchaseStatus.Pending);
 
+    /// <summary>Re-queues a failed item for another download attempt.</summary>
+    public Task<bool> Retry(string id) => _purchases.SetStatus(id, PurchaseStatus.Pending);
+
     /// <summary>Removes an item from the list entirely.</summary>
     public Task Remove(string id) => _purchases.Remove(id);
 
@@ -91,6 +97,12 @@ public class PurchaseService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var ownedAlbums = await _catalog.GetOwnedAlbums();
 
+        // The Deezer album id per (artist, album) — sourced from the global missing-albums set so a
+        // liked album carries the id the downloader needs without threading it through the rating flow.
+        var deezerIds = (await _missing.GetAll())
+            .GroupBy(m => AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName))
+            .ToDictionary(g => g.Key, g => g.First().DeezerAlbumId);
+
         // Desired = the current liked-but-unowned items, keyed and deduped across users.
         var desired = new Dictionary<string, PurchaseItem>();
 
@@ -104,7 +116,7 @@ public class PurchaseService
                 g.Select(c => c.ImageUrl).FirstOrDefault(u => u != null),
                 g.Max(c => c.Score),
                 g.SelectMany(c => c.Sources).Distinct().ToArray(),
-                PurchaseStatus.Pending, default, null);
+                PurchaseStatus.Pending, default, null, null);
         }
 
         foreach (var g in (await _albumRatings.GetAllLiked())
@@ -112,11 +124,13 @@ public class PurchaseService
                      .GroupBy(r => PurchaseKey.ForAlbum(r.Artist.ArtistName, r.Album.AlbumName)))
         {
             var first = g.First();
+            var ratingKey = AlbumRatingKey.For(first.Artist.ArtistName, first.Album.AlbumName);
+            long? deezerAlbumId = deezerIds.TryGetValue(ratingKey, out var did) && did != 0 ? did : null;
             desired[g.Key] = new PurchaseItem(
                 g.Key, FeedKind.MissingAlbum, first.Artist, first.Album.AlbumName,
                 g.Select(r => r.AlbumArt).FirstOrDefault(a => a != null),
                 0, Array.Empty<string>(),
-                PurchaseStatus.Pending, default, null);
+                PurchaseStatus.Pending, default, null, deezerAlbumId);
         }
 
         // Insert new wants as pending / refresh display fields on existing rows.
@@ -141,8 +155,10 @@ public class PurchaseService
                 continue;
             }
 
-            // Not owned and no longer wanted: drop pending rows; keep ordered ones (still in flight).
-            if (!desired.ContainsKey(row.Id) && row.Status == PurchaseStatus.Pending)
+            // Not owned and no longer wanted: drop rows that aren't in flight (pending/failed);
+            // keep Sent ones (already downloaded, waiting to land in the library).
+            if (!desired.ContainsKey(row.Id)
+                && row.Status is PurchaseStatus.Pending or PurchaseStatus.Failed)
             {
                 await _purchases.Remove(row.Id);
             }

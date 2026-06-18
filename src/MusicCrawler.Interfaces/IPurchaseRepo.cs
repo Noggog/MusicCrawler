@@ -9,11 +9,14 @@ public enum PurchaseStatus
     /// <summary>Queued to acquire — liked by at least one user, not yet ordered.</summary>
     Pending,
 
-    /// <summary>Handed to the downloader (or ordered by hand) — awaiting arrival in the library.</summary>
+    /// <summary>Downloaded (or ordered by hand) — awaiting arrival in the library.</summary>
     Sent,
 
     /// <summary>Now present in the Plex library — the loop is closed; drops off the active list.</summary>
     InLibrary,
+
+    /// <summary>The downloader could not acquire it (resolve/download error) — surfaced for retry.</summary>
+    Failed,
 }
 
 /// <summary>
@@ -33,7 +36,8 @@ public record PurchaseItem(
     IReadOnlyList<string> Sources,
     PurchaseStatus Status,
     DateTimeOffset RequestedAt,
-    DateTimeOffset? SentAt);
+    DateTimeOffset? SentAt,
+    long? DeezerAlbumId);
 
 /// <summary>
 /// Canonical id for a purchase row — "artist:{name}" or "album:{artist} {album}", lower-cased. One

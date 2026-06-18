@@ -1,11 +1,11 @@
 using MusicCrawler.Interfaces;
 
-namespace MusicCrawler.Backend.Services.Singletons;
+namespace MusicCrawler.Backend.Services.Download;
 
 /// <summary>
-/// Placeholder acquisition backend: logs the request and accepts it, so the manual "mark ordered"
-/// flow advances an item to <see cref="PurchaseStatus.Sent"/> today. Replace with a real target
-/// (e.g. Lidarr) behind <see cref="IDownloader"/> without touching the purchase list or its UI.
+/// Placeholder acquisition backend, used when downloads are disabled (no <c>DEEZER_DOWNLOADS_ENABLED</c>).
+/// Logs the request and accepts it, so the manual "order" flow still advances an item to
+/// <see cref="PurchaseStatus.Sent"/>. The real path is <see cref="StreamripDownloader"/>.
 /// </summary>
 public class NoOpDownloader : IDownloader
 {

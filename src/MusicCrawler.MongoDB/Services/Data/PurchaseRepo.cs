@@ -22,6 +22,7 @@ public class PurchaseRepo : IPurchaseRepo
     private const string FieldStatus = "status";
     private const string FieldRequestedAt = "requestedAt";
     private const string FieldSentAt = "sentAt";
+    private const string FieldDeezerAlbumId = "deezerAlbumId";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -51,7 +52,8 @@ public class PurchaseRepo : IPurchaseRepo
             .Set(FieldAlbum, (BsonValue)(item.Album ?? (BsonValue)BsonNull.Value))
             .Set(FieldImageUrl, (BsonValue)(item.ImageUrl ?? (BsonValue)BsonNull.Value))
             .Set(FieldScore, item.Score)
-            .Set(FieldSources, new BsonArray(item.Sources));
+            .Set(FieldSources, new BsonArray(item.Sources))
+            .Set(FieldDeezerAlbumId, item.DeezerAlbumId is null ? (BsonValue)BsonNull.Value : new BsonInt64(item.DeezerAlbumId.Value));
 
         return Collection.UpdateOneAsync(
             Builders<BsonDocument>.Filter.Eq("_id", item.Id),
@@ -91,9 +93,12 @@ public class PurchaseRepo : IPurchaseRepo
         DateTimeOffset? sentAt = doc.TryGetValue(FieldSentAt, out var sa) && sa.IsValidDateTime
             ? (DateTimeOffset)sa.ToUniversalTime()
             : null;
+        long? deezerAlbumId = doc.TryGetValue(FieldDeezerAlbumId, out var da) && da.IsNumeric
+            ? da.ToInt64()
+            : null;
 
         return new PurchaseItem(
             doc["_id"].AsString, kind, new ArtistKey(Str(FieldArtist)), StrN(FieldAlbum),
-            StrN(FieldImageUrl), score, sources, status, requestedAt, sentAt);
+            StrN(FieldImageUrl), score, sources, status, requestedAt, sentAt, deezerAlbumId);
     }
 }

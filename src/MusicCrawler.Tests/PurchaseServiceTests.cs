@@ -14,19 +14,21 @@ public class PurchaseServiceTests
     private readonly IUserAlbumRatingRepo _albumRatings = Substitute.For<IUserAlbumRatingRepo>();
     private readonly ILibraryProvider _library = Substitute.For<ILibraryProvider>();
     private readonly IArtistCatalogRepo _catalog = Substitute.For<IArtistCatalogRepo>();
+    private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
     private readonly PurchaseService _sut;
 
     public PurchaseServiceTests()
     {
         _sut = new PurchaseService(
-            _purchases, _queue, _albumRatings, _library, _catalog, _downloader,
+            _purchases, _queue, _albumRatings, _library, _catalog, _missing, _downloader,
             NullLogger<PurchaseService>.Instance);
 
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
         _albumRatings.GetAllLiked().Returns(Array.Empty<AlbumRating>());
         _library.GetAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
         _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
+        _missing.GetAll().Returns(Array.Empty<MissingAlbum>());
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
     }
 
@@ -153,38 +155,39 @@ public class PurchaseServiceTests
         _purchases.Items.Single().Status.Should().Be(PurchaseStatus.InLibrary);
     }
 
-    /// <summary>An in-memory <see cref="IPurchaseRepo"/> mirroring the Mongo upsert semantics
-    /// (status/requestedAt insert-only; display fields refreshed) so lifecycle transitions are real.</summary>
-    private sealed class FakePurchaseRepo : IPurchaseRepo
+    [Fact]
+    public async Task Album_items_carry_the_deezer_album_id_from_the_missing_set()
     {
-        private readonly Dictionary<string, PurchaseItem> _items = new();
-
-        public IReadOnlyCollection<PurchaseItem> Items => _items.Values;
-
-        public Task<PurchaseItem[]> GetAll() => Task.FromResult(_items.Values.ToArray());
-
-        public Task Upsert(PurchaseItem item)
+        _albumRatings.GetAllLiked().Returns(new[]
         {
-            _items[item.Id] = _items.TryGetValue(item.Id, out var existing)
-                ? item with { Status = existing.Status, RequestedAt = existing.RequestedAt, SentAt = existing.SentAt }
-                : item with { Status = PurchaseStatus.Pending };
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> SetStatus(string id, PurchaseStatus status)
+            new AlbumRating(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art", DiscoveryStatus.Liked),
+        });
+        _missing.GetAll().Returns(new[]
         {
-            if (!_items.TryGetValue(id, out var item))
-            {
-                return Task.FromResult(false);
-            }
-            _items[id] = item with { Status = status, SentAt = status == PurchaseStatus.Sent ? DateTimeOffset.UtcNow : item.SentAt };
-            return Task.FromResult(true);
-        }
+            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art", 12345),
+        });
 
-        public Task Remove(string id)
-        {
-            _items.Remove(id);
-            return Task.CompletedTask;
-        }
+        var item = (await _sut.GetActive()).Single(p => p.Kind == FeedKind.MissingAlbum);
+
+        item.DeezerAlbumId.Should().Be(12345);
     }
+
+    [Fact]
+    public async Task Retry_returns_a_failed_item_to_pending_and_it_stays_on_the_list()
+    {
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art", DiscoveryStatus.Liked),
+        });
+        await _sut.Reconcile();
+        var id = PurchaseKey.ForAlbum("Big Thief", "Capacity");
+        await _purchases.SetStatus(id, PurchaseStatus.Failed);
+
+        // Failed items remain visible on the active list (so they can be retried), not dropped.
+        (await _sut.GetActive()).Single(p => p.Id == id).Status.Should().Be(PurchaseStatus.Failed);
+
+        (await _sut.Retry(id)).Should().BeTrue();
+        (await _sut.GetActive()).Single(p => p.Id == id).Status.Should().Be(PurchaseStatus.Pending);
+    }
+
 }

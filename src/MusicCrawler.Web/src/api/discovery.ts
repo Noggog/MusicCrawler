@@ -101,6 +101,14 @@ export async function unsendPurchase(id: string): Promise<void> {
   }
 }
 
+// Re-queue a failed item for another download attempt.
+export async function retryPurchase(id: string): Promise<void> {
+  const res = await fetch(`/api/purchases/retry?id=${encodeURIComponent(id)}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to retry item: ${res.status} ${res.statusText}`)
+  }
+}
+
 // Remove an item from the list entirely.
 export async function removePurchase(id: string): Promise<void> {
   const res = await fetch(`/api/purchases?id=${encodeURIComponent(id)}`, { method: 'DELETE' })

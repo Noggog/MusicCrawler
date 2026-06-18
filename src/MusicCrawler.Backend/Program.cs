@@ -59,6 +59,10 @@ builder.Services.AddHostedService<CatalogSyncService>();
 // shortly after startup (so the catalog is populated first), then daily.
 builder.Services.AddHostedService<AlbumSyncService>();
 
+// Slowly drains the purchase list, downloading pending Deezer albums via streamrip. Idles unless
+// DEEZER_DOWNLOADS_ENABLED is set; deliberately throttled to stay under Deezer's anti-tooling radar.
+builder.Services.AddHostedService<DownloadService>();
+
 // BFF auth: cookie session + OIDC (Keycloak) code flow. See BffAuthentication.
 builder.AddBffAuthentication();
 
@@ -299,6 +303,12 @@ app.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
         await purchases.Unsend(id) ? Results.NoContent() : Results.NotFound())
     .RequireAuthorization()
     .WithName("UnsendPurchase");
+
+// Re-queue a failed item for another download attempt.
+app.MapPost("/purchases/retry", async (string id, PurchaseService purchases) =>
+        await purchases.Retry(id) ? Results.NoContent() : Results.NotFound())
+    .RequireAuthorization()
+    .WithName("RetryPurchase");
 
 // Remove an item from the list entirely.
 app.MapDelete("/purchases", async (string id, PurchaseService purchases) =>

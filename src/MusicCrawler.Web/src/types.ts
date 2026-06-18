@@ -88,7 +88,7 @@ export interface RatedItem {
 
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a
 // persisted acquisition lifecycle. `kind` is 'RecommendedArtist' (no album) or 'MissingAlbum'.
-export type PurchaseStatus = 'Pending' | 'Sent' | 'InLibrary'
+export type PurchaseStatus = 'Pending' | 'Sent' | 'InLibrary' | 'Failed'
 
 export interface PurchaseItem {
   id: string
@@ -101,6 +101,8 @@ export interface PurchaseItem {
   status: PurchaseStatus
   requestedAt: string
   sentAt: string | null
+  // Deezer album id for downloadable (MissingAlbum) items; null for artists.
+  deezerAlbumId: number | null
 }
 
 // The signed-in user, as returned by GET /auth/me (the BFF). Null when not authenticated.
