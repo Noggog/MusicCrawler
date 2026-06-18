@@ -101,6 +101,12 @@ export default function Ratings() {
                   <span className="disc-provenance">
                     {KIND_LABEL[item.kind]}
                     {item.album ? ` · ${name}` : ''}
+                    {item.verdict === 'Snoozed' && (
+                      <span className="disc-snooze-note">
+                        {' · 💤 Snoozed'}
+                        {item.snoozeUntil ? ` until ${new Date(item.snoozeUntil).toLocaleDateString()}` : ''}
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="disc-actions">

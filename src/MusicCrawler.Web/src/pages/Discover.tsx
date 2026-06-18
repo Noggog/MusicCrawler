@@ -6,7 +6,15 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getArtistAlbums, getMixedFeed, rate, refreshQueue, type Verdict } from '../api/discovery'
+import {
+  getArtistAlbums,
+  getMixedFeed,
+  rate,
+  refreshQueue,
+  snooze,
+  type SnoozeDuration,
+  type Verdict,
+} from '../api/discovery'
 import { getDeezerPlayInfo } from '../api/deezer'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
@@ -41,6 +49,53 @@ const ALL_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'Recommended
 const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist']
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
+
+// How a row was marked this view (👍 / 👎 / 💤) so it stays in place until the next natural refresh.
+type RowMark = Verdict | 'snoozed'
+const markChip = (mark: RowMark) =>
+  mark === 'up' ? '👍 Added' : mark === 'down' ? '👎 Dismissed' : '💤 Snoozed'
+
+const SNOOZE_OPTIONS: { label: string; duration: SnoozeDuration }[] = [
+  { label: 'Week', duration: 'week' },
+  { label: 'Month', duration: 'month' },
+  { label: 'Year', duration: 'year' },
+]
+
+// The 💤 action: a button that reveals Week / Month / Year. Open state is owned by the parent
+// (keyed by row) so only one menu is open at a time and it survives the in-place "rated" mark.
+function SnoozeControl({
+  open,
+  onToggle,
+  onPick,
+  disabled,
+}: {
+  open: boolean
+  onToggle: () => void
+  onPick: (duration: SnoozeDuration) => void
+  disabled: boolean
+}) {
+  return (
+    <div className="disc-snooze">
+      <button
+        className={open ? 'disc-btn snooze active' : 'disc-btn snooze'}
+        title="Snooze — hide for a while, then resurface"
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        💤
+      </button>
+      {open && (
+        <div className="disc-snooze-menu">
+          {SNOOZE_OPTIONS.map((o) => (
+            <button key={o.duration} className="disc-snooze-opt" onClick={() => onPick(o.duration)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Stable identity for a feed row, shared by render and the rate mutation so a rated row can be
 // marked in place. Albums key on artist+album; artists on kind+name.
@@ -95,7 +150,7 @@ function ArtistAlbumsPanel({
   disabled,
 }: {
   artist: string
-  rated: Map<string, Verdict>
+  rated: Map<string, RowMark>
   playing: Set<string>
   togglePlay: (key: string) => void
   onRate: (item: FeedItem, verdict: Verdict) => void
@@ -138,7 +193,7 @@ function ArtistAlbumsPanel({
                 )}
                 {verdict ? (
                   <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
-                    {verdict === 'up' ? '👍 Added' : '👎 Dismissed'}
+                    {markChip(verdict)}
                   </span>
                 ) : (
                   <>
@@ -170,7 +225,7 @@ type DiscoverState = {
   page: number
   seed: number
   playing: Set<string>
-  rated: Map<string, Verdict>
+  rated: Map<string, RowMark>
   expandedAlbums: Set<string>
 }
 const persisted: DiscoverState = {
@@ -178,7 +233,7 @@ const persisted: DiscoverState = {
   page: 0,
   seed: newSeed(),
   playing: new Set<string>(),
-  rated: new Map<string, Verdict>(),
+  rated: new Map<string, RowMark>(),
   expandedAlbums: new Set<string>(),
 }
 
@@ -192,7 +247,10 @@ export default function Discover() {
   const [playing, setPlaying] = useState<Set<string>>(() => persisted.playing)
   // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
   // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
-  const [rated, setRated] = useState<Map<string, Verdict>>(() => persisted.rated)
+  const [rated, setRated] = useState<Map<string, RowMark>>(() => persisted.rated)
+  // Which row's snooze menu is open (by row key), or null. Only one open at a time; not persisted —
+  // a transient UI affordance that should start closed on remount.
+  const [snoozeOpen, setSnoozeOpen] = useState<string | null>(null)
   // Brand-new artists liked this view: their albums are fetched and surfaced inline beneath the card
   // so the discovery can be acquired. Driven off state (not the feed item) so it survives the
   // in-place "rated" mark; cleared on the next natural refresh alongside `rated`.
@@ -299,6 +357,25 @@ export default function Discover() {
       }
     },
   })
+  const snoozeMutation = useMutation({
+    mutationFn: ({ item, duration }: { item: FeedItem; duration: SnoozeDuration }) => snooze(item, duration),
+    // Mark in place like a rating; snooze writes a decided row so the artist drops out of the feed on
+    // the next natural refresh. Doesn't touch the buy list (a snooze isn't a "yes").
+    onMutate: ({ item }) => {
+      setSnoozeOpen(null)
+      setRated((prev) => new Map(prev).set(rowKeyFor(item), 'snoozed'))
+    },
+    onError: (_err, { item }) => {
+      setRated((prev) => {
+        const next = new Map(prev)
+        next.delete(rowKeyFor(item))
+        return next
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+    },
+  })
   const rebuild = useMutation({
     mutationFn: refreshQueue,
     onSuccess: () => {
@@ -313,7 +390,7 @@ export default function Discover() {
     setPage(0)
   }
 
-  const busy = rateMutation.isPending || rebuild.isPending
+  const busy = rateMutation.isPending || snoozeMutation.isPending || rebuild.isPending
   const items = data?.items ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -378,6 +455,7 @@ export default function Discover() {
 
       {rebuild.isError && <p className="error">Rebuild failed: {(rebuild.error as Error).message}</p>}
       {rateMutation.isError && <p className="error">Rating failed: {(rateMutation.error as Error).message}</p>}
+      {snoozeMutation.isError && <p className="error">Snooze failed: {(snoozeMutation.error as Error).message}</p>}
       {isError && <p className="error">Failed to load feed: {(error as Error).message}</p>}
 
       {kinds.length === 0 && (
@@ -430,7 +508,7 @@ export default function Discover() {
                     )}
                     {verdict ? (
                       <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
-                        {verdict === 'up' ? '👍 Added' : '👎 Dismissed'}
+                        {markChip(verdict)}
                       </span>
                     ) : (
                       <>
@@ -450,6 +528,13 @@ export default function Discover() {
                         >
                           👎
                         </button>
+                        {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
+                        <SnoozeControl
+                          open={snoozeOpen === rowKey}
+                          onToggle={() => setSnoozeOpen((cur) => (cur === rowKey ? null : rowKey))}
+                          onPick={(duration) => snoozeMutation.mutate({ item, duration })}
+                          disabled={rebuild.isPending}
+                        />
                       </>
                     )}
                   </div>

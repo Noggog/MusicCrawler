@@ -18,7 +18,11 @@ public interface IUserQueueRepo
     /// </summary>
     Task UpsertCandidates(string userId, IReadOnlyList<DiscoveryCandidate> candidates);
 
-    /// <summary>The artist names this user has already Liked or Disliked — the expansion exclusion set.</summary>
+    /// <summary>
+    /// The artist names this user has already decided — the expansion exclusion set. Liked/Disliked
+    /// always count; a Snoozed artist counts only while unexpired (an expired snooze drops out so the
+    /// frontier may re-touch it).
+    /// </summary>
     Task<HashSet<string>> GetDecidedArtists(string userId);
 
     /// <summary>The artist names this user has Liked — the taste anchors the frontier grows from.</summary>
@@ -38,6 +42,14 @@ public interface IUserQueueRepo
     /// </summary>
     Task<DiscoveryCandidate?> Rate(string userId, string artistName, DiscoveryStatus status, string? imageUrl);
 
+    /// <summary>
+    /// Hides an artist until <paramref name="until"/>, upserting the row if needed (mirrors
+    /// <see cref="Rate"/>). The row stays <see cref="DiscoveryStatus.Snoozed"/> until re-rated;
+    /// expiry is transparent — <see cref="GetPending"/> resurfaces it once <paramref name="until"/>
+    /// has passed. Only sets the image when supplied, never clobbering an existing one with null.
+    /// </summary>
+    Task Snooze(string userId, string artistName, DateTimeOffset until, string? imageUrl);
+
     /// <summary>Removes an artist's verdict, returning it to the feed (recommended or library).</summary>
     Task ClearVerdict(string userId, string artistName);
 
@@ -55,6 +67,12 @@ public interface IUserQueueRepo
 
     /// <summary>Clears pending candidates (keeps Liked/Disliked) so the queue can be rebuilt from likes.</summary>
     Task DeletePending(string userId);
+
+    /// <summary>
+    /// Every user id that has at least one queue row — the population the periodic replenisher tops
+    /// up. Sourced here (not from a user repo) so it covers exactly the users who've engaged discovery.
+    /// </summary>
+    Task<string[]> GetAllUserIds();
 
     /// <summary>
     /// Every row across all users whose artist name encodes multiple artists joined by ';' — the

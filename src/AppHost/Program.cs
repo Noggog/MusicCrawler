@@ -35,6 +35,8 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     //   RELATED_STALENESS_DAYS how long a stored edge set is considered fresh (default 30)
     .WithEnvironment("DEEZER_BASE_URI", Environment.GetEnvironmentVariable("DEEZER_BASE_URI"))
     .WithEnvironment("RELATED_STALENESS_DAYS", Environment.GetEnvironmentVariable("RELATED_STALENESS_DAYS"))
+    // QUEUE_REPLENISH_INTERVAL_HOURS how often the per-user queue top-up runs (default 24)
+    .WithEnvironment("QUEUE_REPLENISH_INTERVAL_HOURS", Environment.GetEnvironmentVariable("QUEUE_REPLENISH_INTERVAL_HOURS"))
     // Deezer download subsystem (streamrip). MUSIC_DOWNLOAD_DIR is the library root downloads land in;
     // the rest are optional throttle/quality knobs (backend defaults them). The ARL and the
     // artist/album folder_format live in streamrip's own config, not here.

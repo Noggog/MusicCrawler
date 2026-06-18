@@ -21,9 +21,12 @@ public class UserQueueRepo : IUserQueueRepo
     private const string FieldDepth = "depth";
     private const string FieldAddedAt = "addedAt";
     private const string FieldDecidedAt = "decidedAt";
+    private const string FieldSnoozeUntil = "snoozeUntil";
 
     private static readonly string StatusPending = DiscoveryStatus.Pending.ToString();
     private static readonly string StatusLiked = DiscoveryStatus.Liked.ToString();
+    private static readonly string StatusDisliked = DiscoveryStatus.Disliked.ToString();
+    private static readonly string StatusSnoozed = DiscoveryStatus.Snoozed.ToString();
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -85,8 +88,13 @@ public class UserQueueRepo : IUserQueueRepo
 
     public async Task<HashSet<string>> GetDecidedArtists(string userId)
     {
-        var filter = Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
-                     & Builders<BsonDocument>.Filter.Ne(FieldStatus, StatusPending);
+        var f = Builders<BsonDocument>.Filter;
+        // Liked/Disliked are decided forever; a Snoozed row counts as decided only while unexpired,
+        // so an expired snooze drops out of this exclusion set and expansion may re-touch it.
+        var filter = f.Eq(FieldUserId, userId)
+                     & (f.Eq(FieldStatus, StatusLiked)
+                        | f.Eq(FieldStatus, StatusDisliked)
+                        | (f.Eq(FieldStatus, StatusSnoozed) & f.Gt(FieldSnoozeUntil, DateTimeOffset.UtcNow.UtcDateTime)));
         var cursor = await Collection.FindAsync(
             filter,
             new FindOptions<BsonDocument> { Projection = Builders<BsonDocument>.Projection.Include(FieldArtist) });
@@ -104,10 +112,22 @@ public class UserQueueRepo : IUserQueueRepo
         return names;
     }
 
+    /// <summary>
+    /// Rows eligible to be shown right now: still-Pending, plus Snoozed rows whose snooze has expired
+    /// (they resurface lazily here — their status stays Snoozed until the user re-rates). This OR-filter
+    /// is the single source of truth for resurfacing.
+    /// </summary>
+    private static FilterDefinition<BsonDocument> EligiblePending(string userId)
+    {
+        var f = Builders<BsonDocument>.Filter;
+        return f.Eq(FieldUserId, userId)
+               & (f.Eq(FieldStatus, StatusPending)
+                  | (f.Eq(FieldStatus, StatusSnoozed) & f.Lte(FieldSnoozeUntil, DateTimeOffset.UtcNow.UtcDateTime)));
+    }
+
     public async Task<DiscoveryPage> GetPending(string userId, int page, int pageSize)
     {
-        var filter = Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
-                     & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusPending);
+        var filter = EligiblePending(userId);
 
         var total = await Collection.CountDocumentsAsync(filter);
 
@@ -126,9 +146,8 @@ public class UserQueueRepo : IUserQueueRepo
 
     public async Task<long> CountPending(string userId)
     {
-        var filter = Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
-                     & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusPending);
-        return await Collection.CountDocumentsAsync(filter);
+        // Same OR-filter as GetPending, so an expired snooze counts as pending (not a spurious rebuild).
+        return await Collection.CountDocumentsAsync(EligiblePending(userId));
     }
 
     public async Task<DiscoveryCandidate?> Rate(string userId, string artistName, DiscoveryStatus status, string? imageUrl)
@@ -162,6 +181,32 @@ public class UserQueueRepo : IUserQueueRepo
             });
 
         return doc == null ? null : ToCandidate(doc);
+    }
+
+    public async Task Snooze(string userId, string artistName, DateTimeOffset until, string? imageUrl)
+    {
+        var now = DateTimeOffset.UtcNow.UtcDateTime;
+        var updates = new List<UpdateDefinition<BsonDocument>>
+        {
+            // Mirror Rate's immutable seeding so an artist with no prior candidate row can be snoozed.
+            Builders<BsonDocument>.Update.SetOnInsert(FieldUserId, userId),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldArtist, artistName),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldAddedAt, now),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldScore, 0.0),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldDepth, 0),
+            Builders<BsonDocument>.Update.Set(FieldStatus, StatusSnoozed),
+            Builders<BsonDocument>.Update.Set(FieldSnoozeUntil, until.UtcDateTime),
+            Builders<BsonDocument>.Update.Set(FieldDecidedAt, now),
+        };
+        if (imageUrl != null)
+        {
+            updates.Add(Builders<BsonDocument>.Update.Set(FieldImageUrl, imageUrl));
+        }
+
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName)),
+            Builders<BsonDocument>.Update.Combine(updates),
+            new UpdateOptions { IsUpsert = true });
     }
 
     public Task ClearVerdict(string userId, string artistName) =>
@@ -203,7 +248,10 @@ public class UserQueueRepo : IUserQueueRepo
                 && Enum.TryParse<DiscoveryStatus>(s.AsString, out var parsed)
                 ? parsed
                 : DiscoveryStatus.Pending;
-            return new ArtistRating(c.Artist, c.ImageUrl, status);
+            DateTimeOffset? snoozeUntil = doc.TryGetValue(FieldSnoozeUntil, out var su) && su.IsValidDateTime
+                ? new DateTimeOffset(su.ToUniversalTime(), TimeSpan.Zero)
+                : null;
+            return new ArtistRating(c.Artist, c.ImageUrl, status, snoozeUntil);
         }).ToArray();
     }
 
@@ -232,6 +280,12 @@ public class UserQueueRepo : IUserQueueRepo
         Collection.DeleteManyAsync(
             Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
             & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusPending));
+
+    public async Task<string[]> GetAllUserIds()
+    {
+        var ids = await Collection.DistinctAsync<string>(FieldUserId, Builders<BsonDocument>.Filter.Empty);
+        return (await ids.ToListAsync()).ToArray();
+    }
 
     public async Task<CombinedArtistVerdict[]> FindCombinedRatings()
     {

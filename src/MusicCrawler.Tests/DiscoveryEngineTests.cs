@@ -148,6 +148,43 @@ public class DiscoveryEngineTests
     }
 
     [Fact]
+    public async Task Snoozing_an_artist_records_a_snooze_and_does_not_expand()
+    {
+        await _sut.SnoozeArtist(User, "Phoebe Bridgers", TimeSpan.FromDays(7));
+
+        // Snooze writes a future snoozeUntil and never grows the frontier (it's "not now", not "yes").
+        await _queue.Received(1).Snooze(
+            User, "Phoebe Bridgers", Arg.Is<DateTimeOffset>(d => d > DateTimeOffset.UtcNow), null);
+        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>());
+        await _queue.DidNotReceive().UpsertCandidates(Arg.Any<string>(), Arg.Any<IReadOnlyList<DiscoveryCandidate>>());
+    }
+
+    [Fact]
+    public async Task Snoozing_an_album_records_a_snooze_on_the_album_ratings()
+    {
+        await _sut.SnoozeAlbum(User, "Big Thief", "Capacity", "art", TimeSpan.FromDays(30));
+
+        await _albumRatings.Received(1).Snooze(
+            User, "Big Thief", "Capacity", "art", Arg.Is<DateTimeOffset>(d => d > DateTimeOffset.UtcNow));
+        // A snooze isn't a verdict — it must not record a Liked/Disliked rating.
+        await _albumRatings.DidNotReceive().Rate(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DiscoveryStatus>());
+    }
+
+    [Fact]
+    public async Task TopUp_expands_from_liked_artists_without_clearing_pending()
+    {
+        _queue.GetLikedArtistNames(User).Returns(new[] { "boygenius" });
+        Relates("boygenius", ("Phoebe Bridgers", null, 1));
+
+        await _sut.TopUp(User);
+
+        // Additive: it grows the frontier but, unlike Rebuild, never wipes the existing pending queue.
+        await _queue.DidNotReceive().DeletePending(Arg.Any<string>());
+        Captured(_queue).Select(c => c.Artist.ArtistName).Should().Equal("Phoebe Bridgers");
+    }
+
+    [Fact]
     public async Task Rebuild_clears_pending_then_expands_from_liked_artists()
     {
         _queue.GetLikedArtistNames(User).Returns(new[] { "boygenius" });

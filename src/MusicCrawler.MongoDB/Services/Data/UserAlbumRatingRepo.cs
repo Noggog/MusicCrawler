@@ -18,8 +18,10 @@ public class UserAlbumRatingRepo : IUserAlbumRatingRepo
     private const string FieldAlbumArt = "albumArt";
     private const string FieldStatus = "status";
     private const string FieldDecidedAt = "decidedAt";
+    private const string FieldSnoozeUntil = "snoozeUntil";
 
     private static readonly string StatusLiked = DiscoveryStatus.Liked.ToString();
+    private static readonly string StatusSnoozed = DiscoveryStatus.Snoozed.ToString();
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -54,13 +56,39 @@ public class UserAlbumRatingRepo : IUserAlbumRatingRepo
             new UpdateOptions { IsUpsert = true });
     }
 
+    public async Task Snooze(string userId, string artistName, string albumName, string? albumArt, DateTimeOffset until)
+    {
+        var updates = new List<UpdateDefinition<BsonDocument>>
+        {
+            Builders<BsonDocument>.Update.SetOnInsert(FieldUserId, userId),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldArtist, artistName),
+            Builders<BsonDocument>.Update.SetOnInsert(FieldAlbum, albumName),
+            Builders<BsonDocument>.Update.Set(FieldStatus, StatusSnoozed),
+            Builders<BsonDocument>.Update.Set(FieldSnoozeUntil, until.UtcDateTime),
+            Builders<BsonDocument>.Update.Set(FieldDecidedAt, DateTimeOffset.UtcNow.UtcDateTime),
+        };
+        if (albumArt != null)
+        {
+            updates.Add(Builders<BsonDocument>.Update.Set(FieldAlbumArt, albumArt));
+        }
+
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName, albumName)),
+            Builders<BsonDocument>.Update.Combine(updates),
+            new UpdateOptions { IsUpsert = true });
+    }
+
     public Task Clear(string userId, string artistName, string albumName) =>
         Collection.DeleteOneAsync(Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName, albumName)));
 
     public async Task<HashSet<string>> GetDecidedKeys(string userId)
     {
+        var f = Builders<BsonDocument>.Filter;
+        // Decided = anything except a Snoozed row whose snooze has expired (those resurface).
+        var filter = f.Eq(FieldUserId, userId)
+                     & (f.Ne(FieldStatus, StatusSnoozed) | f.Gt(FieldSnoozeUntil, DateTimeOffset.UtcNow.UtcDateTime));
         var cursor = await Collection.FindAsync(
-            Builders<BsonDocument>.Filter.Eq(FieldUserId, userId),
+            filter,
             new FindOptions<BsonDocument>
             {
                 Projection = Builders<BsonDocument>.Projection.Include(FieldArtist).Include(FieldAlbum),
@@ -135,6 +163,9 @@ public class UserAlbumRatingRepo : IUserAlbumRatingRepo
             && Enum.TryParse<DiscoveryStatus>(s.AsString, out var parsed)
             ? parsed
             : DiscoveryStatus.Pending;
-        return new AlbumRating(new ArtistKey(artist), new AlbumKey(album), art, status);
+        DateTimeOffset? snoozeUntil = doc.TryGetValue(FieldSnoozeUntil, out var su) && su.IsValidDateTime
+            ? new DateTimeOffset(su.ToUniversalTime(), TimeSpan.Zero)
+            : null;
+        return new AlbumRating(new ArtistKey(artist), new AlbumKey(album), art, status, snoozeUntil);
     }
 }

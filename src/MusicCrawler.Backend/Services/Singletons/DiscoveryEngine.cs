@@ -3,6 +3,17 @@ using MusicCrawler.Interfaces;
 namespace MusicCrawler.Backend.Services.Singletons;
 
 /// <summary>
+/// The seam the periodic <c>QueueReplenishService</c> drives — a per-user, additive top-up of the
+/// recommendation queue. Implemented by <see cref="DiscoveryEngine"/>; extracted so the background
+/// service can be unit-tested without constructing the whole engine.
+/// </summary>
+public interface IQueueReplenisher
+{
+    /// <summary>Gently grows (and refreshes stale edges for) the user's queue without clearing pending.</summary>
+    Task TopUp(string userId);
+}
+
+/// <summary>
 /// The discovery loop. Surfaces three kinds of things to react to — new recommended artists, owned
 /// artists not yet rated, and albums missing from owned artists — and steers a per-user walk through
 /// the similarity graph by the user's verdicts.
@@ -14,7 +25,7 @@ namespace MusicCrawler.Backend.Services.Singletons;
 /// Recommendations never re-add an artist that's owned, already-decided, or the frontier itself, so
 /// the frontier only moves outward.
 /// </summary>
-public class DiscoveryEngine
+public class DiscoveryEngine : IQueueReplenisher
 {
     private readonly IUserQueueRepo _queue;
     private readonly IRelatedArtistReader _related;
@@ -260,6 +271,21 @@ public class DiscoveryEngine
         }
     }
 
+    /// <summary>
+    /// Snoozes an artist for <paramref name="duration"/> — hides it from the feed and resurfaces it
+    /// when the window lapses. Unlike a like, it never grows the frontier (a snooze is "not now", not
+    /// "yes"); unlike a dislike, it isn't permanent.
+    /// </summary>
+    public Task SnoozeArtist(string userId, string artistName, TimeSpan duration) =>
+        _queue.Snooze(userId, artistName, DateTimeOffset.UtcNow + duration, imageUrl: null);
+
+    /// <summary>
+    /// Snoozes a missing album for <paramref name="duration"/> — hides it from the missing-albums feed
+    /// and resurfaces it when the window lapses. The album analogue of <see cref="SnoozeArtist"/>.
+    /// </summary>
+    public Task SnoozeAlbum(string userId, string artistName, string albumName, string? albumArt, TimeSpan duration) =>
+        _albumRatings.Snooze(userId, artistName, albumName, albumArt, DateTimeOffset.UtcNow + duration);
+
     /// <summary>Thumbs a missing album: like = queue to buy, dislike = not interested.</summary>
     public Task RateAlbum(string userId, string artistName, string albumName, string? albumArt, DiscoveryStatus status) =>
         _albumRatings.Rate(userId, artistName, albumName, albumArt, status);
@@ -279,6 +305,15 @@ public class DiscoveryEngine
         await ExpandFrom(userId, await _queue.GetLikedArtistNames(userId), depth: 1);
     }
 
+    /// <summary>
+    /// A gentle, additive top-up of the queue for the periodic replenisher — re-expands from the
+    /// liked artists <em>without</em> clearing pending (so it never reshuffles a user mid-swipe). The
+    /// upsert is idempotent, and the expansion naturally refetches similarity edges that have gone
+    /// stale, so one pass both grows the frontier and refreshes the graph.
+    /// </summary>
+    public async Task TopUp(string userId) =>
+        await ExpandFrom(userId, await _queue.GetLikedArtistNames(userId), depth: 1);
+
     // ---- Review ----
 
     /// <summary>
@@ -295,12 +330,12 @@ public class DiscoveryEngine
         var artistItems = (await _queue.GetRated(userId))
             .Select(r => new RatedItem(
                 owned.Contains(r.Artist.ArtistName) ? FeedKind.LibraryArtist : FeedKind.RecommendedArtist,
-                r.Artist, null, r.ImageUrl, r.Status));
+                r.Artist, null, r.ImageUrl, r.Status, r.SnoozeUntil));
 
         var albumItems = (await _albumRatings.GetRated(userId))
             .Where(r => !AlbumIsOwned(ownedAlbums, r.Artist.ArtistName, r.Album.AlbumName))
             .Select(r => new RatedItem(
-                FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, r.Status));
+                FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, r.Status, r.SnoozeUntil));
 
         return artistItems.Concat(albumItems).ToArray();
     }

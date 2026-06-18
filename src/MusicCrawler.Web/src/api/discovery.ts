@@ -11,6 +11,9 @@ import type {
 
 export type Verdict = 'up' | 'down'
 
+// How long a snoozed recommendation stays hidden before it resurfaces in the feed.
+export type SnoozeDuration = 'week' | 'month' | 'year'
+
 // A paged feed section for one category (recommended artists, missing albums, unrated owned artists).
 export async function getFeed(kind: FeedKind, page = 0, pageSize = 20): Promise<DiscoveryFeedPage> {
   const params = new URLSearchParams({ kind, page: String(page), pageSize: String(pageSize) })
@@ -71,6 +74,20 @@ export async function rate(item: FeedItem | RatedItem, verdict: Verdict): Promis
   const res = await fetch(`/api/discovery/rate?${params}`, { method: 'POST' })
   if (!res.ok) {
     throw new Error(`Failed to rate ${item.artist.artistName}: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Snooze an artist or — when album is supplied — a missing album (hidden for the chosen duration;
+// resurfaces when the window lapses).
+export async function snooze(item: FeedItem | RatedItem, duration: SnoozeDuration): Promise<void> {
+  const params = new URLSearchParams({ artist: item.artist.artistName, duration })
+  if (item.album) {
+    params.set('album', item.album)
+    if (item.imageUrl) params.set('albumArt', item.imageUrl)
+  }
+  const res = await fetch(`/api/discovery/snooze?${params}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to snooze ${item.artist.artistName}: ${res.status} ${res.statusText}`)
   }
 }
 

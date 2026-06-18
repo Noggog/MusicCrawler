@@ -2,6 +2,7 @@ using System.Reactive.Concurrency;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
+using MusicCrawler.Backend;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Plex;
 using MusicCrawler.Plex.Services.Singletons;

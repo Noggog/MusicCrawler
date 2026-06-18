@@ -26,6 +26,14 @@ public class MainModule : Autofac.Module
         var stalenessDays = double.TryParse(
             Environment.GetEnvironmentVariable("RELATED_STALENESS_DAYS"), out var d) ? d : 30;
         builder.RegisterInstance(new RelatedStalenessPolicy(TimeSpan.FromDays(stalenessDays)));
+
+        // Periodic queue replenisher cadence (env knob, default 24h). First run is offset ~5min past
+        // boot so it lands after the catalog + album syncs rather than contending with them on Deezer.
+        var replenishHours = double.TryParse(
+            Environment.GetEnvironmentVariable("QUEUE_REPLENISH_INTERVAL_HOURS"), out var h) ? h : 24;
+        builder.RegisterInstance(new ReplenishConfig(
+            Interval: TimeSpan.FromHours(replenishHours), StartupDelay: TimeSpan.FromMinutes(5)));
+
         builder.RegisterInstance(
             new PlexEndpointInfo(Environment.GetEnvironmentVariable("PLEX_ENDPOINT") ?? throw new InvalidOperationException()));
         builder.RegisterInstance(

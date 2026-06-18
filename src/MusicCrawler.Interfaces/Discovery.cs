@@ -14,6 +14,13 @@ public enum DiscoveryStatus
 
     /// <summary>Thumbs-down: pruned — never shown or expanded again.</summary>
     Disliked,
+
+    /// <summary>
+    /// Temporarily hidden until <c>snoozeUntil</c> passes, then it resurfaces as pending (lazily, on
+    /// the next read). Counts as decided while unexpired (not re-added by expansion); once expired it
+    /// drops back out of the decided set so the frontier may re-touch it.
+    /// </summary>
+    Snoozed,
 }
 
 /// <summary>
@@ -102,7 +109,11 @@ public record RatedItem(
     ArtistKey Artist,
     string? Album,
     string? ImageUrl,
-    DiscoveryStatus Verdict);
+    DiscoveryStatus Verdict,
+    DateTimeOffset? SnoozeUntil = null);
 
-/// <summary>An artist-level rating row (verdict + image) read back from the per-user queue.</summary>
-public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus Status);
+/// <summary>
+/// An artist-level rating row (verdict + image) read back from the per-user queue.
+/// <paramref name="SnoozeUntil"/> is set only for <see cref="DiscoveryStatus.Snoozed"/> rows.
+/// </summary>
+public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus Status, DateTimeOffset? SnoozeUntil = null);

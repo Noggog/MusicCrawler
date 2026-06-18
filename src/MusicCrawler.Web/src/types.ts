@@ -53,7 +53,7 @@ export type FeedKind =
   | 'LibraryArtist'
   | 'RecommendedLibraryArtist'
   | 'SeedLibraryArtist'
-export type DiscoveryStatus = 'Pending' | 'Liked' | 'Disliked'
+export type DiscoveryStatus = 'Pending' | 'Liked' | 'Disliked' | 'Snoozed'
 
 // One thing to react to in the discovery feed. `album` is set only for MissingAlbum items;
 // `score`/`sources` rank and explain recommended artists (0/empty otherwise).
@@ -84,6 +84,8 @@ export interface RatedItem {
   album: string | null
   imageUrl: string | null
   verdict: DiscoveryStatus
+  // ISO timestamp set only for Snoozed items — when the artist resurfaces in the feed.
+  snoozeUntil: string | null
 }
 
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a

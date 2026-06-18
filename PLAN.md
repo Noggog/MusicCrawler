@@ -231,7 +231,7 @@ Each phase is shippable on its own.
 
 Worked one at a time. Full design in `~/.claude/plans/dreamy-forging-hearth.md`.
 
-1. **New-artist → albums, surfaced inline.** Liking a non-owned recommended artist enumerates
+1. **New-artist → albums, surfaced inline.** _(built 2026-06-18)_ Liking a non-owned recommended artist enumerates
    their Deezer discography (albums only) on-demand and renders them as ratable missing-album
    rows **inline under the just-rated card**. Thumbed-up albums flow through the existing
    missing-album → purchase → download path. The enumerated albums are written to the global
@@ -249,14 +249,23 @@ Worked one at a time. Full design in `~/.claude/plans/dreamy-forging-hearth.md`.
    Library resolution moved from `PlexRepo` to a shared `PlexApi.ResolveLibrary()` so reads and the
    rescan target the same section. Best-effort: scan failures are logged, never thrown. (The `InLibrary`
    flip still depends on the deferred title-match correctness fix below.)
-3. **Snooze (Week / Month / Year).** Third action beside 👍/👎: hides a recommendation for the
-   chosen duration, auto-resurfaces it on expiry (lazy-on-read), and is excluded from queue
-   rebuilds meanwhile. Adds `DiscoveryStatus.Snoozed` + `snoozeUntil` to `userQueue`; the
-   `Pending`/decided filters become expiry-aware. _New `POST /discovery/snooze`._
-4. **Periodic replenisher.** Background job (`QueueReplenishService`) that per-user tops up the
-   recommendation queue via a gentle additive `DiscoveryEngine.TopUp` (no `DeletePending`),
-   which also refetches edges stale past `RelatedStalenessPolicy`. Cadence
-   `QUEUE_REPLENISH_INTERVAL_HOURS` (default 24). Lands with #3 (shares the decided-set filter).
+3. **Snooze (Week / Month / Year).** _(built 2026-06-18)_ Third action beside 👍/👎: hides a
+   recommendation for the chosen duration, auto-resurfaces it on expiry (lazy-on-read), and is
+   excluded from queue rebuilds meanwhile. Added `DiscoveryStatus.Snoozed` + `snoozeUntil` to
+   `userQueue`; the `Pending`/decided filters became expiry-aware (`UserQueueRepo.EligiblePending`
+   OR-filter is the single source of truth for resurfacing; `GetDecidedArtists` counts a snooze as
+   decided only while unexpired). `DiscoveryEngine.SnoozeArtist` never expands. `POST
+   /discovery/snooze?artist=&album?=&albumArt?=&duration=week|month|year`. Albums snooze the same way
+   (`UserAlbumRatingRepo.Snooze`; `GetDecidedKeys` drops expired snoozes so the album resurfaces;
+   `DiscoveryEngine.SnoozeAlbum`). Frontend: 💤 popover on every Discover card (artists + missing
+   albums), "Snoozed until X" + un-snooze (✕) on Ratings.
+4. **Periodic replenisher.** _(built 2026-06-18)_ Background `QueueReplenishService` (Rx
+   `Observable.Timer`, mirrors `AlbumSyncService`) that per-user tops up the recommendation queue via
+   a gentle additive `DiscoveryEngine.TopUp` (no `DeletePending`), which also refetches edges stale
+   past `RelatedStalenessPolicy`. Per-user try/catch so one failure doesn't abort the pass. Users
+   sourced from `IUserQueueRepo.GetAllUserIds`; seam is `IQueueReplenisher` (impl by `DiscoveryEngine`)
+   for testability. `ReplenishConfig` (`QUEUE_REPLENISH_INTERVAL_HOURS`, default 24; +5min startup
+   offset). Forwarded in AppHost. Shares the decided-set filter with #3.
 
 _Deferred:_ title-normalize / `(Deluxe)`-tolerant correctness fix in `PurchaseService.AlbumIsOwned`
 — revisit if lingering rows become a problem.

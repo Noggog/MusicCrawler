@@ -1,4 +1,8 @@
-namespace MusicCrawler.Backend.Services.Singletons;
+// Lives in the MusicCrawler.Backend root namespace (NOT Services.Singletons) on purpose: MainModule's
+// assembly scan sweeps Services.Singletons AsSelf via reflection, which would shadow the env-built
+// RegisterInstance below with a non-constructable reflection registration (no parameterless ctor) and
+// fail activation. Config records belong outside the scanned namespace — same as RelatedStalenessPolicy.
+namespace MusicCrawler.Backend;
 
 /// <summary>
 /// Configuration for the post-download Plex rescan, read from environment variables in MainModule

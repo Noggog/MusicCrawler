@@ -59,6 +59,10 @@ builder.Services.AddHostedService<CatalogSyncService>();
 // shortly after startup (so the catalog is populated first), then daily.
 builder.Services.AddHostedService<AlbumSyncService>();
 
+// Periodically tops up each user's recommendation queue (additive — grows the frontier and refreshes
+// stale similarity edges without clearing pending). Cadence via QUEUE_REPLENISH_INTERVAL_HOURS.
+builder.Services.AddHostedService<QueueReplenishService>();
+
 // The Deezer download engine (DownloadService) is registered in MainModule as a shared singleton
 // hosted service, so the "download now" endpoint and the drainer loop are the same instance.
 
@@ -267,6 +271,37 @@ app.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, D
         Results.Ok(await engine.ArtistAlbums(http.User.GetSubject()!, artist)))
     .RequireAuthorization()
     .WithName("GetArtistAlbums");
+
+// Snooze a recommendation: hide it for the chosen duration; it resurfaces when the window lapses.
+// Snoozes an artist, or — when album is supplied — a missing album. duration = week | month | year
+// (mapped server-side to 7 / 30 / 365 days).
+app.MapPost("/discovery/snooze", async (
+        string artist, string? album, string? albumArt, string duration, HttpContext http, DiscoveryEngine engine) =>
+    {
+        var window = duration.ToLowerInvariant() switch
+        {
+            "week" => TimeSpan.FromDays(7),
+            "month" => TimeSpan.FromDays(30),
+            "year" => TimeSpan.FromDays(365),
+            _ => (TimeSpan?)null,
+        };
+        if (window is null)
+        {
+            return Results.Problem("duration must be week, month, or year.", statusCode: 400);
+        }
+        var userId = http.User.GetSubject()!;
+        if (string.IsNullOrEmpty(album))
+        {
+            await engine.SnoozeArtist(userId, artist, window.Value);
+        }
+        else
+        {
+            await engine.SnoozeAlbum(userId, artist, album, albumArt, window.Value);
+        }
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("SnoozeCandidate");
 
 // Clear a rating, returning the artist/album to the feed.
 app.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
