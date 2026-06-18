@@ -15,8 +15,8 @@ public interface IQueueReplenisher
 
 /// <summary>
 /// The discovery loop. Surfaces three kinds of things to react to — new recommended artists, owned
-/// artists not yet rated, and albums missing from owned artists — and steers a per-user walk through
-/// the similarity graph by the user's verdicts.
+/// artists not yet rated, and albums missing from <em>liked</em> artists — and steers a per-user walk
+/// through the similarity graph by the user's verdicts.
 ///
 /// There is no separate "seed" concept: the frontier is simply the user's <em>Liked</em> artists
 /// (owned taste anchors and approved recommendations alike). A thumbs-up on an artist grows the
@@ -194,8 +194,17 @@ public class DiscoveryEngine : IQueueReplenisher
 
     private async Task<List<FeedItem>> MissingAlbumItems(string userId)
     {
+        // Gap-fill only for artists the user has thumbed up (the frontier) — not every owned artist.
+        // A fresh user with no likes sees no missing albums until they like a band.
+        var liked = (await _queue.GetLikedArtistNames(userId)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (liked.Count == 0)
+        {
+            return new List<FeedItem>();
+        }
+
         var decided = await _albumRatings.GetDecidedKeys(userId);
         return (await _missing.GetAll())
+            .Where(m => liked.Contains(m.Artist.ArtistName))
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
             .Select(m => new FeedItem(
                 FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))

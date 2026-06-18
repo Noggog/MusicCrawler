@@ -255,6 +255,7 @@ public class DiscoveryEngineTests
     [Fact]
     public async Task Missing_album_feed_excludes_albums_the_user_already_decided()
     {
+        _queue.GetLikedArtistNames(User).Returns(new[] { "Big Thief" });
         _missing.GetAll().Returns(new[]
         {
             new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Dragon New Warm Mountain"), "art1", 101),
@@ -266,6 +267,26 @@ public class DiscoveryEngineTests
 
         page.Items.Select(i => i.Album).Should().Equal("Dragon New Warm Mountain");
         page.Items.Single().Kind.Should().Be(FeedKind.MissingAlbum);
+    }
+
+    [Fact]
+    public async Task Missing_album_feed_only_surfaces_albums_from_liked_artists()
+    {
+        // A fresh user with no thumbs-up sees no missing albums, even though the global store has gaps
+        // for every owned artist; once they like an artist, only that artist's gaps appear.
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Capacity"), "art1", 101),
+            new MissingAlbum(new ArtistKey("Wilco"), new AlbumKey("Yankee Hotel Foxtrot"), "art2", 102),
+        });
+
+        _queue.GetLikedArtistNames(User).Returns(Array.Empty<string>());
+        var fresh = await _sut.GetFeed(User, FeedKind.MissingAlbum, 0, 20);
+        fresh.Items.Should().BeEmpty();
+
+        _queue.GetLikedArtistNames(User).Returns(new[] { "Big Thief" });
+        var afterLike = await _sut.GetFeed(User, FeedKind.MissingAlbum, 0, 20);
+        afterLike.Items.Select(i => i.Album).Should().Equal("Capacity");
     }
 
     [Fact]

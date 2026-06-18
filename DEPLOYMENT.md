@@ -60,6 +60,23 @@ Create a **Stack** in Komodo pointing at this repo:
 The `condition: service_healthy` on `mongo` uses Compose-spec healthchecks; modern `docker compose`
 and Podman both honor it. If your engine doesn't, change it to a plain `depends_on: [mongo]`.
 
+### Separate Komodo Build + Stack (no registry)
+
+If you split this into a Komodo **Build** (clones this repo, runs `docker build`) and a **Stack**
+that references the built image by name (e.g. `localhost/<image>:latest`), two non-obvious things
+are required to make it work without pushing to a registry:
+
+1. **Build: add `--load`.** Komodo builds with BuildKit's `docker-container` driver, which keeps the
+   result in the build cache and exports *no* image unless told to. Put `--load` in the Build
+   resource's **Extra Args** so it imports the finished image into the local engine store. (Only
+   works when the build and the Stack run on the **same host**; otherwise push to a registry.)
+   Success looks like `exporting to docker image format` + `importing to docker` at the end of the
+   build log — if you instead see "Build result will only remain in the build cache", `--load` is
+   missing.
+2. **Stack: add `pull_policy: never`** on the `app` service. Komodo runs `docker compose pull` before
+   `up`; without this it tries to pull the local image as if `localhost/` were a registry and dies
+   with `tls: internal error`. `pull_policy: never` makes the pull step report `Skipped`.
+
 ## 4. First-run streamrip (Deezer ARL)
 
 The download path shells out to `streamrip` (`rip`), which keeps the Deezer **ARL** session token in
