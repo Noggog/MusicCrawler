@@ -1,0 +1,60 @@
+name: musiccrawler
+
+# MusicCrawler stack: one app container (API + SPA on a single HTTP port) plus MongoDB. The Aspire
+# AppHost is NOT used here — it's a local-dev orchestrator only. Put this service behind your own
+# reverse proxy / TLS; it just speaks plain HTTP on ${HTTP_PORT}.
+# Copy .env.example to .env and fill it in (Komodo can also inject these values).
+
+services:
+  app:
+    build: .
+    image: musiccrawler:latest
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-43105}:8080"
+    environment:
+      # --- BFF / OIDC (Authentik). BFF_PUBLIC_ORIGIN is the public URL your reverse proxy serves
+      #     this app at; the OIDC redirect URI registered in Authentik is that origin + /signin-oidc.
+      BFF_PUBLIC_ORIGIN: ${BFF_PUBLIC_ORIGIN}
+      OIDC_AUTHORITY: ${OIDC_AUTHORITY}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      # --- Plex ---
+      PLEX_ENDPOINT: ${PLEX_ENDPOINT}
+      PLEX_TOKEN: ${PLEX_TOKEN}
+      PLEX_LIBRARY: ${PLEX_LIBRARY:-}
+      # --- Data store ---
+      MONGO_URI: mongodb://mongo:27017
+      # --- Deezer downloads (streamrip). The ARL lives in streamrip's own config volume. ---
+      MUSIC_DOWNLOAD_DIR: /music
+      DEEZER_DOWNLOADS_AUTOMATIC: ${DEEZER_DOWNLOADS_AUTOMATIC:-false}
+      DEEZER_QUALITY: ${DEEZER_QUALITY:-2}
+      DEEZER_FALLBACK_QUALITY: ${DEEZER_FALLBACK_QUALITY:-1}
+      # Optional knobs (left unset -> backend defaults): RELATED_STALENESS_DAYS,
+      # QUEUE_REPLENISH_INTERVAL_HOURS, DEEZER_CODEC, DOWNLOAD_BATCH_SIZE,
+      # DOWNLOAD_ITEM_DELAY_SECONDS, DOWNLOAD_BATCH_INTERVAL_MINUTES,
+      # DEEZER_DOWNLOAD_TIMEOUT_MINUTES, PLEX_RESCAN_AFTER_DOWNLOAD, PLEX_RESCAN_DEBOUNCE_MINUTES.
+    volumes:
+      # Downloads must land where Plex scans — point this host path at your Plex music library.
+      - ${MUSIC_DOWNLOAD_DIR_HOST}:/music
+      # streamrip config (Deezer ARL + folder_format) — bind-mounted so you can edit config.toml.
+      - ${STREAMRIP_CONFIG_HOST}:/config
+      - app_logs:/app/logs
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data:
+  app_logs:

@@ -1,0 +1,14 @@
+# Build context excludes — keep image builds small and reproducible.
+.git
+.gitignore
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/logs
+**/.vs
+**/.idea
+# Never ship secrets into an image layer.
+local.secrets.env
+.env
+.env*.local

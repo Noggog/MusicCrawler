@@ -79,6 +79,11 @@ app.UseExceptionHandler();
 // spot which endpoint failed and with what status.
 app.UseSerilogRequestLogging();
 
+// Serve the built SPA (production: the Vite build is copied to wwwroot in the image). No-op in
+// local dev, where Vite serves the SPA itself and proxies /api + /auth to this backend.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -128,7 +133,11 @@ app.MapGet("/auth/me", (HttpContext http) =>
     })
     .WithName("Me");
 
-app.MapGet("/artists", (ILibraryProvider libraryProvider) =>
+// Application API, grouped under /api so it shares the origin with the SPA without the SPA's
+// client routes (/artists, /related, /purchases, ...) colliding with same-named API paths.
+var api = app.MapGroup("/api");
+
+api.MapGet("/artists", (ILibraryProvider libraryProvider) =>
     {
         return libraryProvider.GetAllArtistMetadata();
     })
@@ -136,7 +145,7 @@ app.MapGet("/artists", (ILibraryProvider libraryProvider) =>
 
 // The Library Catalog sync job: pull the artist list from Plex into the local catalog.
 // Daily reads (GET /artists) serve from that catalog, so this is the only Plex-touching path.
-app.MapPost("/catalog/refresh", (CatalogRefresher refresher) =>
+api.MapPost("/catalog/refresh", (CatalogRefresher refresher) =>
     {
         return refresher.Refresh();
     })
@@ -145,12 +154,12 @@ app.MapPost("/catalog/refresh", (CatalogRefresher refresher) =>
 // Maintenance: clean up Plex's ';'-joined multi-artist names (e.g. "Nina Simone;Hot Chip") that
 // leaked into the catalog and user ratings before ingestion-time splitting. GET previews the work;
 // POST resolves it (splits catalog docs, re-attributes ratings). Auth-gated — the maintainer's tool.
-app.MapGet("/maintenance/combined-artists", async (LibraryCleanupService cleanup) =>
+api.MapGet("/maintenance/combined-artists", async (LibraryCleanupService cleanup) =>
         Results.Ok(await cleanup.Scan()))
     .RequireAuthorization()
     .WithName("ScanCombinedArtists");
 
-app.MapPost("/maintenance/combined-artists/resolve", async (LibraryCleanupService cleanup) =>
+api.MapPost("/maintenance/combined-artists/resolve", async (LibraryCleanupService cleanup) =>
         Results.Ok(await cleanup.Resolve()))
     .RequireAuthorization()
     .WithName("ResolveCombinedArtists");
@@ -159,7 +168,7 @@ app.MapPost("/maintenance/combined-artists/resolve", async (LibraryCleanupServic
 // miss/stale entry (persisting into the graph); pass ?refresh=true to force a re-fetch.
 // The artist is a query param (not a path segment) so names with '/' (e.g. "AC/DC") work —
 // an encoded slash in a path segment is rejected by ASP.NET routing by default.
-app.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor interactor) =>
+api.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor interactor) =>
     {
         return interactor.GetRelated(new ArtistKey(artist), forceRefresh: refresh ?? false);
     })
@@ -168,7 +177,7 @@ app.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor in
 // Deezer play info for an artist: a 30-second preview MP3 to sample plus the deezer.com artist
 // link. The SPA plays the preview in a plain <audio> (no login/cookies, unlike the embed widget).
 // Public Deezer metadata, so no auth; cached server-side.
-app.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver) =>
+api.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver) =>
     {
         var info = await resolver.ResolvePlayInfo(artist);
         return info is null ? Results.NotFound() : Results.Ok(info);
@@ -177,13 +186,13 @@ app.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver
 
 // Deezer play info for a specific album id: its previewable tracks plus the deezer.com album link.
 // Used to sample "missing album" cards. Public Deezer metadata, so no auth; cached server-side.
-app.MapGet("/deezer/album", async (long id, DeezerArtistResolver resolver) =>
+api.MapGet("/deezer/album", async (long id, DeezerArtistResolver resolver) =>
         Results.Ok(await resolver.ResolveAlbumPlayInfo(id)))
     .WithName("ResolveDeezerAlbum");
 
 // The missing-album sync job (Deezer discography diff per owned artist). Heavy, so it's a dev-only
 // manual trigger; in production it runs on the daily AlbumSyncService schedule.
-app.MapPost("/albums/missing/refresh", (MissingAlbumRefresher refresher) =>
+api.MapPost("/albums/missing/refresh", (MissingAlbumRefresher refresher) =>
     {
         return refresher.Refresh();
     })
@@ -194,7 +203,7 @@ app.MapPost("/albums/missing/refresh", (MissingAlbumRefresher refresher) =>
 // pageSize is clamped to keep paging sane.
 
 // A paged feed section for one category: RecommendedArtist | LibraryArtist | MissingAlbum.
-app.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, string? kind, int? page, int? pageSize) =>
+api.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, string? kind, int? page, int? pageSize) =>
     {
         var feedKind = Enum.TryParse<FeedKind>(kind, ignoreCase: true, out var parsed)
             ? parsed
@@ -208,7 +217,7 @@ app.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, string
 // A single mixed feed across the selected categories (comma-separated `kinds`), round-robin
 // interleaved + shuffled by `seed` so the order is stable across pages. This is what the Discover
 // page uses; the per-kind endpoint above remains for any single-category view.
-app.MapGet("/discovery/mixed", async (
+api.MapGet("/discovery/mixed", async (
         HttpContext http, DiscoveryEngine engine, string? kinds, int? page, int? pageSize, int? seed) =>
     {
         var requested = (kinds ?? string.Empty)
@@ -234,7 +243,7 @@ app.MapGet("/discovery/mixed", async (
     .WithName("GetMixedDiscoveryFeed");
 
 // Rebuild the pending recommendations from the current liked artists (keeps ratings).
-app.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine) =>
+api.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine) =>
     {
         await engine.Rebuild(http.User.GetSubject()!);
         return Results.NoContent();
@@ -243,7 +252,7 @@ app.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engin
     .WithName("RefreshDiscoveryQueue");
 
 // Rate an artist or (when album is supplied) a missing album. verdict = "up" (Liked) | "down" (Disliked).
-app.MapPost("/discovery/rate", async (
+api.MapPost("/discovery/rate", async (
         string artist, string? album, string? albumArt, string verdict,
         HttpContext http, DiscoveryEngine engine) =>
     {
@@ -267,7 +276,7 @@ app.MapPost("/discovery/rate", async (
 // A liked non-owned artist's acquirable albums (their Deezer discography minus anything already
 // owned), surfaced inline under the just-rated card so a fresh discovery can be acted on. Fetched
 // on demand (one Deezer call) only when an artist is liked — not precomputed per feed card.
-app.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+api.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, DiscoveryEngine engine) =>
         Results.Ok(await engine.ArtistAlbums(http.User.GetSubject()!, artist)))
     .RequireAuthorization()
     .WithName("GetArtistAlbums");
@@ -275,7 +284,7 @@ app.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, D
 // Snooze a recommendation: hide it for the chosen duration; it resurfaces when the window lapses.
 // Snoozes an artist, or — when album is supplied — a missing album. duration = week | month | year
 // (mapped server-side to 7 / 30 / 365 days).
-app.MapPost("/discovery/snooze", async (
+api.MapPost("/discovery/snooze", async (
         string artist, string? album, string? albumArt, string duration, HttpContext http, DiscoveryEngine engine) =>
     {
         var window = duration.ToLowerInvariant() switch
@@ -304,7 +313,7 @@ app.MapPost("/discovery/snooze", async (
     .WithName("SnoozeCandidate");
 
 // Clear a rating, returning the artist/album to the feed.
-app.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
+api.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
     {
         var userId = http.User.GetSubject()!;
         if (string.IsNullOrEmpty(album))
@@ -321,7 +330,7 @@ app.MapDelete("/discovery/rate", async (string artist, string? album, HttpContex
     .WithName("ClearRating");
 
 // Every rating the user has made, for the review page (albums that now exist are filtered out).
-app.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine) =>
+api.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine) =>
         Results.Ok(await engine.GetRatings(http.User.GetSubject()!)))
     .RequireAuthorization()
     .WithName("GetRatings");
@@ -329,21 +338,21 @@ app.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine
 // The shared "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
 // persisted with a status (pending → sent → in-library). Reconciles on read so it's always current.
 // Auth-gated, but not scoped to the caller — this is the library maintainer's unified queue.
-app.MapGet("/purchases", async (PurchaseService purchases) =>
+api.MapGet("/purchases", async (PurchaseService purchases) =>
         Results.Ok(await purchases.GetActive()))
     .RequireAuthorization()
     .WithName("GetPurchases");
 
 // A live snapshot of the download subsystem for the monitoring panel (backend, throttle, counts,
 // what's downloading now). Cheap; polled by the UI.
-app.MapGet("/purchases/status", async (PurchaseService purchases) =>
+api.MapGet("/purchases/status", async (PurchaseService purchases) =>
         Results.Ok(await purchases.GetDownloadSnapshot()))
     .RequireAuthorization()
     .WithName("DownloadStatus");
 
 // Manually queue an item for download now (the "Download now"/"Retry" button). Non-blocking — the
 // drainer does the fetch; returns immediately. Works whether or not automatic downloads are on.
-app.MapPost("/purchases/download", async (string id, DownloadService downloads) =>
+api.MapPost("/purchases/download", async (string id, DownloadService downloads) =>
         await downloads.RequestDownload(id)
             ? Results.NoContent()
             : Results.Problem("Item isn't a downloadable Deezer album.", statusCode: 409))
@@ -351,11 +360,14 @@ app.MapPost("/purchases/download", async (string id, DownloadService downloads) 
     .WithName("DownloadPurchase");
 
 // Undo — move a downloaded/queued item back to "pending".
-app.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
+api.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
         await purchases.Unsend(id) ? Results.NoContent() : Results.NotFound())
     .RequireAuthorization()
     .WithName("UnsendPurchase");
 
 app.MapDefaultEndpoints();
+
+// Any unmatched, non-API route serves the SPA shell so client-side deep links work.
+app.MapFallbackToFile("index.html");
 
 app.Run();

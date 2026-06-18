@@ -14,13 +14,10 @@ export default defineConfig({
   server: {
     port,
     // Proxy "/api/*" to the backend so the browser stays same-origin in dev (no CORS needed).
+    // The backend serves the API under /api (see Program.cs), matching prod where it also serves
+    // the SPA from the same origin — so there's no prefix to strip here.
     proxy: {
-      '/api': {
-        target: backendUrl,
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
+      '/api': { target: backendUrl, changeOrigin: true, secure: false },
       // BFF auth paths must reach the backend verbatim (no /api strip): the OIDC login/logout
       // redirects and the callback all run on the SPA origin so the session cookie lands here.
       '/auth': { target: backendUrl, changeOrigin: true, secure: false },
