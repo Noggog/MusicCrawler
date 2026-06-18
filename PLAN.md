@@ -257,8 +257,12 @@ Worked one at a time. Full design in `~/.claude/plans/dreamy-forging-hearth.md`.
    decided only while unexpired). `DiscoveryEngine.SnoozeArtist` never expands. `POST
    /discovery/snooze?artist=&album?=&albumArt?=&duration=week|month|year`. Albums snooze the same way
    (`UserAlbumRatingRepo.Snooze`; `GetDecidedKeys` drops expired snoozes so the album resurfaces;
-   `DiscoveryEngine.SnoozeAlbum`). Frontend: 💤 popover on every Discover card (artists + missing
-   albums), "Snoozed until X" + un-snooze (✕) on Ratings.
+   `DiscoveryEngine.SnoozeAlbum`). Frontend: on every Discover card (artists + missing albums) the
+   three snooze durations show inline as direct buttons (no popover); "Snoozed until X" + un-snooze
+   (✕) on Ratings. **Every feed decision is undoable inline** — like / dislike / snooze, on artists
+   and albums, render a `DecisionMark` with an `undo` that clears the verdict (reuses DELETE
+   `/discovery/rate`); undoing a recommended artist also clears the album decisions made in its inline
+   panel and collapses it (client-side, from the react-query cache, same session).
 4. **Periodic replenisher.** _(built 2026-06-18)_ Background `QueueReplenishService` (Rx
    `Observable.Timer`, mirrors `AlbumSyncService`) that per-user tops up the recommendation queue via
    a gentle additive `DiscoveryEngine.TopUp` (no `DeletePending`), which also refetches edges stale

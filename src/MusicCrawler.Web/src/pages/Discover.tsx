@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
+  clearRating,
   getArtistAlbums,
   getMixedFeed,
   rate,
@@ -55,45 +56,48 @@ type RowMark = Verdict | 'snoozed'
 const markChip = (mark: RowMark) =>
   mark === 'up' ? '👍 Added' : mark === 'down' ? '👎 Dismissed' : '💤 Snoozed'
 
+// An in-place decision marker with an undo: "👍 Added · undo". Every decision (like / dislike /
+// snooze, on artists or albums) is reversible from the feed so a misclick is one click to fix.
+function DecisionMark({ mark, onUndo, disabled }: { mark: RowMark; onUndo: () => void; disabled: boolean }) {
+  return (
+    <span className="disc-rated">
+      {markChip(mark)}
+      <button className="disc-undo" title="Undo this decision" disabled={disabled} onClick={onUndo}>
+        undo
+      </button>
+    </span>
+  )
+}
+
 const SNOOZE_OPTIONS: { label: string; duration: SnoozeDuration }[] = [
   { label: 'Week', duration: 'week' },
   { label: 'Month', duration: 'month' },
   { label: 'Year', duration: 'year' },
 ]
 
-// The 💤 action: a button that reveals Week / Month / Year. Open state is owned by the parent
-// (keyed by row) so only one menu is open at a time and it survives the in-place "rated" mark.
+// The 💤 snooze action. The three durations (Week / Month / Year) are shown inline as direct
+// buttons — no popover — so a "not now, remind me later" is a single click.
 function SnoozeControl({
-  open,
-  onToggle,
   onPick,
   disabled,
 }: {
-  open: boolean
-  onToggle: () => void
   onPick: (duration: SnoozeDuration) => void
   disabled: boolean
 }) {
   return (
-    <div className="disc-snooze">
-      <button
-        className={open ? 'disc-btn snooze active' : 'disc-btn snooze'}
-        title="Snooze — hide for a while, then resurface"
-        disabled={disabled}
-        onClick={onToggle}
-      >
-        💤
-      </button>
-      {open && (
-        <div className="disc-snooze-menu">
-          {SNOOZE_OPTIONS.map((o) => (
-            <button key={o.duration} className="disc-snooze-opt" onClick={() => onPick(o.duration)}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <span className="disc-snooze" title="Snooze — hide for a while, then resurface">
+      <span className="disc-snooze-label">💤</span>
+      {SNOOZE_OPTIONS.map((o) => (
+        <button
+          key={o.duration}
+          className="disc-btn snooze"
+          disabled={disabled}
+          onClick={() => onPick(o.duration)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </span>
   )
 }
 
@@ -147,6 +151,7 @@ function ArtistAlbumsPanel({
   playing,
   togglePlay,
   onRate,
+  onUndo,
   disabled,
 }: {
   artist: string
@@ -154,6 +159,7 @@ function ArtistAlbumsPanel({
   playing: Set<string>
   togglePlay: (key: string) => void
   onRate: (item: FeedItem, verdict: Verdict) => void
+  onUndo: (item: FeedItem) => void
   disabled: boolean
 }) {
   const { data, isPending, isError } = useQuery({
@@ -192,9 +198,7 @@ function ArtistAlbumsPanel({
                   </button>
                 )}
                 {verdict ? (
-                  <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
-                    {markChip(verdict)}
-                  </span>
+                  <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
                 ) : (
                   <>
                     <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
@@ -248,9 +252,6 @@ export default function Discover() {
   // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
   // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
   const [rated, setRated] = useState<Map<string, RowMark>>(() => persisted.rated)
-  // Which row's snooze menu is open (by row key), or null. Only one open at a time; not persisted —
-  // a transient UI affordance that should start closed on remount.
-  const [snoozeOpen, setSnoozeOpen] = useState<string | null>(null)
   // Brand-new artists liked this view: their albums are fetched and surfaced inline beneath the card
   // so the discovery can be acquired. Driven off state (not the feed item) so it survives the
   // in-place "rated" mark; cleared on the next natural refresh alongside `rated`.
@@ -362,7 +363,6 @@ export default function Discover() {
     // Mark in place like a rating; snooze writes a decided row so the artist drops out of the feed on
     // the next natural refresh. Doesn't touch the buy list (a snooze isn't a "yes").
     onMutate: ({ item }) => {
-      setSnoozeOpen(null)
       setRated((prev) => new Map(prev).set(rowKeyFor(item), 'snoozed'))
     },
     onError: (_err, { item }) => {
@@ -374,6 +374,47 @@ export default function Discover() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ratings'] })
+    },
+  })
+  // The inline album decisions made under a just-liked brand-new artist (from its expanded panel),
+  // read from the react-query cache. Used so undoing the artist also walks back those album picks.
+  const decidedAlbumsFor = (artistName: string): FeedItem[] => {
+    const albums = queryClient.getQueryData<FeedItem[]>(['artist-albums', artistName]) ?? []
+    return albums.filter((a) => rated.has(rowKeyFor(a)))
+  }
+
+  // Undo any decision (like / dislike / snooze, artist or album), clearing it back to actionable.
+  // Optimistically drops the in-place mark so the card's 👍/👎/💤 reappear instantly; rolls back on
+  // failure. Undoing a recommended artist also clears the album decisions made in its inline panel
+  // (and collapses it) — you went back on the artist, so its album picks shouldn't linger.
+  const undo = useMutation({
+    mutationFn: async (item: FeedItem) => {
+      await clearRating(item)
+      if (item.kind === 'RecommendedArtist') {
+        await Promise.all(decidedAlbumsFor(item.artist.artistName).map((a) => clearRating(a)))
+      }
+    },
+    onMutate: (item) => {
+      const prev = new Map(rated)
+      const next = new Map(rated)
+      next.delete(rowKeyFor(item))
+      if (item.kind === 'RecommendedArtist') {
+        decidedAlbumsFor(item.artist.artistName).forEach((a) => next.delete(rowKeyFor(a)))
+        setExpandedAlbums((p) => {
+          const n = new Set(p)
+          n.delete(item.artist.artistName)
+          return n
+        })
+      }
+      setRated(next)
+      return { prev }
+    },
+    onError: (_err, _item, ctx) => {
+      if (ctx?.prev) setRated(ctx.prev)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
     },
   })
   const rebuild = useMutation({
@@ -390,7 +431,7 @@ export default function Discover() {
     setPage(0)
   }
 
-  const busy = rateMutation.isPending || snoozeMutation.isPending || rebuild.isPending
+  const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending || rebuild.isPending
   const items = data?.items ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -507,9 +548,7 @@ export default function Discover() {
                       </button>
                     )}
                     {verdict ? (
-                      <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
-                        {markChip(verdict)}
-                      </span>
+                      <DecisionMark mark={verdict} disabled={busy} onUndo={() => undo.mutate(item)} />
                     ) : (
                       <>
                         <button
@@ -530,8 +569,6 @@ export default function Discover() {
                         </button>
                         {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
                         <SnoozeControl
-                          open={snoozeOpen === rowKey}
-                          onToggle={() => setSnoozeOpen((cur) => (cur === rowKey ? null : rowKey))}
                           onPick={(duration) => snoozeMutation.mutate({ item, duration })}
                           disabled={rebuild.isPending}
                         />
@@ -549,6 +586,7 @@ export default function Discover() {
                     playing={playing}
                     togglePlay={togglePlay}
                     onRate={(albumItem, v) => rateMutation.mutate({ item: albumItem, verdict: v })}
+                    onUndo={(albumItem) => undo.mutate(albumItem)}
                     disabled={rebuild.isPending}
                   />
                 )}
