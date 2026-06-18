@@ -31,7 +31,7 @@ cp .env.example .env
 # edit .env — see the inline comments
 ```
 
-Required: `BFF_PUBLIC_ORIGIN`, the three `OIDC_*` values, `PLEX_ENDPOINT`, `PLEX_TOKEN`,
+Required: `PUBLIC_ORIGIN`, the three `OIDC_*` values, `PLEX_ENDPOINT`, `PLEX_TOKEN`,
 `MUSIC_DOWNLOAD_DIR_HOST`, `STREAMRIP_CONFIG_HOST`.
 
 `MUSIC_DOWNLOAD_DIR_HOST` **must be the same storage Plex scans** for its music library — that's how
@@ -40,11 +40,11 @@ downloaded albums show up in Plex (the app can also trigger a Plex rescan via
 
 ## 2. Reverse proxy + Authentik
 
-Point your reverse proxy at `app:${HTTP_PORT}` and serve it at `BFF_PUBLIC_ORIGIN` over HTTPS (the
-BFF session cookies need HTTPS in practice). Then, in the Authentik OAuth2/OIDC provider for this
+Point your reverse proxy at `app:${HTTP_PORT}` and serve it at `PUBLIC_ORIGIN` over HTTPS (the
+auth session cookies need HTTPS in practice). Then, in the Authentik OAuth2/OIDC provider for this
 app, register the redirect URI:
 
-- `${BFF_PUBLIC_ORIGIN}/signin-oidc`  (e.g. `https://music.example.com/signin-oidc`)
+- `${PUBLIC_ORIGIN}/signin-oidc`  (e.g. `https://music.example.com/signin-oidc`)
 
 Authentik must be reachable from the app container at `OIDC_AUTHORITY`.
 

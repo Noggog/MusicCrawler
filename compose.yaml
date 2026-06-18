@@ -9,13 +9,17 @@ services:
   app:
     build: .
     image: musiccrawler:latest
+    # Built locally from the Dockerfile — never pull it from a registry (it isn't published).
+    # Without this, `docker compose pull` (which Komodo runs before deploy) fails with
+    # "pull access denied" because musiccrawler:latest exists in no registry.
+    pull_policy: build
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-43105}:8080"
     environment:
-      # --- BFF / OIDC (Authentik). BFF_PUBLIC_ORIGIN is the public URL your reverse proxy serves
+      # --- Auth / OIDC (Authentik). PUBLIC_ORIGIN is the public URL your reverse proxy serves
       #     this app at; the OIDC redirect URI registered in Authentik is that origin + /signin-oidc.
-      BFF_PUBLIC_ORIGIN: ${BFF_PUBLIC_ORIGIN}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
       OIDC_AUTHORITY: ${OIDC_AUTHORITY}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}

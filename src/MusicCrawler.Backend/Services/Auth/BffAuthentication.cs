@@ -22,7 +22,7 @@ public static class BffAuthentication
         var authority = Environment.GetEnvironmentVariable("OIDC_AUTHORITY") ?? "";
         var clientId = Environment.GetEnvironmentVariable("OIDC_CLIENT_ID") ?? "";
         var clientSecret = Environment.GetEnvironmentVariable("OIDC_CLIENT_SECRET") ?? "";
-        var publicOrigin = (Environment.GetEnvironmentVariable("BFF_PUBLIC_ORIGIN")
+        var publicOrigin = (Environment.GetEnvironmentVariable("PUBLIC_ORIGIN")
                             ?? "http://localhost:5173").TrimEnd('/');
 
         builder.Services
