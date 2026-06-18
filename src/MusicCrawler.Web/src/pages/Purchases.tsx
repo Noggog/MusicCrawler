@@ -2,13 +2,12 @@ import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
+  downloadPurchase,
+  getDownloadStatus,
   getPurchases,
-  orderPurchase,
-  removePurchase,
-  retryPurchase,
   unsendPurchase,
 } from '../api/discovery'
-import type { PurchaseItem } from '../types'
+import type { DownloadSnapshot, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
 
 function Avatar({ item }: { item: PurchaseItem }) {
@@ -23,21 +22,63 @@ function Avatar({ item }: { item: PurchaseItem }) {
   )
 }
 
+function Monitor({ s }: { s: DownloadSnapshot }) {
+  const current = s.current[0]
+  const activity = current
+    ? `⬇ Downloading: ${current.album ?? current.artist.artistName} — ${current.artist.artistName}`
+    : s.queued > 0
+      ? s.automatic
+        ? `Idle — ${s.queued} album${s.queued === 1 ? '' : 's'} queued (auto)`
+        : `${s.queued} album${s.queued === 1 ? '' : 's'} queued — use Download now`
+      : 'Idle — queue empty'
+
+  return (
+    <div className="dl-monitor">
+      <div className="dl-monitor-head">
+        <span className={s.automatic ? 'dl-badge on' : 'dl-badge off'}>
+          {s.automatic ? '● auto' : '○ manual'}
+        </span>
+        <span className="dl-backend">backend: {s.backend}</span>
+      </div>
+      <div className={current ? 'dl-activity active' : 'dl-activity'}>{activity}</div>
+      <div className="dl-counts">
+        <span>Queued <strong>{s.queued}</strong></span>
+        <span>Downloading <strong>{s.downloading}</strong></span>
+        <span>Ordered <strong>{s.ordered}</strong></span>
+        <span>Failed <strong>{s.failed}</strong></span>
+      </div>
+      <div className="dl-throttle">
+        {s.automatic ? 'auto' : 'manual only'} · batch {s.batchSize} · {s.itemDelaySeconds}s between
+        items{s.automatic ? ` · every ${s.batchIntervalMinutes}m` : ''}
+      </div>
+    </div>
+  )
+}
+
 export default function Purchases() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['purchases'],
     queryFn: getPurchases,
     enabled: !!user,
+    refetchInterval: 5000, // keep the list moving as the drainer works
+  })
+  const { data: status } = useQuery({
+    queryKey: ['download-status'],
+    queryFn: getDownloadStatus,
+    enabled: !!user,
+    refetchInterval: 3000,
   })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['purchases'] })
-  const order = useMutation({ mutationFn: (id: string) => orderPurchase(id), onSuccess: invalidate })
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    queryClient.invalidateQueries({ queryKey: ['download-status'] })
+  }
+  const download = useMutation({ mutationFn: (id: string) => downloadPurchase(id), onSuccess: invalidate })
   const unsend = useMutation({ mutationFn: (id: string) => unsendPurchase(id), onSuccess: invalidate })
-  const retry = useMutation({ mutationFn: (id: string) => retryPurchase(id), onSuccess: invalidate })
-  const remove = useMutation({ mutationFn: (id: string) => removePurchase(id), onSuccess: invalidate })
-  const busy = order.isPending || unsend.isPending || retry.isPending || remove.isPending
+  const busy = download.isPending || unsend.isPending
 
   if (!user) {
     return (
@@ -50,6 +91,7 @@ export default function Purchases() {
 
   const items = data ?? []
   // Albums are what the downloader can actually grab; artists are wishlist reminders only.
+  const downloading = items.filter((i) => i.status === 'Downloading')
   const pendingAlbums = items.filter((i) => i.status === 'Pending' && i.album)
   const pendingArtists = items.filter((i) => i.status === 'Pending' && !i.album)
   const sent = items.filter((i) => i.status === 'Sent')
@@ -72,26 +114,18 @@ export default function Purchases() {
     </div>
   )
 
-  const removeBtn = (item: PurchaseItem) => (
-    <button
-      className="disc-btn down"
-      title="Remove from the list"
-      disabled={busy}
-      onClick={() => remove.mutate(item.id)}
-    >
-      ✕
-    </button>
-  )
-
   return (
     <section>
       <h1>To Buy {items.length > 0 ? `(${items.length})` : ''}</h1>
+
+      {status && <Monitor s={status} />}
+
       <p className="disc-sub">
         <em>
           The shared acquisition queue. Thumbs-up items from <Link to="/">Discover</Link> land here.
-          Albums are downloaded automatically by the slow background drainer (or hit{' '}
-          <strong>Order</strong> to prioritize one); they drop off once they appear in the library.
-          Artists are wishlist reminders — they aren't auto-downloaded.
+          Hit <strong>Download now</strong> on an album to grab it (or turn on automatic downloads to
+          drain the queue in the background); items drop off once they appear in the library. Artists
+          are wishlist reminders — only albums download.
         </em>
       </p>
 
@@ -107,27 +141,35 @@ export default function Purchases() {
         </p>
       )}
 
+      {downloading.length > 0 && (
+        <>
+          <h2 className="feed-section-title">
+            Downloading now <span className="feed-count">{downloading.length}</span>
+          </h2>
+          <div className="disc-list">
+            {downloading.map((item) => row(item, <span className="dl-spinner" title="Downloading">⬇</span>))}
+          </div>
+        </>
+      )}
+
       {failed.length > 0 && (
         <>
           <h2 className="feed-section-title">
             Failed <span className="feed-count">{failed.length}</span>
           </h2>
-          <p className="disc-sub"><em>The downloader couldn't grab these — retry or remove.</em></p>
+          <p className="disc-sub"><em>The downloader couldn't grab these — retry.</em></p>
           <div className="disc-list">
             {failed.map((item) =>
               row(
                 item,
-                <>
-                  <button
-                    className="disc-btn up"
-                    title="Retry download"
-                    disabled={busy}
-                    onClick={() => retry.mutate(item.id)}
-                  >
-                    Retry
-                  </button>
-                  {removeBtn(item)}
-                </>,
+                <button
+                  className="disc-btn up"
+                  title="Retry download"
+                  disabled={busy}
+                  onClick={() => download.mutate(item.id)}
+                >
+                  Retry
+                </button>,
               ),
             )}
           </div>
@@ -143,17 +185,14 @@ export default function Purchases() {
             {pendingAlbums.map((item) =>
               row(
                 item,
-                <>
-                  <button
-                    className="disc-btn up"
-                    title="Download now (prioritize)"
-                    disabled={busy}
-                    onClick={() => order.mutate(item.id)}
-                  >
-                    Order
-                  </button>
-                  {removeBtn(item)}
-                </>,
+                <button
+                  className="disc-btn up"
+                  title="Download now"
+                  disabled={busy}
+                  onClick={() => download.mutate(item.id)}
+                >
+                  Download now
+                </button>,
               ),
             )}
           </div>
@@ -170,17 +209,14 @@ export default function Purchases() {
             {sent.map((item) =>
               row(
                 item,
-                <>
-                  <button
-                    className="disc-btn"
-                    title="Undo — move back to queued"
-                    disabled={busy}
-                    onClick={() => unsend.mutate(item.id)}
-                  >
-                    Undo
-                  </button>
-                  {removeBtn(item)}
-                </>,
+                <button
+                  className="disc-btn"
+                  title="Undo — move back to queued"
+                  disabled={busy}
+                  onClick={() => unsend.mutate(item.id)}
+                >
+                  Undo
+                </button>,
               ),
             )}
           </div>
@@ -193,7 +229,7 @@ export default function Purchases() {
             Artists — wishlist <span className="feed-count">{pendingArtists.length}</span>
           </h2>
           <p className="disc-sub"><em>Not auto-downloaded. Queue specific albums to actually grab them.</em></p>
-          <div className="disc-list">{pendingArtists.map((item) => row(item, removeBtn(item)))}</div>
+          <div className="disc-list">{pendingArtists.map((item) => row(item, null))}</div>
         </>
       )}
     </section>

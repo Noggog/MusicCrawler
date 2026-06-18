@@ -636,3 +636,78 @@ body {
   color: #8888a0;
   font-size: 0.85rem;
 }
+
+/* --- Download monitor panel --- */
+.dl-monitor {
+  border: 1px solid #d6d6e3;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0 1rem;
+  background: #fafaff;
+  max-width: 640px;
+}
+
+.dl-monitor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #55556b;
+}
+
+.dl-badge {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.dl-badge.on {
+  color: #1f9d55;
+}
+
+.dl-badge.off {
+  color: #9a9ab0;
+}
+
+.dl-backend {
+  color: #8888a0;
+}
+
+.dl-activity {
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+  color: #33334a;
+}
+
+.dl-activity.active {
+  font-weight: 600;
+  color: #1f9d55;
+}
+
+.dl-counts {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+  font-size: 0.85rem;
+  color: #55556b;
+}
+
+.dl-counts strong {
+  color: #33334a;
+}
+
+.dl-throttle {
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: #9a9ab0;
+}
+
+.dl-spinner {
+  font-size: 1.2rem;
+  animation: dl-bounce 1s ease-in-out infinite;
+}
+
+@keyframes dl-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(2px); opacity: 1; }
+}

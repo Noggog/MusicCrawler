@@ -59,9 +59,8 @@ builder.Services.AddHostedService<CatalogSyncService>();
 // shortly after startup (so the catalog is populated first), then daily.
 builder.Services.AddHostedService<AlbumSyncService>();
 
-// Slowly drains the purchase list, downloading pending Deezer albums via streamrip. Idles unless
-// DEEZER_DOWNLOADS_ENABLED is set; deliberately throttled to stay under Deezer's anti-tooling radar.
-builder.Services.AddHostedService<DownloadService>();
+// The Deezer download engine (DownloadService) is registered in MainModule as a shared singleton
+// hosted service, so the "download now" endpoint and the drainer loop are the same instance.
 
 // BFF auth: cookie session + OIDC (Keycloak) code flow. See BffAuthentication.
 builder.AddBffAuthentication();
@@ -292,32 +291,27 @@ app.MapGet("/purchases", async (PurchaseService purchases) =>
     .RequireAuthorization()
     .WithName("GetPurchases");
 
-// Order an item: hand it to the downloader and, if accepted, advance it to "sent".
-app.MapPost("/purchases/order", async (string id, PurchaseService purchases) =>
-        await purchases.Order(id) ? Results.NoContent() : Results.Problem("Could not order this item.", statusCode: 409))
+// A live snapshot of the download subsystem for the monitoring panel (backend, throttle, counts,
+// what's downloading now). Cheap; polled by the UI.
+app.MapGet("/purchases/status", async (PurchaseService purchases) =>
+        Results.Ok(await purchases.GetDownloadSnapshot()))
     .RequireAuthorization()
-    .WithName("OrderPurchase");
+    .WithName("DownloadStatus");
 
-// Undo an order, moving the item back to "pending".
+// Manually queue an item for download now (the "Download now"/"Retry" button). Non-blocking — the
+// drainer does the fetch; returns immediately. Works whether or not automatic downloads are on.
+app.MapPost("/purchases/download", async (string id, DownloadService downloads) =>
+        await downloads.RequestDownload(id)
+            ? Results.NoContent()
+            : Results.Problem("Item isn't a downloadable Deezer album.", statusCode: 409))
+    .RequireAuthorization()
+    .WithName("DownloadPurchase");
+
+// Undo — move a downloaded/queued item back to "pending".
 app.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
         await purchases.Unsend(id) ? Results.NoContent() : Results.NotFound())
     .RequireAuthorization()
     .WithName("UnsendPurchase");
-
-// Re-queue a failed item for another download attempt.
-app.MapPost("/purchases/retry", async (string id, PurchaseService purchases) =>
-        await purchases.Retry(id) ? Results.NoContent() : Results.NotFound())
-    .RequireAuthorization()
-    .WithName("RetryPurchase");
-
-// Remove an item from the list entirely.
-app.MapDelete("/purchases", async (string id, PurchaseService purchases) =>
-    {
-        await purchases.Remove(id);
-        return Results.NoContent();
-    })
-    .RequireAuthorization()
-    .WithName("RemovePurchase");
 
 app.MapDefaultEndpoints();
 

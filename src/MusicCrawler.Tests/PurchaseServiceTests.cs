@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using MusicCrawler.Backend.Services.Download;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Interfaces;
 using NSubstitute;
@@ -18,10 +19,15 @@ public class PurchaseServiceTests
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
     private readonly PurchaseService _sut;
 
+    private static readonly DownloaderConfig Config = new(
+        Automatic: true, DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
+        Codec: "", BatchSize: 3, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero,
+        DownloadTimeout: TimeSpan.FromMinutes(15));
+
     public PurchaseServiceTests()
     {
         _sut = new PurchaseService(
-            _purchases, _queue, _albumRatings, _library, _catalog, _missing, _downloader,
+            _purchases, _queue, _albumRatings, _library, _catalog, _missing, _downloader, Config,
             NullLogger<PurchaseService>.Instance);
 
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
@@ -29,6 +35,7 @@ public class PurchaseServiceTests
         _library.GetAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
         _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
         _missing.GetAll().Returns(Array.Empty<MissingAlbum>());
+        _downloader.Name.Returns("test-backend");
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
     }
 
@@ -84,57 +91,24 @@ public class PurchaseServiceTests
     }
 
     [Fact]
-    public async Task Ordering_routes_through_the_downloader_and_marks_sent()
-    {
-        _queue.GetAllLiked().Returns(new[]
-        {
-            new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), null, 3, Array.Empty<string>(), 1),
-        });
-        await _sut.Reconcile();
-        var id = PurchaseKey.ForArtist("Phoebe Bridgers");
-
-        var ok = await _sut.Order(id);
-
-        ok.Should().BeTrue();
-        await _downloader.Received(1).Request(Arg.Is<PurchaseItem>(p => p.Id == id));
-        (await _sut.GetActive()).Single().Status.Should().Be(PurchaseStatus.Sent);
-    }
-
-    [Fact]
-    public async Task Declined_order_leaves_the_item_pending()
-    {
-        _downloader.Request(Arg.Any<PurchaseItem>()).Returns(false);
-        _queue.GetAllLiked().Returns(new[]
-        {
-            new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), null, 3, Array.Empty<string>(), 1),
-        });
-        await _sut.Reconcile();
-        var id = PurchaseKey.ForArtist("Phoebe Bridgers");
-
-        var ok = await _sut.Order(id);
-
-        ok.Should().BeFalse();
-        (await _sut.GetActive()).Single().Status.Should().Be(PurchaseStatus.Pending);
-    }
-
-    [Fact]
-    public async Task Pending_item_no_longer_liked_is_pruned_but_an_ordered_one_is_kept()
+    public async Task Pending_item_no_longer_liked_is_pruned_but_an_in_flight_one_is_kept()
     {
         var liked = new[]
         {
             new DiscoveryCandidate(new ArtistKey("Pending Band"), null, 1, Array.Empty<string>(), 1),
-            new DiscoveryCandidate(new ArtistKey("Ordered Band"), null, 1, Array.Empty<string>(), 1),
+            new DiscoveryCandidate(new ArtistKey("Sent Band"), null, 1, Array.Empty<string>(), 1),
         };
         _queue.GetAllLiked().Returns(liked);
         await _sut.Reconcile();
-        await _sut.Order(PurchaseKey.ForArtist("Ordered Band"));
+        // "Sent Band" has been downloaded (in flight, awaiting the library).
+        await _purchases.SetStatus(PurchaseKey.ForArtist("Sent Band"), PurchaseStatus.Sent);
 
         // Both un-liked now (nobody wants them via ratings any more).
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
         var active = await _sut.GetActive();
 
-        // The pending one is dropped; the already-ordered one survives (it's in flight).
-        active.Select(p => p.Artist.ArtistName).Should().Equal("Ordered Band");
+        // The pending one is dropped; the in-flight one survives.
+        active.Select(p => p.Artist.ArtistName).Should().Equal("Sent Band");
         active.Single().Status.Should().Be(PurchaseStatus.Sent);
     }
 
@@ -173,7 +147,7 @@ public class PurchaseServiceTests
     }
 
     [Fact]
-    public async Task Retry_returns_a_failed_item_to_pending_and_it_stays_on_the_list()
+    public async Task Failed_items_stay_on_the_active_list_for_retry()
     {
         _albumRatings.GetAllLiked().Returns(new[]
         {
@@ -185,9 +159,30 @@ public class PurchaseServiceTests
 
         // Failed items remain visible on the active list (so they can be retried), not dropped.
         (await _sut.GetActive()).Single(p => p.Id == id).Status.Should().Be(PurchaseStatus.Failed);
-
-        (await _sut.Retry(id)).Should().BeTrue();
-        (await _sut.GetActive()).Single(p => p.Id == id).Status.Should().Be(PurchaseStatus.Pending);
     }
 
+    [Fact]
+    public async Task Snapshot_reports_backend_and_counts_by_stage()
+    {
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("A"), new AlbumKey("queued"), null, DiscoveryStatus.Liked),
+            new AlbumRating(new ArtistKey("B"), new AlbumKey("sent"), null, DiscoveryStatus.Liked),
+        });
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("A"), new AlbumKey("queued"), null, 11),
+            new MissingAlbum(new ArtistKey("B"), new AlbumKey("sent"), null, 22),
+        });
+        await _sut.Reconcile();
+        await _purchases.SetStatus(PurchaseKey.ForAlbum("B", "sent"), PurchaseStatus.Sent);
+
+        var snap = await _sut.GetDownloadSnapshot();
+
+        snap.Automatic.Should().BeTrue();
+        snap.Backend.Should().Be(_downloader.Name);
+        snap.Queued.Should().Be(1); // only the downloadable pending album with a Deezer id
+        snap.Ordered.Should().Be(1);
+        snap.BatchSize.Should().Be(3);
+    }
 }

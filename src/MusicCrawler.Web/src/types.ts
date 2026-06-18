@@ -88,7 +88,21 @@ export interface RatedItem {
 
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a
 // persisted acquisition lifecycle. `kind` is 'RecommendedArtist' (no album) or 'MissingAlbum'.
-export type PurchaseStatus = 'Pending' | 'Sent' | 'InLibrary' | 'Failed'
+export type PurchaseStatus = 'Pending' | 'Downloading' | 'Sent' | 'InLibrary' | 'Failed'
+
+// Mirror DownloadSnapshot (IPurchaseRepo.cs) — the live download-monitor payload.
+export interface DownloadSnapshot {
+  automatic: boolean
+  backend: string
+  batchSize: number
+  itemDelaySeconds: number
+  batchIntervalMinutes: number
+  queued: number
+  downloading: number
+  ordered: number
+  failed: number
+  current: PurchaseItem[]
+}
 
 export interface PurchaseItem {
   id: string

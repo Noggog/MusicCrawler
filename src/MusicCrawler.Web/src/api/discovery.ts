@@ -1,6 +1,13 @@
 // Per-user discovery feed + ratings. All calls require an authenticated session (cookie sent
 // automatically, same-origin). artist/album go in the query string so names with '/' work.
-import type { DiscoveryFeedPage, FeedItem, FeedKind, PurchaseItem, RatedItem } from '../types'
+import type {
+  DiscoveryFeedPage,
+  DownloadSnapshot,
+  FeedItem,
+  FeedKind,
+  PurchaseItem,
+  RatedItem,
+} from '../types'
 
 export type Verdict = 'up' | 'down'
 
@@ -85,15 +92,25 @@ export async function getPurchases(): Promise<PurchaseItem[]> {
   return (await res.json()) as PurchaseItem[]
 }
 
-// Order an item — hand it to the downloader and advance it to "sent".
-export async function orderPurchase(id: string): Promise<void> {
-  const res = await fetch(`/api/purchases/order?id=${encodeURIComponent(id)}`, { method: 'POST' })
+// A live snapshot of the download subsystem for the monitor panel (polled).
+export async function getDownloadStatus(): Promise<DownloadSnapshot> {
+  const res = await fetch('/api/purchases/status')
   if (!res.ok) {
-    throw new Error(`Failed to order item: ${res.status} ${res.statusText}`)
+    throw new Error(`Failed to load download status: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as DownloadSnapshot
+}
+
+// Manually queue an item for download now (non-blocking — the drainer does the fetch). Also the
+// "retry" action for failed items. Works whether or not automatic downloads are on.
+export async function downloadPurchase(id: string): Promise<void> {
+  const res = await fetch(`/api/purchases/download?id=${encodeURIComponent(id)}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to queue download: ${res.status} ${res.statusText}`)
   }
 }
 
-// Undo an order, moving the item back to "pending".
+// Undo — move a downloaded/queued item back to "pending".
 export async function unsendPurchase(id: string): Promise<void> {
   const res = await fetch(`/api/purchases/unsend?id=${encodeURIComponent(id)}`, { method: 'POST' })
   if (!res.ok) {
@@ -101,18 +118,3 @@ export async function unsendPurchase(id: string): Promise<void> {
   }
 }
 
-// Re-queue a failed item for another download attempt.
-export async function retryPurchase(id: string): Promise<void> {
-  const res = await fetch(`/api/purchases/retry?id=${encodeURIComponent(id)}`, { method: 'POST' })
-  if (!res.ok) {
-    throw new Error(`Failed to retry item: ${res.status} ${res.statusText}`)
-  }
-}
-
-// Remove an item from the list entirely.
-export async function removePurchase(id: string): Promise<void> {
-  const res = await fetch(`/api/purchases?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-  if (!res.ok) {
-    throw new Error(`Failed to remove item: ${res.status} ${res.statusText}`)
-  }
-}

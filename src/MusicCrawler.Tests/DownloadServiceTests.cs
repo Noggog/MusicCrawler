@@ -13,12 +13,13 @@ public class DownloadServiceTests
     private readonly FakePurchaseRepo _repo = new();
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
 
-    private DownloadService Sut(int batchSize = 10)
+    private DownloadService Sut()
     {
         var config = new DownloaderConfig(
-            Enabled: true, DownloadDir: "", RipBinary: "rip", Quality: "", Codec: "",
-            BatchSize: batchSize, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero);
-        // purchases is only used by the background loop, not DrainBatch — null is fine for these tests.
+            Automatic: false, DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
+            Codec: "", BatchSize: 10, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero,
+            DownloadTimeout: TimeSpan.FromMinutes(15));
+        // PurchaseService is only used by the background loop, not the methods under test — null is fine.
         return new DownloadService(_repo, _downloader, config, purchases: null!, NullLogger<DownloadService>.Instance);
     }
 
@@ -26,19 +27,22 @@ public class DownloadServiceTests
         new(PurchaseKey.ForAlbum(artist, album), FeedKind.MissingAlbum, new ArtistKey(artist), album,
             null, 0, Array.Empty<string>(), status, DateTimeOffset.UtcNow, null, deezerId);
 
-    private static PurchaseItem Artist(string artist) =>
+    private static PurchaseItem Artist(string artist, PurchaseStatus status = PurchaseStatus.Pending) =>
         new(PurchaseKey.ForArtist(artist), FeedKind.RecommendedArtist, new ArtistKey(artist), null,
-            null, 0, Array.Empty<string>(), PurchaseStatus.Pending, DateTimeOffset.UtcNow, null, null);
+            null, 0, Array.Empty<string>(), status, DateTimeOffset.UtcNow, null, null);
+
+    // ---- ProcessOne (the consumer's per-item work) ----
 
     [Fact]
     public async Task Successful_download_marks_the_item_sent()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        _repo.Seed(Album("Big Thief", "Capacity", 12345));
+        var item = Album("Big Thief", "Capacity", 12345);
+        _repo.Seed(item);
 
-        var processed = await Sut().DrainBatch(CancellationToken.None);
+        var ran = await Sut().ProcessOne(item.Id);
 
-        processed.Should().Be(1);
+        ran.Should().BeTrue();
         _repo.Items.Single().Status.Should().Be(PurchaseStatus.Sent);
     }
 
@@ -46,9 +50,10 @@ public class DownloadServiceTests
     public async Task Failed_download_marks_the_item_failed()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(false);
-        _repo.Seed(Album("Big Thief", "Capacity", 12345));
+        var item = Album("Big Thief", "Capacity", 12345);
+        _repo.Seed(item);
 
-        await Sut().DrainBatch(CancellationToken.None);
+        await Sut().ProcessOne(item.Id);
 
         _repo.Items.Single().Status.Should().Be(PurchaseStatus.Failed);
     }
@@ -57,52 +62,61 @@ public class DownloadServiceTests
     public async Task A_thrown_downloader_is_caught_and_the_item_marked_failed()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns<bool>(_ => throw new InvalidOperationException("boom"));
-        _repo.Seed(Album("Big Thief", "Capacity", 12345));
+        var item = Album("Big Thief", "Capacity", 12345);
+        _repo.Seed(item);
 
-        await Sut().DrainBatch(CancellationToken.None);
+        await Sut().ProcessOne(item.Id);
 
         _repo.Items.Single().Status.Should().Be(PurchaseStatus.Failed);
     }
 
     [Fact]
-    public async Task Artists_and_albums_without_a_deezer_id_are_not_downloaded()
+    public async Task Non_pending_or_non_downloadable_items_are_skipped()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        _repo.Seed(Artist("Phoebe Bridgers"));
-        _repo.Seed(Album("Big Thief", "No Id", 0));
+        _repo.Seed(Album("A", "already-sent", 1, PurchaseStatus.Sent)); // not pending
+        _repo.Seed(Album("B", "no-id", 0));                              // no deezer id
+        _repo.Seed(Artist("Phoebe Bridgers"));                          // artist, not an album
 
-        var processed = await Sut().DrainBatch(CancellationToken.None);
+        (await Sut().ProcessOne(PurchaseKey.ForAlbum("A", "already-sent"))).Should().BeFalse();
+        (await Sut().ProcessOne(PurchaseKey.ForAlbum("B", "no-id"))).Should().BeFalse();
+        (await Sut().ProcessOne(PurchaseKey.ForArtist("Phoebe Bridgers"))).Should().BeFalse();
 
-        processed.Should().Be(0);
         await _downloader.DidNotReceive().Request(Arg.Any<PurchaseItem>());
-        _repo.Items.Should().OnlyContain(i => i.Status == PurchaseStatus.Pending);
+    }
+
+    // ---- RequestDownload (the manual "Download now" trigger) ----
+
+    [Fact]
+    public async Task Manual_request_resets_a_failed_album_to_pending()
+    {
+        _repo.Seed(Album("Big Thief", "Capacity", 12345, PurchaseStatus.Failed));
+
+        (await Sut().RequestDownload(PurchaseKey.ForAlbum("Big Thief", "Capacity"))).Should().BeTrue();
+
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Pending);
     }
 
     [Fact]
-    public async Task Only_non_pending_albums_are_left_alone()
+    public async Task Manual_request_rejects_artists_and_unknown_ids()
     {
-        _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        _repo.Seed(Album("A", "sent", 1, PurchaseStatus.Sent));
-        _repo.Seed(Album("B", "pending", 2));
+        _repo.Seed(Artist("Phoebe Bridgers"));
 
-        var processed = await Sut().DrainBatch(CancellationToken.None);
-
-        processed.Should().Be(1);
-        await _downloader.Received(1).Request(Arg.Is<PurchaseItem>(p => p.Album == "pending"));
+        (await Sut().RequestDownload(PurchaseKey.ForArtist("Phoebe Bridgers"))).Should().BeFalse();
+        (await Sut().RequestDownload("nope")).Should().BeFalse();
     }
 
+    // ---- Crash recovery ----
+
     [Fact]
-    public async Task Batch_size_caps_how_many_download_per_pass()
+    public async Task Reset_returns_stranded_downloads_to_pending()
     {
-        _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        _repo.Seed(Album("A", "one", 1));
-        _repo.Seed(Album("B", "two", 2));
-        _repo.Seed(Album("C", "three", 3));
+        _repo.Seed(Album("Big Thief", "Capacity", 1, PurchaseStatus.Downloading));
+        _repo.Seed(Album("Other", "Done", 2, PurchaseStatus.Sent));
 
-        var processed = await Sut(batchSize: 2).DrainBatch(CancellationToken.None);
+        await Sut().ResetStuckDownloads();
 
-        processed.Should().Be(2);
-        _repo.Items.Count(i => i.Status == PurchaseStatus.Sent).Should().Be(2);
-        _repo.Items.Count(i => i.Status == PurchaseStatus.Pending).Should().Be(1);
+        _repo.Items.Single(i => i.Album == "Capacity").Status.Should().Be(PurchaseStatus.Pending);
+        _repo.Items.Single(i => i.Album == "Done").Status.Should().Be(PurchaseStatus.Sent);
     }
 }

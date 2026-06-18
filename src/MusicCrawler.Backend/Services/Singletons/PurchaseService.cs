@@ -1,3 +1,4 @@
+using MusicCrawler.Backend.Services.Download;
 using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.Backend.Services.Singletons;
@@ -22,6 +23,7 @@ public class PurchaseService
     private readonly IArtistCatalogRepo _catalog;
     private readonly IMissingAlbumRepo _missing;
     private readonly IDownloader _downloader;
+    private readonly DownloaderConfig _config;
     private readonly ILogger<PurchaseService> _logger;
 
     public PurchaseService(
@@ -32,6 +34,7 @@ public class PurchaseService
         IArtistCatalogRepo catalog,
         IMissingAlbumRepo missing,
         IDownloader downloader,
+        DownloaderConfig config,
         ILogger<PurchaseService> logger)
     {
         _purchases = purchases;
@@ -41,6 +44,7 @@ public class PurchaseService
         _catalog = catalog;
         _missing = missing;
         _downloader = downloader;
+        _config = config;
         _logger = logger;
     }
 
@@ -56,35 +60,36 @@ public class PurchaseService
             .ToArray();
     }
 
-    /// <summary>
-    /// Hands an item to the downloader and, if accepted, advances it to <see cref="PurchaseStatus.Sent"/>.
-    /// Returns false if the id is unknown or the backend declined.
-    /// </summary>
-    public async Task<bool> Order(string id)
-    {
-        var item = (await _purchases.GetAll()).FirstOrDefault(p => p.Id == id);
-        if (item is null)
-        {
-            return false;
-        }
-
-        if (!await _downloader.Request(item))
-        {
-            _logger.LogWarning("Downloader {Name} declined purchase {Id}", _downloader.Name, id);
-            return false;
-        }
-
-        return await _purchases.SetStatus(id, PurchaseStatus.Sent);
-    }
-
-    /// <summary>Moves an ordered item back to <see cref="PurchaseStatus.Pending"/> (undo an order).</summary>
+    /// <summary>Moves a downloaded/queued item back to <see cref="PurchaseStatus.Pending"/> (undo).</summary>
     public Task<bool> Unsend(string id) => _purchases.SetStatus(id, PurchaseStatus.Pending);
 
-    /// <summary>Re-queues a failed item for another download attempt.</summary>
-    public Task<bool> Retry(string id) => _purchases.SetStatus(id, PurchaseStatus.Pending);
+    /// <summary>
+    /// A live snapshot of the download subsystem for the monitoring panel — backend + throttle
+    /// config and current counts. Cheap (one read, no reconcile); the list query reconciles. "Queued"
+    /// is downloadable albums waiting (wishlist artists don't download, so they're excluded).
+    /// </summary>
+    public async Task<DownloadSnapshot> GetDownloadSnapshot()
+    {
+        var all = await _purchases.GetAll();
+        var queued = all.Count(p => p.Status == PurchaseStatus.Pending
+                                    && p.Kind == FeedKind.MissingAlbum && p.DeezerAlbumId is > 0);
+        var current = all
+            .Where(p => p.Status == PurchaseStatus.Downloading)
+            .OrderBy(p => p.RequestedAt)
+            .ToArray();
 
-    /// <summary>Removes an item from the list entirely.</summary>
-    public Task Remove(string id) => _purchases.Remove(id);
+        return new DownloadSnapshot(
+            _config.Automatic,
+            _downloader.Name,
+            _config.BatchSize,
+            _config.ItemDelay.TotalSeconds,
+            _config.BatchInterval.TotalMinutes,
+            queued,
+            current.Length,
+            all.Count(p => p.Status == PurchaseStatus.Sent),
+            all.Count(p => p.Status == PurchaseStatus.Failed),
+            current);
+    }
 
     /// <summary>
     /// Folds the current liked-but-unowned set into the store and reconciles statuses. Idempotent —

@@ -9,6 +9,9 @@ public enum PurchaseStatus
     /// <summary>Queued to acquire — liked by at least one user, not yet ordered.</summary>
     Pending,
 
+    /// <summary>Actively being fetched by the downloader right now (single-flight).</summary>
+    Downloading,
+
     /// <summary>Downloaded (or ordered by hand) — awaiting arrival in the library.</summary>
     Sent,
 
@@ -38,6 +41,23 @@ public record PurchaseItem(
     DateTimeOffset RequestedAt,
     DateTimeOffset? SentAt,
     long? DeezerAlbumId);
+
+/// <summary>
+/// A live snapshot of the download subsystem for the monitoring panel: whether downloads are on,
+/// which backend, the throttle settings, current counts by lifecycle stage, and the item(s) being
+/// fetched right now (normally one — the drainer is single-flight).
+/// </summary>
+public record DownloadSnapshot(
+    bool Automatic,
+    string Backend,
+    int BatchSize,
+    double ItemDelaySeconds,
+    double BatchIntervalMinutes,
+    int Queued,
+    int Downloading,
+    int Ordered,
+    int Failed,
+    PurchaseItem[] Current);
 
 /// <summary>
 /// Canonical id for a purchase row — "artist:{name}" or "album:{artist} {album}", lower-cased. One

@@ -151,23 +151,55 @@ Each is independently buildable and testable.
   each catalog/album sync, so the loop closes without a page visit.
 - **Downloader (built 2026-06-17):** `IDownloader` is the pluggable seam.
   `StreamripDownloader` shells out to **streamrip** (Deezer ARL, configured in streamrip
-  itself — credential never enters this app) to grab **albums only** (artists stay as
-  wishlist reminders). `DownloadService` is a slow background drainer — one item at a time,
-  configurable per-item delay + inter-batch pause — that keeps under Deezer's anti-tooling
-  radar; it marks items `sent` on success, `failed` on error. The catalog sync closes the
-  loop (file lands in Plex → reconcile → `in-library`). Disabled (NoOpDownloader, drainer
-  idle) unless `DEEZER_DOWNLOADS_ENABLED`. Env knobs: `MUSIC_DOWNLOAD_DIR`, `STREAMRIP_BIN`,
-  `DEEZER_QUALITY`, `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE`, `DOWNLOAD_ITEM_DELAY_SECONDS`,
-  `DOWNLOAD_BATCH_INTERVAL_MINUTES`.
+  itself via `rip config` — credential never enters this app) to grab **albums only** (artists
+  stay as wishlist reminders). Invocation: `Process` with `FileName=STREAMRIP_BIN` (default
+  `rip`, resolved via the backend process's PATH, or an absolute path) →
+  `rip --folder DIR --quality Q [--codec C] url https://www.deezer.com/album/{id}`.
+  **Quality defaults to FLAC (`DEEZER_QUALITY=2`); on a failed pass it retries once at
+  `DEEZER_FALLBACK_QUALITY` (default `1` = 320 MP3)** so an album not available lossless still
+  comes down.
+  - **`DownloadService`** is a single-flight channel consumer: ids reach the queue either
+    automatically (a background loop, only when `DEEZER_DOWNLOADS_AUTOMATIC` is on, enqueues
+    pending albums every `DOWNLOAD_BATCH_INTERVAL_MINUTES`) or manually via
+    `RequestDownload(id)` (the "Download now"/"Retry" button — non-blocking, returns
+    immediately). Each item: Pending → Downloading → Sent/Failed, throttled by
+    `DOWNLOAD_ITEM_DELAY_SECONDS`. Registered as a **shared singleton hosted service** so the
+    endpoint and the loop are one instance. Crash recovery: stranded `Downloading` rows reset
+    to Pending on startup. The catalog sync closes the loop (file in Plex → reconcile →
+    `in-library`).
+  - **`DEEZER_DOWNLOADS_AUTOMATIC` (default off)** governs only the background drainer; manual
+    downloads work regardless. streamrip is always the backend (no NoOp). Env knobs:
+    `MUSIC_DOWNLOAD_DIR`, `STREAMRIP_BIN`, `DEEZER_QUALITY` (2), `DEEZER_FALLBACK_QUALITY` (1),
+    `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE` (3), `DOWNLOAD_ITEM_DELAY_SECONDS` (60),
+    `DOWNLOAD_BATCH_INTERVAL_MINUTES` (30), `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` (15).
+  - **Error handling:** every streamrip attempt logs its command up front; a pass that exceeds
+    `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` is killed (process tree) and the item marked `failed`
+    rather than hanging in `downloading` forever; timeouts/non-zero exits log streamrip's
+    captured stdout+stderr. A timeout does not trigger the MP3 fallback (it's a systemic failure
+    — bad/empty ARL, network — so retrying would only burn another timeout); a clean non-zero
+    exit at FLAC still downgrades to MP3. (Empty ARL in streamrip's config makes it fall back to
+    the unreliable deezloader, which hangs — the timeout is what rescues that case.)
   - _Why not Lidarr / a Deezer playlist:_ Deezer closed new API app registration, so the
     official playlist-write (OAuth) is unavailable; the ARL drives the unofficial API that
     streamrip uses. Lidarr's Deezer plugins exist but are flagged ban-risky and add a
     moving part; a direct, throttled, server-controlled grab was preferred.
-- **Endpoints:** `GET /purchases` (active = pending + sent + failed), `POST /purchases/order`,
-  `POST /purchases/unsend`, `POST /purchases/retry`, `DELETE /purchases` (all by `?id=`).
-  Frontend Purchases.tsx splits Failed / Albums-queued / Ordered / Artists-wishlist with
-  Order / Undo / Retry / ✕ actions. `PurchaseItem` carries `DeezerAlbumId` (from the
-  missing-album set) so the downloader resolves the album URL without DB joins at grab time.
+- **Endpoints:** `GET /purchases` (active = pending/downloading/sent/failed),
+  `GET /purchases/status` (live monitor snapshot), `POST /purchases/download` (manual "download
+  now"/retry — non-blocking), `POST /purchases/unsend` (all by `?id=`). Frontend Purchases.tsx
+  splits Downloading-now / Failed / Albums-queued / Ordered / Artists-wishlist with Download now
+  / Undo / Retry actions. `PurchaseItem` carries `DeezerAlbumId` (from the missing-album set) so
+  the downloader resolves the album URL without DB joins at grab time.
+  - _No manual "remove" action_ (removed 2026-06-17): the list is reconciled from likes, so a
+    removed-but-still-liked item just reappeared. To drop something, un-rate it; a more
+    intentional dismissal (e.g. clear-the-like, or a suppressed flag) is a future addition.
+    `IPurchaseRepo.Remove` stays for internal reconcile pruning of unwanted pending/failed rows.
+- **Live monitor (built 2026-06-17):** a `Downloading` status is set the instant the drainer
+  hands an item to streamrip (single-flight), so the page shows "Downloading: X" in real time;
+  it flips to `sent`/`failed` on completion. Stranded `Downloading` rows (crash mid-fetch) are
+  reset to pending on drainer startup. `GET /purchases/status` returns a `DownloadSnapshot`
+  (backend, automatic on/off, throttle, counts by stage, current item); the To Buy page renders
+  a monitor panel and polls it (3s) plus the list (5s) so it updates without a reload. Deeper
+  activity (per-item lines, streamrip stderr) is in the backend log (`logs/backend-<date>.log`).
 
 ### 6. Web UI (React + Vite)
 - **Artists** — owned-artist list with 👍/👎 per row (replaces the seed star).

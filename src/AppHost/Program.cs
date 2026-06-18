@@ -34,7 +34,20 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     //   DEEZER_BASE_URI       override the public Deezer API endpoint
     //   RELATED_STALENESS_DAYS how long a stored edge set is considered fresh (default 30)
     .WithEnvironment("DEEZER_BASE_URI", Environment.GetEnvironmentVariable("DEEZER_BASE_URI"))
-    .WithEnvironment("RELATED_STALENESS_DAYS", Environment.GetEnvironmentVariable("RELATED_STALENESS_DAYS"));
+    .WithEnvironment("RELATED_STALENESS_DAYS", Environment.GetEnvironmentVariable("RELATED_STALENESS_DAYS"))
+    // Deezer download subsystem (streamrip). MUSIC_DOWNLOAD_DIR is the library root downloads land in;
+    // the rest are optional throttle/quality knobs (backend defaults them). The ARL and the
+    // artist/album folder_format live in streamrip's own config, not here.
+    .WithEnvironment("DEEZER_DOWNLOADS_AUTOMATIC", Environment.GetEnvironmentVariable("DEEZER_DOWNLOADS_AUTOMATIC"))
+    .WithEnvironment("MUSIC_DOWNLOAD_DIR", Environment.GetEnvironmentVariable("MUSIC_DOWNLOAD_DIR"))
+    .WithEnvironment("STREAMRIP_BIN", Environment.GetEnvironmentVariable("STREAMRIP_BIN"))
+    .WithEnvironment("DEEZER_QUALITY", Environment.GetEnvironmentVariable("DEEZER_QUALITY"))
+    .WithEnvironment("DEEZER_FALLBACK_QUALITY", Environment.GetEnvironmentVariable("DEEZER_FALLBACK_QUALITY"))
+    .WithEnvironment("DEEZER_CODEC", Environment.GetEnvironmentVariable("DEEZER_CODEC"))
+    .WithEnvironment("DOWNLOAD_BATCH_SIZE", Environment.GetEnvironmentVariable("DOWNLOAD_BATCH_SIZE"))
+    .WithEnvironment("DOWNLOAD_ITEM_DELAY_SECONDS", Environment.GetEnvironmentVariable("DOWNLOAD_ITEM_DELAY_SECONDS"))
+    .WithEnvironment("DOWNLOAD_BATCH_INTERVAL_MINUTES", Environment.GetEnvironmentVariable("DOWNLOAD_BATCH_INTERVAL_MINUTES"))
+    .WithEnvironment("DEEZER_DOWNLOAD_TIMEOUT_MINUTES", Environment.GetEnvironmentVariable("DEEZER_DOWNLOAD_TIMEOUT_MINUTES"));
 
 builder.AddNpmApp("web", "../MusicCrawler.Web", "dev")
     .WithReference(backend)
