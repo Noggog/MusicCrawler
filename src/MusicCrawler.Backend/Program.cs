@@ -260,6 +260,14 @@ app.MapPost("/discovery/rate", async (
     .RequireAuthorization()
     .WithName("RateCandidate");
 
+// A liked non-owned artist's acquirable albums (their Deezer discography minus anything already
+// owned), surfaced inline under the just-rated card so a fresh discovery can be acted on. Fetched
+// on demand (one Deezer call) only when an artist is liked — not precomputed per feed card.
+app.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+        Results.Ok(await engine.ArtistAlbums(http.User.GetSubject()!, artist)))
+    .RequireAuthorization()
+    .WithName("GetArtistAlbums");
+
 // Clear a rating, returning the artist/album to the feed.
 app.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
     {

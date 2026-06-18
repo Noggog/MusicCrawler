@@ -50,49 +50,63 @@ public class MissingAlbumRefresher
 
         foreach (var artist in present)
         {
-            var name = artist.ArtistKey.ArtistName;
             scanned++;
-
-            var deezerId = await _resolver.ResolveArtistId(name);
-            if (deezerId is null)
-            {
-                // No Deezer match — clear any stale rows so we don't keep suggesting against nothing.
-                await _missing.ReplaceForArtist(name, Array.Empty<MissingAlbum>());
-                continue;
-            }
-
-            // Compare on a normalized form so punctuation/casing differences between Plex and Deezer
-            // (e.g. a typographic vs. straight apostrophe in "so the flies don't come") don't make an
-            // owned album look missing. The original Deezer title is still what we persist/display.
-            var owned = (ownedAlbums.TryGetValue(name, out var set) ? set : Enumerable.Empty<string>())
-                .Select(NormalizeTitle)
-                .ToHashSet(StringComparer.Ordinal);
-
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            var missing = new List<MissingAlbum>();
-            foreach (var album in await _deezer.GetAlbums(deezerId.Value))
-            {
-                var title = album.title;
-                var key = NormalizeTitle(title);
-                if (string.IsNullOrEmpty(key)
-                    || !string.Equals(album.record_type, AlbumRecordType, StringComparison.OrdinalIgnoreCase)
-                    || owned.Contains(key)
-                    || !seen.Add(key))
-                {
-                    continue;
-                }
-
-                missing.Add(new MissingAlbum(artist.ArtistKey, new AlbumKey(title), album.BestCoverUrl, album.id));
-            }
-
-            await _missing.ReplaceForArtist(name, missing);
-            missingTotal += missing.Count;
+            var owned = ownedAlbums.TryGetValue(artist.ArtistKey.ArtistName, out var set)
+                ? set
+                : Enumerable.Empty<string>();
+            missingTotal += (await RefreshOne(artist.ArtistKey, owned)).Count;
         }
 
         _logger.LogInformation(
             "Missing-album sync: scanned {Scanned} owned artist(s), {Missing} missing album(s) total",
             scanned, missingTotal);
         return new MissingAlbumSyncResult(scanned, missingTotal);
+    }
+
+    /// <summary>
+    /// Resolves one artist's Deezer discography, diffs it against the albums already owned for that
+    /// artist, and persists the gap into <see cref="IMissingAlbumRepo"/> (replacing the artist's prior
+    /// rows). Shared by the bulk <see cref="Refresh"/> sweep over owned artists and the on-demand
+    /// expansion when a user likes a brand-new recommended artist (whose owned set is empty, so the
+    /// whole discography surfaces as acquirable). Returns the persisted rows.
+    /// </summary>
+    public async Task<IReadOnlyList<MissingAlbum>> RefreshOne(ArtistKey artist, IEnumerable<string> ownedAlbumTitles)
+    {
+        var name = artist.ArtistName;
+        var deezerId = await _resolver.ResolveArtistId(name);
+        if (deezerId is null)
+        {
+            // No Deezer match — clear any stale rows so we don't keep suggesting against nothing.
+            await _missing.ReplaceForArtist(name, Array.Empty<MissingAlbum>());
+            return Array.Empty<MissingAlbum>();
+        }
+
+        // Compare on a normalized form so punctuation/casing differences between Plex and Deezer
+        // (e.g. a typographic vs. straight apostrophe in "so the flies don't come") don't make an
+        // owned album look missing. The original Deezer title is still what we persist/display.
+        var owned = ownedAlbumTitles
+            .Select(NormalizeTitle)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var missing = new List<MissingAlbum>();
+        foreach (var album in await _deezer.GetAlbums(deezerId.Value))
+        {
+            var title = album.title;
+            var key = NormalizeTitle(title);
+            if (string.IsNullOrEmpty(key)
+                || !string.Equals(album.record_type, AlbumRecordType, StringComparison.OrdinalIgnoreCase)
+                || owned.Contains(key)
+                || !seen.Add(key))
+            {
+                continue;
+            }
+
+            missing.Add(new MissingAlbum(artist, new AlbumKey(title), album.BestCoverUrl, album.id));
+        }
+
+        await _missing.ReplaceForArtist(name, missing);
+        return missing;
     }
 
     /// <summary>

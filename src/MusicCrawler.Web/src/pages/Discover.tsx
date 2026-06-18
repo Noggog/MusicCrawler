@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -6,7 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getMixedFeed, rate, refreshQueue, type Verdict } from '../api/discovery'
+import { getArtistAlbums, getMixedFeed, rate, refreshQueue, type Verdict } from '../api/discovery'
 import { getDeezerPlayInfo } from '../api/deezer'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
@@ -83,26 +83,148 @@ function Provenance({ sources }: { sources: string[] }) {
   )
 }
 
+// Inline under a just-liked brand-new artist: their Deezer albums, each thumbable so a fresh
+// discovery can actually be acquired (a liked album flows to the downloader). Reuses the parent's
+// `rated`/play/rate plumbing so album rows mark in place exactly like top-level cards.
+function ArtistAlbumsPanel({
+  artist,
+  rated,
+  playing,
+  togglePlay,
+  onRate,
+  disabled,
+}: {
+  artist: string
+  rated: Map<string, Verdict>
+  playing: Set<string>
+  togglePlay: (key: string) => void
+  onRate: (item: FeedItem, verdict: Verdict) => void
+  disabled: boolean
+}) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['artist-albums', artist],
+    queryFn: () => getArtistAlbums(artist),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  if (isPending) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">Finding albums…</em></div>
+  }
+  if (isError || !data || data.length === 0) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">No albums found on Deezer.</em></div>
+  }
+
+  return (
+    <div className="disc-sub-albums">
+      <div className="disc-sub-note">Albums by {artist} — 👍 the ones to grab:</div>
+      {data.map((album) => {
+        const rowKey = `${album.artist.artistName}::${album.album}`
+        const verdict = rated.get(rowKey)
+        const isPlaying = playing.has(rowKey)
+        return (
+          <div className="disc-sub-album-wrap" key={rowKey}>
+            <div className="disc-sub-album">
+              <FeedAvatar item={album} size={36} />
+              <div className="disc-sub-album-name">{album.album}</div>
+              <div className="disc-actions">
+                {album.deezerAlbumId && (
+                  <button
+                    className={isPlaying ? 'disc-btn play active' : 'disc-btn play'}
+                    title={isPlaying ? 'Hide Deezer player' : 'Listen on Deezer'}
+                    onClick={() => togglePlay(rowKey)}
+                  >
+                    {isPlaying ? '▾' : '▶'}
+                  </button>
+                )}
+                {verdict ? (
+                  <span className="disc-rated" title="Rated — refreshes on shuffle or page change">
+                    {verdict === 'up' ? '👍 Added' : '👎 Dismissed'}
+                  </span>
+                ) : (
+                  <>
+                    <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
+                      👍
+                    </button>
+                    <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
+                      👎
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            {isPlaying && album.deezerAlbumId && <DeezerSample albumId={album.deezerAlbumId} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// View state kept at module scope so navigating away from /discover and back restores the same feed
+// instead of remounting fresh — which regenerated `seed` (reshuffling the whole list) and dropped the
+// rated marks and a just-approved artist's inline albums. The QueryClient already caches the feed
+// data across navigation; this keeps the local view in sync with it. Lives for the browser session
+// (resets on full reload), which is the right scope for a randomized, react-to-it-now feed.
+type DiscoverState = {
+  shown: Set<FeedKind>
+  page: number
+  seed: number
+  playing: Set<string>
+  rated: Map<string, Verdict>
+  expandedAlbums: Set<string>
+}
+const persisted: DiscoverState = {
+  shown: new Set<FeedKind>(DEFAULT_KINDS),
+  page: 0,
+  seed: newSeed(),
+  playing: new Set<string>(),
+  rated: new Map<string, Verdict>(),
+  expandedAlbums: new Set<string>(),
+}
+
 export default function Discover() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const [shown, setShown] = useState<Set<FeedKind>>(() => new Set<FeedKind>(DEFAULT_KINDS))
-  const [page, setPage] = useState(0)
-  const [seed, setSeed] = useState(newSeed)
+  const [shown, setShown] = useState<Set<FeedKind>>(() => persisted.shown)
+  const [page, setPage] = useState(() => persisted.page)
+  const [seed, setSeed] = useState(() => persisted.seed)
   // Artists whose Deezer player is expanded (kept collapsed by default so we don't mount many iframes).
-  const [playing, setPlaying] = useState<Set<string>>(new Set())
+  const [playing, setPlaying] = useState<Set<string>>(() => persisted.playing)
   // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
   // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
-  const [rated, setRated] = useState<Map<string, Verdict>>(new Map())
+  const [rated, setRated] = useState<Map<string, Verdict>>(() => persisted.rated)
+  // Brand-new artists liked this view: their albums are fetched and surfaced inline beneath the card
+  // so the discovery can be acquired. Driven off state (not the feed item) so it survives the
+  // in-place "rated" mark; cleared on the next natural refresh alongside `rated`.
+  const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(() => persisted.expandedAlbums)
+
+  // Mirror the live view state back into the module store every render so a later remount restores it.
+  useEffect(() => {
+    persisted.shown = shown
+    persisted.page = page
+    persisted.seed = seed
+    persisted.playing = playing
+    persisted.rated = rated
+    persisted.expandedAlbums = expandedAlbums
+  })
 
   // Keep a stable, sorted kinds list so the query key (and the server's interleave) are deterministic.
   const kinds = ALL_KINDS.filter((k) => shown.has(k))
 
   // A natural refresh (page, shuffle, or category change refetches the feed) clears the in-place
   // marks so the freshly-fetched list — which already excludes the rated items — starts clean.
+  // The guard is value-based, not run-count-based: it clears only when the page/seed/kinds actually
+  // change from what's currently shown. On a remount we restore the persisted state for this same
+  // page/seed, so the key matches and nothing clears — and it stays correct under StrictMode, which
+  // double-invokes the mount effect (a run-count "skip first mount" guard would clear on the 2nd run).
   const kindsKey = kinds.join(',')
+  const lastRefreshKey = useRef(`${page}|${seed}|${kindsKey}`)
   useEffect(() => {
+    const key = `${page}|${seed}|${kindsKey}`
+    if (lastRefreshKey.current === key) return
+    lastRefreshKey.current = key
     setRated(new Map())
+    setExpandedAlbums(new Set())
   }, [page, seed, kindsKey])
 
   const togglePlay = (key: string) =>
@@ -139,6 +261,13 @@ export default function Discover() {
     queryFn: () => getMixedFeed(kinds, page, PAGE_SIZE, seed),
     enabled: !!user && kinds.length > 0,
     placeholderData: keepPreviousData,
+    // Freeze the feed for the session. Without this it defaults to stale-immediately and refetches on
+    // every remount (i.e. navigating away and back) — and because the server drops just-rated artists
+    // from the feed, that refetch made an approved artist's card (and its inline albums) disappear.
+    // A new seed/page is a different query key, so Shuffle and paging still fetch fresh; Rebuild
+    // invalidates ['feed'] explicitly; a full page reload starts a new session with a new seed.
+    staleTime: Infinity,
+    gcTime: 60 * 60 * 1000,
   })
 
   const invalidate = () => {
@@ -161,9 +290,13 @@ export default function Discover() {
         return next
       })
     },
-    onSuccess: () => {
+    onSuccess: (_data, { item, verdict }) => {
       queryClient.invalidateQueries({ queryKey: ['purchases'] })
       queryClient.invalidateQueries({ queryKey: ['ratings'] })
+      // Liking a brand-new artist surfaces their albums inline so the find can be acquired.
+      if (verdict === 'up' && item.kind === 'RecommendedArtist') {
+        setExpandedAlbums((prev) => new Set(prev).add(item.artist.artistName))
+      }
     },
   })
   const rebuild = useMutation({
@@ -324,6 +457,16 @@ export default function Discover() {
                 {isPlaying && (isAlbum
                   ? <DeezerSample albumId={item.deezerAlbumId!} />
                   : <DeezerSample artist={name} />)}
+                {!isAlbum && expandedAlbums.has(name) && (
+                  <ArtistAlbumsPanel
+                    artist={name}
+                    rated={rated}
+                    playing={playing}
+                    togglePlay={togglePlay}
+                    onRate={(albumItem, v) => rateMutation.mutate({ item: albumItem, verdict: v })}
+                    disabled={rebuild.isPending}
+                  />
+                )}
               </div>
             )
           })}

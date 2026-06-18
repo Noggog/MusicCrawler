@@ -42,6 +42,17 @@ export async function getMixedFeed(
   return (await res.json()) as DiscoveryFeedPage
 }
 
+// A liked non-owned artist's acquirable albums (their Deezer discography minus anything owned),
+// surfaced inline under the just-rated card. Fetched on demand only when an artist is liked.
+export async function getArtistAlbums(artist: string): Promise<FeedItem[]> {
+  const params = new URLSearchParams({ artist })
+  const res = await fetch(`/api/discovery/artist-albums?${params}`)
+  if (!res.ok) {
+    throw new Error(`Failed to load albums for ${artist}: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as FeedItem[]
+}
+
 // Rebuild the pending recommendations from the current liked artists (keeps ratings).
 export async function refreshQueue(): Promise<void> {
   const res = await fetch('/api/discovery/refresh', { method: 'POST' })

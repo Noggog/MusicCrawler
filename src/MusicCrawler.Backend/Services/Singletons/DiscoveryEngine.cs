@@ -22,6 +22,7 @@ public class DiscoveryEngine
     private readonly IArtistCatalogRepo _catalog;
     private readonly IMissingAlbumRepo _missing;
     private readonly IUserAlbumRatingRepo _albumRatings;
+    private readonly MissingAlbumRefresher _albumRefresher;
     private readonly ILogger<DiscoveryEngine> _logger;
 
     public DiscoveryEngine(
@@ -31,6 +32,7 @@ public class DiscoveryEngine
         IArtistCatalogRepo catalog,
         IMissingAlbumRepo missing,
         IUserAlbumRatingRepo albumRatings,
+        MissingAlbumRefresher albumRefresher,
         ILogger<DiscoveryEngine> logger)
     {
         _queue = queue;
@@ -39,6 +41,7 @@ public class DiscoveryEngine
         _catalog = catalog;
         _missing = missing;
         _albumRatings = albumRatings;
+        _albumRefresher = albumRefresher;
         _logger = logger;
     }
 
@@ -182,6 +185,31 @@ public class DiscoveryEngine
     {
         var decided = await _albumRatings.GetDecidedKeys(userId);
         return (await _missing.GetAll())
+            .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
+            .Select(m => new FeedItem(
+                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))
+            .ToList();
+    }
+
+    /// <summary>
+    /// On-demand: a brand-new (non-owned) liked artist's albums, so the discover→acquire loop can act
+    /// on a fresh discovery rather than just wishlisting the artist. Pulls the artist's Deezer
+    /// discography, persists it into the global missing-album store (so a liked album carries its
+    /// <see cref="MissingAlbum.DeezerAlbumId"/> through reconcile to the downloader — without that row
+    /// the album would be un-downloadable), and returns the not-yet-decided ones as missing-album feed
+    /// items to surface inline under the just-rated card. Whatever Plex already owns for the artist is
+    /// diffed out, so a partly-owned artist only surfaces its gaps.
+    /// </summary>
+    public async Task<IReadOnlyList<FeedItem>> ArtistAlbums(string userId, string artistName)
+    {
+        var ownedAlbums = await _catalog.GetOwnedAlbums();
+        var owned = ownedAlbums.TryGetValue(artistName, out var set)
+            ? (IEnumerable<string>)set
+            : Array.Empty<string>();
+
+        var rows = await _albumRefresher.RefreshOne(new ArtistKey(artistName), owned);
+        var decided = await _albumRatings.GetDecidedKeys(userId);
+        return rows
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
             .Select(m => new FeedItem(
                 FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))

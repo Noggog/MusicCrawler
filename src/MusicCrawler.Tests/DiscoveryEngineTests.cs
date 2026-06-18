@@ -1,6 +1,11 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using MusicCrawler.Backend.Services.Singletons;
+using MusicCrawler.Deezer.Models;
+using MusicCrawler.Deezer.Services;
 using MusicCrawler.Interfaces;
 using NSubstitute;
 using Xunit;
@@ -17,12 +22,17 @@ public class DiscoveryEngineTests
     private readonly IArtistCatalogRepo _catalog = Substitute.For<IArtistCatalogRepo>();
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
     private readonly IUserAlbumRatingRepo _albumRatings = Substitute.For<IUserAlbumRatingRepo>();
+    private readonly IDeezerApi _deezer = Substitute.For<IDeezerApi>();
     private readonly DiscoveryEngine _sut;
 
     public DiscoveryEngineTests()
     {
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var resolver = new DeezerArtistResolver(_deezer, cache);
+        var refresher = new MissingAlbumRefresher(
+            _catalog, resolver, _deezer, _missing, NullLogger<MissingAlbumRefresher>.Instance);
         _sut = new DiscoveryEngine(
-            _queue, _related, _library, _catalog, _missing, _albumRatings, NullLogger<DiscoveryEngine>.Instance);
+            _queue, _related, _library, _catalog, _missing, _albumRatings, refresher, NullLogger<DiscoveryEngine>.Instance);
 
         // Sensible empty defaults; individual tests override what they need.
         _queue.GetLikedArtistNames(User).Returns(Array.Empty<string>());
@@ -219,6 +229,27 @@ public class DiscoveryEngineTests
 
         page.Items.Select(i => i.Album).Should().Equal("Dragon New Warm Mountain");
         page.Items.Single().Kind.Should().Be(FeedKind.MissingAlbum);
+    }
+
+    [Fact]
+    public async Task ArtistAlbums_surfaces_a_new_artists_discography_excluding_decided()
+    {
+        // Liking a brand-new artist pulls their Deezer discography as ratable missing-album items,
+        // each carrying the Deezer id so a thumbs-up can flow to the downloader.
+        _deezer.SearchArtist("Phoebe Bridgers").Returns(new DeezerArtist { id = 7, name = "Phoebe Bridgers" });
+        _deezer.GetAlbums(7).Returns(new[]
+        {
+            new DeezerAlbum { id = 201, title = "Stranger in the Alps", record_type = "album" },
+            new DeezerAlbum { id = 202, title = "Punisher", record_type = "album" },
+        });
+        _albumRatings.GetDecidedKeys(User)
+            .Returns(new HashSet<string> { AlbumRatingKey.For("Phoebe Bridgers", "Punisher") });
+
+        var items = await _sut.ArtistAlbums(User, "Phoebe Bridgers");
+
+        items.Select(i => i.Album).Should().Equal("Stranger in the Alps");
+        items.Single().Kind.Should().Be(FeedKind.MissingAlbum);
+        items.Single().DeezerAlbumId.Should().Be(201);
     }
 
     [Fact]

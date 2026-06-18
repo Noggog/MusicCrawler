@@ -32,8 +32,8 @@ public class MissingAlbumRefresherTests
         _deezer.SearchArtist(Artist).Returns(new DeezerArtist { id = DeezerId, name = Artist });
     }
 
-    private static DeezerAlbum Album(string title) =>
-        new() { id = 1, title = title, record_type = "album" };
+    private static DeezerAlbum Album(string title, string recordType = "album") =>
+        new() { id = 1, title = title, record_type = recordType };
 
     private IReadOnlyList<MissingAlbum> CapturedMissing()
     {
@@ -74,5 +74,24 @@ public class MissingAlbumRefresherTests
 
         CapturedMissing().Select(m => m.Album.AlbumName)
             .Should().Equal("budding ornithologists are weary of tired analogies");
+    }
+
+    [Fact]
+    public async Task RefreshOne_with_no_owned_albums_surfaces_whole_discography_albums_only()
+    {
+        // The brand-new-artist path: nothing is owned, so every album-type record should surface as
+        // acquirable — while singles/EPs/compilations stay filtered out.
+        _deezer.GetAlbums(DeezerId).Returns(new[]
+        {
+            Album("first lp"),
+            Album("second lp"),
+            Album("a single", recordType: "single"),
+            Album("an ep", recordType: "ep"),
+        });
+
+        var result = await _sut.RefreshOne(new ArtistKey(Artist), Array.Empty<string>());
+
+        result.Select(m => m.Album.AlbumName).Should().BeEquivalentTo("first lp", "second lp");
+        CapturedMissing().Select(m => m.Album.AlbumName).Should().BeEquivalentTo("first lp", "second lp");
     }
 }

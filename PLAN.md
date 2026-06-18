@@ -227,12 +227,37 @@ Each phase is shippable on its own.
    owned artists); the album sync pipeline (Plex albums + Deezer discography diff →
    `missingAlbums`); and a Ratings review page. Artists page gets 👍/👎.
 
+## Phase 7 — Discover/Acquire follow-ups (planned 2026-06-17)
+
+Worked one at a time. Full design in `~/.claude/plans/dreamy-forging-hearth.md`.
+
+1. **New-artist → albums, surfaced inline.** Liking a non-owned recommended artist enumerates
+   their Deezer discography (albums only) on-demand and renders them as ratable missing-album
+   rows **inline under the just-rated card**. Thumbed-up albums flow through the existing
+   missing-album → purchase → download path. The enumerated albums are written to the global
+   `missingAlbums` store so `PurchaseService.Reconcile` can attach their `DeezerAlbumId`
+   (otherwise un-downloadable). Closes the one real hole in discover→acquire. _New endpoint
+   `GET /discovery/artist-albums`; shared `MissingAlbumRefresher.RefreshOne`._
+2. **Post-download-batch Plex rescan.** After a download batch drains, trigger a targeted Plex
+   library scan (`PlexApi.RefreshLibrary` → `/library/sections/{key}/refresh`, behind a new
+   `ILibraryScanner`) so new albums are picked up promptly. Debounced
+   (`PLEX_RESCAN_DEBOUNCE_MINUTES`), gated by `PLEX_RESCAN_AFTER_DOWNLOAD`. (The `InLibrary`
+   flip still depends on the deferred title-match correctness fix below.)
+3. **Snooze (Week / Month / Year).** Third action beside 👍/👎: hides a recommendation for the
+   chosen duration, auto-resurfaces it on expiry (lazy-on-read), and is excluded from queue
+   rebuilds meanwhile. Adds `DiscoveryStatus.Snoozed` + `snoozeUntil` to `userQueue`; the
+   `Pending`/decided filters become expiry-aware. _New `POST /discovery/snooze`._
+4. **Periodic replenisher.** Background job (`QueueReplenishService`) that per-user tops up the
+   recommendation queue via a gentle additive `DiscoveryEngine.TopUp` (no `DeletePending`),
+   which also refetches edges stale past `RelatedStalenessPolicy`. Cadence
+   `QUEUE_REPLENISH_INTERVAL_HOURS` (default 24). Lands with #3 (shares the decided-set filter).
+
+_Deferred:_ title-normalize / `(Deluxe)`-tolerant correctness fix in `PurchaseService.AlbumIsOwned`
+— revisit if lingering rows become a problem.
+
 ## Open questions
 
-- **Downloader target** (Phase 5): _decided 2026-06-17_ — direct, throttled streamrip
-  (Deezer ARL), albums only. Open follow-up: let liked **artists** expand into their albums
-  so new-artist discovery can be acquired too (today only owned artists' missing albums
-  download). streamrip CLI invocation is untested against a live install.
-- **Graph refresh policy:** how stale before re-fetching a Deezer artist's related list.
-- **Replenisher cadence:** how often the periodic queue job runs, and whether
-  decisions trigger it (debounced) in addition to the schedule.
+- **Graph refresh policy:** _resolved_ — `RelatedStalenessPolicy` (`RELATED_STALENESS_DAYS`,
+  default 30) governs re-fetch; the periodic replenisher (Phase 7 #4) drives it.
+- **Replenisher cadence:** _resolved_ — periodic only (`QUEUE_REPLENISH_INTERVAL_HOURS`, default
+  24); decisions already expand live via `ExpandFrom`, so no debounced decision-trigger.
