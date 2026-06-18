@@ -56,6 +56,53 @@ public class PlexApi
         var data = JObject.Parse(response);
         return data["MediaContainer"]["Metadata"].ToObject<PlexRecentlyAddedItem[]>();
     }
+
+    /// <summary>
+    /// Kicks off a Plex scan of one library section (the empty-args refresh — Plex walks the section's
+    /// folders for new/changed media). Fire-and-forget on Plex's side; this just issues the request.
+    /// </summary>
+    public async Task RefreshLibrary(int libraryKey)
+    {
+        string url = $"{_endpointInfo.BaseUri}/library/sections/{libraryKey}/refresh";
+        _logger.LogDebug("Plex RefreshLibrary {Library}: {Url}", libraryKey, url);
+        var response = await httpClient.GetAsync(url); // Plex accepts GET for section refresh
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Resolves the music library to operate on: the one named by <c>PLEX_LIBRARY</c> when it matches,
+    /// otherwise the first artist-type library. Logs which path it took. Shared by the catalog reads
+    /// and the post-download rescan so they always target the same section.
+    /// </summary>
+    public async Task<PlexLibrary> ResolveLibrary()
+    {
+        var plexLibraries = await GetLibraries();
+        var preferredPlexLibrary = Environment.GetEnvironmentVariable("PLEX_LIBRARY");
+        PlexLibrary? plexLibrary = null;
+        if (preferredPlexLibrary == null)
+        {
+            _logger.LogWarning("PLEX_LIBRARY not set; falling back to the first artist-type library.");
+        }
+        else if (plexLibraries.FirstOrDefault(it => string.Equals(it.Title, preferredPlexLibrary)) == null)
+        {
+            _logger.LogWarning(
+                "Preferred Plex library {Library} not found; falling back to the first artist-type library.",
+                preferredPlexLibrary);
+        }
+        else
+        {
+            plexLibrary = plexLibraries.First(it => string.Equals(it.Title, preferredPlexLibrary));
+            _logger.LogInformation("Using preferred Plex library {Library}.", plexLibrary.Title);
+        }
+
+        if (plexLibrary == null)
+        {
+            plexLibrary = plexLibraries.Where(it => it.Type == "artist").Take(1).First();
+            _logger.LogWarning("Fell back to artist-type Plex library {Library}.", plexLibrary.Title);
+        }
+
+        return plexLibrary;
+    }
 }
 
 public class PlexLibrary

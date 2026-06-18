@@ -20,7 +20,8 @@ public class DownloadServiceTests
             Codec: "", BatchSize: 10, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero,
             DownloadTimeout: TimeSpan.FromMinutes(15));
         // PurchaseService is only used by the background loop, not the methods under test — null is fine.
-        return new DownloadService(_repo, _downloader, config, purchases: null!, NullLogger<DownloadService>.Instance);
+        return new DownloadService(_repo, _downloader, config, purchases: null!,
+            Substitute.For<ILibraryScanner>(), NullLogger<DownloadService>.Instance);
     }
 
     private static PurchaseItem Album(string artist, string album, long deezerId, PurchaseStatus status = PurchaseStatus.Pending) =>

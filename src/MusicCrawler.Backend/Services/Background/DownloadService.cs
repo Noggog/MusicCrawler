@@ -23,6 +23,7 @@ public class DownloadService : BackgroundService
     private readonly IDownloader _downloader;
     private readonly DownloaderConfig _config;
     private readonly PurchaseService _purchases;
+    private readonly ILibraryScanner _scanner;
     private readonly ILogger<DownloadService> _logger;
 
     // Unbounded but effectively tiny; ProcessOne dedups by re-checking status, so duplicate ids are cheap.
@@ -33,12 +34,14 @@ public class DownloadService : BackgroundService
         IDownloader downloader,
         DownloaderConfig config,
         PurchaseService purchases,
+        ILibraryScanner scanner,
         ILogger<DownloadService> logger)
     {
         _repo = repo;
         _downloader = downloader;
         _config = config;
         _purchases = purchases;
+        _scanner = scanner;
         _logger = logger;
     }
 
@@ -90,6 +93,9 @@ public class DownloadService : BackgroundService
                 {
                     // Drop anything that became owned/unwanted, and space out fetches.
                     await _purchases.Reconcile();
+                    // Ask Plex to pick up the new album. Debounced, so a draining batch triggers a
+                    // single rescan once it quiets — and a no-op unless PLEX_RESCAN_AFTER_DOWNLOAD is on.
+                    await _scanner.RequestScan();
                     await Delay(_config.ItemDelay, ct);
                 }
             }

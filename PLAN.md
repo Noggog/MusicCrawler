@@ -238,10 +238,16 @@ Worked one at a time. Full design in `~/.claude/plans/dreamy-forging-hearth.md`.
    `missingAlbums` store so `PurchaseService.Reconcile` can attach their `DeezerAlbumId`
    (otherwise un-downloadable). Closes the one real hole in discover→acquire. _New endpoint
    `GET /discovery/artist-albums`; shared `MissingAlbumRefresher.RefreshOne`._
-2. **Post-download-batch Plex rescan.** After a download batch drains, trigger a targeted Plex
-   library scan (`PlexApi.RefreshLibrary` → `/library/sections/{key}/refresh`, behind a new
-   `ILibraryScanner`) so new albums are picked up promptly. Debounced
-   (`PLEX_RESCAN_DEBOUNCE_MINUTES`), gated by `PLEX_RESCAN_AFTER_DOWNLOAD`. (The `InLibrary`
+2. **Post-download-batch Plex rescan.** _(built 2026-06-18)_ After a download batch drains, trigger a
+   targeted Plex library scan (`PlexApi.RefreshLibrary` → `GET /library/sections/{key}/refresh`, behind
+   the new `ILibraryScanner` seam; `PlexLibraryScanner` is its only impl) so new albums are picked up
+   promptly. `DownloadService` calls `RequestScan()` after each successful fetch; the scanner applies a
+   **trailing debounce via Rx** (`Subject` → `Throttle(Debounce)` → `Concat`, `PLEX_RESCAN_DEBOUNCE_MINUTES`,
+   default 5) so a draining batch folds into one scan once activity quiets, and is a **no-op unless
+   `PLEX_RESCAN_AFTER_DOWNLOAD`** is on (default off). The debounce clock is scheduler-injected so tests
+   drive it deterministically with a `TestScheduler` (no wall-clock waits).
+   Library resolution moved from `PlexRepo` to a shared `PlexApi.ResolveLibrary()` so reads and the
+   rescan target the same section. Best-effort: scan failures are logged, never thrown. (The `InLibrary`
    flip still depends on the deferred title-match correctness fix below.)
 3. **Snooze (Week / Month / Year).** Third action beside 👍/👎: hides a recommendation for the
    chosen duration, auto-resurfaces it on expiry (lazy-on-read), and is excluded from queue

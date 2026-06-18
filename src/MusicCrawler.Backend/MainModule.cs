@@ -40,6 +40,10 @@ public class MainModule : Autofac.Module
         builder.RegisterType<StreamripDownloader>().As<IDownloader>().AsSelf().SingleInstance();
         builder.RegisterType<DownloadService>().AsSelf().As<IHostedService>().SingleInstance();
 
+        // Post-download Plex rescan (PlexLibraryScanner auto-registers as ILibraryScanner via the
+        // assembly scan below). Off unless PLEX_RESCAN_AFTER_DOWNLOAD is set; debounce defaults to 5m.
+        builder.RegisterInstance(BuildLibraryScannerConfig());
+
         builder.RegisterAssemblyTypes(typeof(LibraryProvider).Assembly)
             .InNamespacesOf(
                 typeof(LibraryProvider))
@@ -69,5 +73,14 @@ public class MainModule : Autofac.Module
             ItemDelay: TimeSpan.FromSeconds(EnvDouble("DOWNLOAD_ITEM_DELAY_SECONDS", 60)),
             BatchInterval: TimeSpan.FromMinutes(EnvDouble("DOWNLOAD_BATCH_INTERVAL_MINUTES", 30)),
             DownloadTimeout: TimeSpan.FromMinutes(EnvDouble("DEEZER_DOWNLOAD_TIMEOUT_MINUTES", 15)));
+    }
+
+    private static LibraryScannerConfig BuildLibraryScannerConfig()
+    {
+        var enabled = Environment.GetEnvironmentVariable("PLEX_RESCAN_AFTER_DOWNLOAD") is var v
+                      && (v == "1" || string.Equals(v, "true", StringComparison.OrdinalIgnoreCase));
+        var debounceMinutes = double.TryParse(
+            Environment.GetEnvironmentVariable("PLEX_RESCAN_DEBOUNCE_MINUTES"), out var m) ? m : 5;
+        return new LibraryScannerConfig(enabled, TimeSpan.FromMinutes(debounceMinutes));
     }
 }
