@@ -16,11 +16,14 @@ public class AlbumSyncService : BackgroundService
     private static readonly TimeSpan SyncInterval = TimeSpan.FromDays(1);
 
     private readonly MissingAlbumRefresher _refresher;
+    private readonly PurchaseService _purchases;
     private readonly ILogger<AlbumSyncService> _logger;
 
-    public AlbumSyncService(MissingAlbumRefresher refresher, ILogger<AlbumSyncService> logger)
+    public AlbumSyncService(
+        MissingAlbumRefresher refresher, PurchaseService purchases, ILogger<AlbumSyncService> logger)
     {
         _refresher = refresher;
+        _purchases = purchases;
         _logger = logger;
     }
 
@@ -37,6 +40,8 @@ public class AlbumSyncService : BackgroundService
         try
         {
             await _refresher.Refresh();
+            // Albums that have since landed in the library close out their purchase rows.
+            await _purchases.Reconcile();
         }
         catch (Exception ex)
         {

@@ -1,6 +1,6 @@
 // Per-user discovery feed + ratings. All calls require an authenticated session (cookie sent
 // automatically, same-origin). artist/album go in the query string so names with '/' work.
-import type { DiscoveryFeedPage, FeedItem, FeedKind, RatedItem } from '../types'
+import type { DiscoveryFeedPage, FeedItem, FeedKind, PurchaseItem, RatedItem } from '../types'
 
 export type Verdict = 'up' | 'down'
 
@@ -75,11 +75,36 @@ export async function getRatings(): Promise<RatedItem[]> {
   return (await res.json()) as RatedItem[]
 }
 
-// The "to buy" list: liked non-owned artists + liked albums not yet acquired.
-export async function getPurchases(): Promise<FeedItem[]> {
-  const res = await fetch('/api/discovery/purchases')
+// The shared "to buy" list: liked non-owned artists + liked albums not yet acquired, with a
+// persisted status (pending → sent → in-library). In-library items have dropped off.
+export async function getPurchases(): Promise<PurchaseItem[]> {
+  const res = await fetch('/api/purchases')
   if (!res.ok) {
     throw new Error(`Failed to load wishlist: ${res.status} ${res.statusText}`)
   }
-  return (await res.json()) as FeedItem[]
+  return (await res.json()) as PurchaseItem[]
+}
+
+// Order an item — hand it to the downloader and advance it to "sent".
+export async function orderPurchase(id: string): Promise<void> {
+  const res = await fetch(`/api/purchases/order?id=${encodeURIComponent(id)}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to order item: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Undo an order, moving the item back to "pending".
+export async function unsendPurchase(id: string): Promise<void> {
+  const res = await fetch(`/api/purchases/unsend?id=${encodeURIComponent(id)}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to revert item: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Remove an item from the list entirely.
+export async function removePurchase(id: string): Promise<void> {
+  const res = await fetch(`/api/purchases?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(`Failed to remove item: ${res.status} ${res.statusText}`)
+  }
 }

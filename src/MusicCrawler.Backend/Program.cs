@@ -280,12 +280,34 @@ app.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine
     .RequireAuthorization()
     .WithName("GetRatings");
 
-// The unified "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
-// aggregated for the library maintainer. Auth-gated, but not scoped to the caller.
-app.MapGet("/discovery/purchases", async (DiscoveryEngine engine) =>
-        Results.Ok(await engine.GetPurchases()))
+// The shared "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
+// persisted with a status (pending → sent → in-library). Reconciles on read so it's always current.
+// Auth-gated, but not scoped to the caller — this is the library maintainer's unified queue.
+app.MapGet("/purchases", async (PurchaseService purchases) =>
+        Results.Ok(await purchases.GetActive()))
     .RequireAuthorization()
     .WithName("GetPurchases");
+
+// Order an item: hand it to the downloader and, if accepted, advance it to "sent".
+app.MapPost("/purchases/order", async (string id, PurchaseService purchases) =>
+        await purchases.Order(id) ? Results.NoContent() : Results.Problem("Could not order this item.", statusCode: 409))
+    .RequireAuthorization()
+    .WithName("OrderPurchase");
+
+// Undo an order, moving the item back to "pending".
+app.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
+        await purchases.Unsend(id) ? Results.NoContent() : Results.NotFound())
+    .RequireAuthorization()
+    .WithName("UnsendPurchase");
+
+// Remove an item from the list entirely.
+app.MapDelete("/purchases", async (string id, PurchaseService purchases) =>
+    {
+        await purchases.Remove(id);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("RemovePurchase");
 
 app.MapDefaultEndpoints();
 

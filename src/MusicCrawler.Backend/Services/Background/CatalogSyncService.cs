@@ -15,11 +15,14 @@ public class CatalogSyncService : BackgroundService
     private static readonly TimeSpan SyncInterval = TimeSpan.FromDays(1);
 
     private readonly CatalogRefresher _refresher;
+    private readonly PurchaseService _purchases;
     private readonly ILogger<CatalogSyncService> _logger;
 
-    public CatalogSyncService(CatalogRefresher refresher, ILogger<CatalogSyncService> logger)
+    public CatalogSyncService(
+        CatalogRefresher refresher, PurchaseService purchases, ILogger<CatalogSyncService> logger)
     {
         _refresher = refresher;
+        _purchases = purchases;
         _logger = logger;
     }
 
@@ -36,6 +39,8 @@ public class CatalogSyncService : BackgroundService
         try
         {
             await _refresher.Refresh();
+            // Newly-arrived artists close out their purchase rows (→ in-library, off the buy list).
+            await _purchases.Reconcile();
         }
         catch (Exception ex)
         {

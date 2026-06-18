@@ -138,11 +138,23 @@ Each is independently buildable and testable.
 - First-ever seeding shows a brief "building recommendations" state, then the queue
   stays pre-warmed.
 
-### 5. Acquisition / Purchase List (per user)
-- **Store:** approved artists queued for purchase, status `pending → sent → in-library`.
-- **Integration job (future):** push `pending` items to a downloader behind an
-  interface; the Library refresh closes the loop (artist appears in Plex → status
-  becomes `in-library` and it drops off the list).
+### 5. Acquisition / Purchase List (global) — _Built 2026-06-17_
+- **Store:** `purchases` — one doc per item (artist or missing album), status
+  `pending → sent → in-library`. **Global / unified across users** (the maintainer's
+  queue), keyed by `PurchaseKey` (`artist:{name}` / `album:{artist} {album}`).
+  `IPurchaseRepo`/`PurchaseRepo`; display fields refresh on upsert, status/requestedAt
+  are insert-only so a reconcile never demotes an ordered row.
+- **`PurchaseService`** (Backend singleton) owns the lifecycle. `Reconcile()` is the one
+  sync point: folds the current liked-but-unowned set in (insert as pending / dedup
+  across users), flips arrivals to `in-library`, and prunes pending rows nobody wants
+  any more (ordered rows are kept — in flight). Runs on each read of the list and after
+  each catalog/album sync, so the loop closes without a page visit.
+- **Integration job (stubbed):** `IDownloader` is the pluggable seam; `NoOpDownloader`
+  logs + accepts, so "Order" advances an item to `sent` today. Real target (Lidarr?)
+  drops in later without touching the list or UI.
+- **Endpoints:** `GET /purchases` (active = pending + sent), `POST /purchases/order`,
+  `POST /purchases/unsend`, `DELETE /purchases` (all by `?id=`). Frontend Purchases.tsx
+  splits Pending / Ordered with Order / Undo / ✕ actions.
 
 ### 6. Web UI (React + Vite)
 - **Artists** — owned-artist list with 👍/👎 per row (replaces the seed star).
@@ -162,7 +174,9 @@ Each phase is shippable on its own.
 2. **Deezer provider + similarity graph store** — replace dead Spotify; persist edges.
 3. **Authentik OIDC login + per-user seeds** — identity, then mark library artists as liked.
 4. **Tree-search engine + swipe UI** — the core discovery loop.
-5. **Purchase list store + status tracking** — downloader push wired later behind an interface.
+5. **Purchase list store + status tracking** _(built 2026-06-17)_ — persisted `purchases`
+   store, `pending → sent → in-library` lifecycle reconciled from likes + library state,
+   downloader behind a stubbed `IDownloader` interface.
 6. **Richer discovery feed (2026-06-17, in progress)** — seeds→ratings unification;
    three toggleable feed categories (recommended artists, missing albums, unrated
    owned artists); the album sync pipeline (Plex albums + Deezer discography diff →

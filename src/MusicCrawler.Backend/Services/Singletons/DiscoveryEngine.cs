@@ -251,7 +251,7 @@ public class DiscoveryEngine
         await ExpandFrom(userId, await _queue.GetLikedArtistNames(userId), depth: 1);
     }
 
-    // ---- Review + purchases ----
+    // ---- Review ----
 
     /// <summary>
     /// Every rating the user has made, for the review page. Album ratings whose album has since been
@@ -275,49 +275,6 @@ public class DiscoveryEngine
                 FeedKind.MissingAlbum, r.Artist, r.Album.AlbumName, r.AlbumArt, r.Status));
 
         return artistItems.Concat(albumItems).ToArray();
-    }
-
-    /// <summary>
-    /// The unified "to buy" list: every user's liked artists not already owned, plus every user's
-    /// liked albums not yet acquired. Aggregated across all users (this is the library maintainer's
-    /// queue), deduped so an item liked by multiple users appears once. A placeholder until these
-    /// feed into an external acquisition system.
-    /// </summary>
-    public async Task<FeedItem[]> GetPurchases()
-    {
-        var owned = (await _library.GetAllArtistMetadata())
-            .Select(a => a.ArtistKey.ArtistName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ownedAlbums = await _catalog.GetOwnedAlbums();
-
-        // Dedup artists by name; multiple users may have liked the same one. Keep the strongest
-        // score and union the provenance sources across those users' candidates.
-        var artists = (await _queue.GetAllLiked())
-            .Where(c => !owned.Contains(c.Artist.ArtistName))
-            .GroupBy(c => c.Artist.ArtistName, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new FeedItem(
-                FeedKind.RecommendedArtist,
-                g.First().Artist,
-                null,
-                g.Select(c => c.ImageUrl).FirstOrDefault(u => u != null),
-                g.Max(c => c.Score),
-                g.SelectMany(c => c.Sources).Distinct().ToArray(),
-                null));
-
-        // Dedup albums by (artist, album) across users.
-        var albums = (await _albumRatings.GetAllLiked())
-            .Where(r => !AlbumIsOwned(ownedAlbums, r.Artist.ArtistName, r.Album.AlbumName))
-            .GroupBy(r => (r.Artist.ArtistName.ToLowerInvariant(), r.Album.AlbumName.ToLowerInvariant()))
-            .Select(g => new FeedItem(
-                FeedKind.MissingAlbum,
-                g.First().Artist,
-                g.First().Album.AlbumName,
-                g.Select(r => r.AlbumArt).FirstOrDefault(a => a != null),
-                0,
-                Array.Empty<string>(),
-                null));
-
-        return artists.Concat(albums).ToArray();
     }
 
     private static bool AlbumIsOwned(Dictionary<string, HashSet<string>> ownedAlbums, string artist, string album) =>

@@ -86,6 +86,23 @@ export interface RatedItem {
   verdict: DiscoveryStatus
 }
 
+// Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a
+// persisted acquisition lifecycle. `kind` is 'RecommendedArtist' (no album) or 'MissingAlbum'.
+export type PurchaseStatus = 'Pending' | 'Sent' | 'InLibrary'
+
+export interface PurchaseItem {
+  id: string
+  kind: FeedKind
+  artist: ArtistKey
+  album: string | null
+  imageUrl: string | null
+  score: number
+  sources: string[]
+  status: PurchaseStatus
+  requestedAt: string
+  sentAt: string | null
+}
+
 // The signed-in user, as returned by GET /auth/me (the BFF). Null when not authenticated.
 export interface CurrentUser {
   subject: string
