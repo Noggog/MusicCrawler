@@ -1,3 +1,5 @@
+using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 using System.Threading.Channels;
 using MusicCrawler.Backend.Services.Download;
 using MusicCrawler.Backend.Services.Singletons;
@@ -139,34 +141,41 @@ public class DownloadService : BackgroundService
         return true;
     }
 
-    /// <summary>When automatic is on, periodically enqueues pending downloadable albums (batch-capped).</summary>
-    private async Task AutoEnqueue(CancellationToken ct)
+    /// <summary>When automatic is on, periodically enqueues pending downloadable albums (batch-capped).
+    /// Mirrors the daily sync services' Rx shape; off entirely when automatic is disabled.</summary>
+    private Task AutoEnqueue(CancellationToken ct)
+    {
+        if (!_config.Automatic)
+        {
+            return Task.CompletedTask; // manual "download now" still works via the channel
+        }
+
+        return Observable
+            .Timer(TimeSpan.Zero, _config.BatchInterval)
+            .SelectMany(_ => Observable.FromAsync(EnqueuePendingBatch))
+            .ToTask(ct);
+    }
+
+    private async Task EnqueuePendingBatch()
     {
         try
         {
-            while (!ct.IsCancellationRequested)
+            await _purchases.Reconcile();
+            var pending = (await _repo.GetAll())
+                .Where(p => p.Status == PurchaseStatus.Pending
+                            && p.Kind == FeedKind.MissingAlbum
+                            && p.DeezerAlbumId is > 0)
+                .OrderBy(p => p.RequestedAt)
+                .Take(_config.BatchSize);
+            foreach (var item in pending)
             {
-                if (_config.Automatic)
-                {
-                    await _purchases.Reconcile();
-                    var pending = (await _repo.GetAll())
-                        .Where(p => p.Status == PurchaseStatus.Pending
-                                    && p.Kind == FeedKind.MissingAlbum
-                                    && p.DeezerAlbumId is > 0)
-                        .OrderBy(p => p.RequestedAt)
-                        .Take(_config.BatchSize);
-                    foreach (var item in pending)
-                    {
-                        _queue.Writer.TryWrite(item.Id);
-                    }
-                }
-
-                await Delay(_config.BatchInterval, ct);
+                _queue.Writer.TryWrite(item.Id);
             }
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            // shutting down
+            // A transient failure must not tear down the timer — retry at the next interval.
+            _logger.LogWarning(ex, "Auto-enqueue pass failed; will retry at the next interval");
         }
     }
 
