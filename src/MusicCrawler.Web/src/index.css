@@ -1405,11 +1405,17 @@ input[type='checkbox'] {
   border-color: rgba(87, 241, 252, 0.4);
 }
 .feed-badge-LibraryArtist,
-.feed-badge-RecommendedLibraryArtist,
 .feed-badge-SeedLibraryArtist {
   color: var(--yellow);
   background: rgba(247, 185, 146, 0.1);
   border-color: rgba(247, 185, 146, 0.35);
+}
+/* "Recommended Artist" — a mint hue so it doesn't read as the same chip as the peach
+   "Rate Unfamiliar Artist" sitting right next to it. */
+.feed-badge-RecommendedLibraryArtist {
+  color: var(--good);
+  background: rgba(56, 232, 160, 0.1);
+  border-color: rgba(56, 232, 160, 0.38);
 }
 
 /* Filter chips: the per-kind badge styling made into a clickable on/off toggle. */
@@ -1435,9 +1441,11 @@ input[type='checkbox'] {
 .feed-chip.feed-badge-MissingAlbum:not(.off) {
   box-shadow: 0 0 12px rgba(87, 241, 252, 0.35), inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
-.feed-chip.feed-badge-RecommendedLibraryArtist:not(.off),
 .feed-chip.feed-badge-SeedLibraryArtist:not(.off) {
   box-shadow: 0 0 12px rgba(247, 185, 146, 0.32), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+.feed-chip.feed-badge-RecommendedLibraryArtist:not(.off) {
+  box-shadow: 0 0 12px rgba(56, 232, 160, 0.32), inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
 /* Off chip: desaturated, dashed, dimmed — clearly toggled out. */
 .feed-chip.off {

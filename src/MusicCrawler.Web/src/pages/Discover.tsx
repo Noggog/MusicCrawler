@@ -49,6 +49,35 @@ const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'Recomme
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
+// Which category chips are checked, persisted across sessions so unchecking e.g. "Rate Unfamiliar
+// Artist" sticks the next time you open Discover. Stored as a JSON array of kinds in localStorage;
+// any malformed/missing value falls back to the all-on default.
+const SHOWN_PREF_KEY = 'mc.discover.shown'
+
+function readShownKinds(): Set<FeedKind> {
+  try {
+    const stored = localStorage.getItem(SHOWN_PREF_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) {
+        const kinds = parsed.filter((k): k is FeedKind => ALL_KINDS.includes(k as FeedKind))
+        return new Set(kinds)
+      }
+    }
+  } catch {
+    // localStorage / JSON can throw (private mode, corrupt value) — fall back to the default.
+  }
+  return new Set(DEFAULT_KINDS)
+}
+
+function writeShownKinds(shown: Set<FeedKind>) {
+  try {
+    localStorage.setItem(SHOWN_PREF_KEY, JSON.stringify([...shown]))
+  } catch {
+    // Ignore — the in-memory state still reflects the choice for this session.
+  }
+}
+
 // How a row was marked this view (approve / reject / snooze) so it stays in place until the next
 // natural refresh.
 type RowMark = Verdict | 'snoozed'
@@ -433,7 +462,7 @@ type DiscoverState = {
   selected: FeedItem | null
 }
 const persisted: DiscoverState = {
-  shown: new Set<FeedKind>(DEFAULT_KINDS),
+  shown: readShownKinds(),
   page: 0,
   seed: newSeed(),
   rated: new Map<string, RowMark>(),
@@ -486,6 +515,7 @@ export default function Discover() {
     setShown((prev) => {
       const next = new Set(prev)
       next.has(kind) ? next.delete(kind) : next.add(kind)
+      writeShownKinds(next)
       return next
     })
     setPage(0)
