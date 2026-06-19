@@ -35,19 +35,19 @@ const BADGE: Record<FeedKind, string> = {
 // The filter tree. "Recommended Artists" groups the two recommended sections (existing owned vs.
 // brand-new), each individually toggleable; the standalone rows sit beside it.
 const RECOMMENDED_KINDS: FeedKind[] = ['RecommendedLibraryArtist', 'RecommendedArtist']
-const FILTER_GROUP: { label: string; kind: FeedKind }[] = [
-  { label: 'Existing', kind: 'RecommendedLibraryArtist' },
-  { label: 'New', kind: 'RecommendedArtist' },
+const FILTER_GROUP: { label: string; kind: FeedKind; tip: string }[] = [
+  { label: 'Existing', kind: 'RecommendedLibraryArtist', tip: "Recommends artists already in the library that you haven't rated" },
+  { label: 'New', kind: 'RecommendedArtist', tip: 'Recommends artists not yet in the library' },
 ]
-const STANDALONE_FILTERS: { label: string; kind: FeedKind }[] = [
-  { label: 'Missing albums', kind: 'MissingAlbum' },
-  { label: 'Unknown existing artists', kind: 'SeedLibraryArtist' },
+const STANDALONE_FILTERS: { label: string; kind: FeedKind; tip: string }[] = [
+  { label: 'Missing albums', kind: 'MissingAlbum', tip: 'Recommends missing albums for artists you have rated up' },
+  { label: 'Seed Existing Artists', kind: 'SeedLibraryArtist', tip: "Asks you to rate existing artists that aren't yet recommended by anything you like." },
 ]
 
 const ALL_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
-// Default to the recommended sections (new + existing owned) plus missing albums. The seed section
-// (owned artists nothing recommends yet) stays off until opted in — it's noisier and less targeted.
-const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist']
+// Default to everything on: the recommended sections (new + existing owned), missing albums, and the
+// seed section (owned artists nothing recommends yet) — rating those grows the frontier.
+const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
@@ -472,7 +472,7 @@ export default function Discover() {
           </label>
           <div className="feed-subfilters">
             {FILTER_GROUP.map((c) => (
-              <label key={c.kind} className="feed-filter">
+              <label key={c.kind} className="feed-filter" title={c.tip}>
                 <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
                 {c.label}
               </label>
@@ -480,7 +480,7 @@ export default function Discover() {
           </div>
         </div>
         {STANDALONE_FILTERS.map((c) => (
-          <label key={c.kind} className="feed-filter">
+          <label key={c.kind} className="feed-filter" title={c.tip}>
             <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
             {c.label}
           </label>
