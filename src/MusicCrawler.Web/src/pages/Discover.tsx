@@ -75,10 +75,59 @@ const SNOOZE_OPTIONS: { label: string; duration: SnoozeDuration }[] = [
   { label: 'Month', duration: 'month' },
   { label: 'Year', duration: 'year' },
 ]
+const SNOOZE_LABEL: Record<SnoozeDuration, string> = {
+  week: 'a week',
+  month: 'a month',
+  year: 'a year',
+}
 
-// The 💤 snooze action. Collapsed to just the icon; hovering (or focusing) springs a flyout out to
-// the right with the three durations (Week / Month / Year). The flyout is absolutely positioned so
-// it overflows the row without resizing it or nudging the thumbs up/down beside it.
+// "Sticky snooze": remember the last duration the user picked so a quick click on the moon re-applies
+// it without reopening the flyout. Persisted in localStorage and mirrored across every SnoozeControl
+// on the page via a custom event (the native `storage` event only fires in *other* tabs).
+const SNOOZE_PREF_KEY = 'mc.snooze.last'
+const SNOOZE_PREF_EVENT = 'mc-snooze-changed'
+const DEFAULT_SNOOZE: SnoozeDuration = 'week'
+
+function readStickySnooze(): SnoozeDuration {
+  try {
+    const stored = localStorage.getItem(SNOOZE_PREF_KEY)
+    if (stored && stored in SNOOZE_LABEL) return stored as SnoozeDuration
+  } catch {
+    // localStorage can throw (private mode / disabled storage) — fall back to the default.
+  }
+  return DEFAULT_SNOOZE
+}
+
+function useStickySnooze(): [SnoozeDuration, (duration: SnoozeDuration) => void] {
+  const [duration, setDuration] = useState<SnoozeDuration>(readStickySnooze)
+  useEffect(() => {
+    const sync = () => setDuration(readStickySnooze())
+    window.addEventListener(SNOOZE_PREF_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SNOOZE_PREF_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  const remember = (next: SnoozeDuration) => {
+    try {
+      localStorage.setItem(SNOOZE_PREF_KEY, next)
+    } catch {
+      // Ignore — we still update in-memory state so this session behaves correctly.
+    }
+    setDuration(next)
+    window.dispatchEvent(new Event(SNOOZE_PREF_EVENT))
+  }
+  return [duration, remember]
+}
+
+// The 💤 snooze action. Collapsed to just the icon; hovering (or focusing) grows it rightward into a
+// matching dark-glass square holding the three durations (Week / Month / Year), absolutely positioned
+// so it overflows the row without resizing it or nudging the thumbs up/down beside it. The spans run
+// a "frozen" scale — purple Week → icy Year (see data-duration styling in index.css).
+//
+// Clicking the moon itself re-applies the last-used duration ("sticky snooze") — the panel is only
+// needed when you want a *different* span. Picking from the panel updates that remembered default.
 function SnoozeControl({
   onPick,
   disabled,
@@ -86,6 +135,11 @@ function SnoozeControl({
   onPick: (duration: SnoozeDuration) => void
   disabled: boolean
 }) {
+  const [lastDuration, rememberDuration] = useStickySnooze()
+  const pick = (duration: SnoozeDuration) => {
+    rememberDuration(duration)
+    onPick(duration)
+  }
   return (
     <span className="disc-snooze" title="Snooze — hide for a while, then resurface">
       <button
@@ -93,7 +147,9 @@ function SnoozeControl({
         className="disc-btn snooze snooze-trigger"
         disabled={disabled}
         aria-haspopup="menu"
-        aria-label="Snooze"
+        aria-label={`Snooze for ${SNOOZE_LABEL[lastDuration]}`}
+        title={`Snooze for ${SNOOZE_LABEL[lastDuration]} — hover for other spans`}
+        onClick={() => pick(lastDuration)}
       >
         <IconMoon size={18} />
       </button>
@@ -102,10 +158,12 @@ function SnoozeControl({
           <button
             key={o.duration}
             type="button"
-            className="disc-btn snooze"
-            role="menuitem"
+            className={`disc-btn snooze${o.duration === lastDuration ? ' is-last' : ''}`}
+            data-duration={o.duration}
+            role="menuitemradio"
+            aria-checked={o.duration === lastDuration}
             disabled={disabled}
-            onClick={() => onPick(o.duration)}
+            onClick={() => pick(o.duration)}
           >
             {o.label}
           </button>

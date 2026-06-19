@@ -888,23 +888,26 @@ input[type='checkbox'] {
   box-shadow: var(--glow-salmon);
 }
 
-/* Collapsed snooze: just the 💤 trigger, with a flyout that springs out to the right on hover. */
+/* Collapsed snooze: just the 💤 trigger. On hover it grows rightward into a matching dark-glass
+   square holding the three spans — absolutely positioned so the row/actions never reflow. */
 .disc-snooze {
+  /* Shared height keeps the trigger and the opening panel edge-aligned so they read as one box. */
+  --snooze-h: 2.15rem;
   position: relative;
   display: inline-flex;
   align-items: center;
 }
 .disc-btn.snooze {
   font-size: 0.8rem;
-  padding: 0.32rem 0.55rem;
+  padding: 0.32rem 0.6rem;
 }
-.disc-btn.snooze:hover:not(:disabled) {
-  border-color: var(--purple-light);
-  color: var(--purple-fg);
-  box-shadow: var(--glow-purple);
-}
-/* The lone moon icon matches the approve/reject footprint, tinted purple at rest. */
+
+/* The lone moon icon matches the approve/reject footprint, tinted purple at rest — and stays purple
+   no matter which span is remembered (the frozen scale only reveals itself once the panel opens). */
 .disc-btn.snooze-trigger {
+  height: var(--snooze-h);
+  display: inline-flex;
+  align-items: center;
   font-size: 1.05rem;
   padding: 0.4rem 0.55rem;
   color: var(--purple-fg);
@@ -913,28 +916,47 @@ input[type='checkbox'] {
 .disc-snooze:focus-within .disc-btn.snooze-trigger {
   border-color: var(--purple-light);
   color: var(--purple-fg);
-  box-shadow: var(--glow-purple);
+  /* Fuse with the opening panel: no glow (its halo at the seam reads as a hard line), kill the hover
+     lift, square off the shared seam, drop the seam border, and match the panel's solid fill so the
+     tone runs straight across with no step. */
+  box-shadow: none;
+  transform: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-color: transparent;
+  /* Flat fill equal to the panel's left-edge colour — its own gradient can't continue into the panel
+     (each spans its own width), so the trigger holds that start value and the frozen ramp begins at
+     the seam. */
+  background: linear-gradient(rgba(116, 88, 219, 0.28), rgba(116, 88, 219, 0.28)), rgba(12, 10, 20, 0.95);
 }
 
-/* Absolutely positioned so it overflows the container — the row/actions never reflow. The box starts
-   flush at the trigger's right edge (no dead gap) so hover carries from icon into the flyout. */
+/* The opening panel: the same dark-glass square as the trigger, butted flush to its right (no left
+   border/radius) so the two read as one box that grew. A purple→ice wash previews the frozen scale. */
 .disc-snooze-flyout {
   position: absolute;
   left: 100%;
-  top: 50%;
+  top: 0;
   display: flex;
+  align-items: center;
   gap: 0.3rem;
-  padding: 0.3rem 0.3rem 0.3rem 0.45rem;
+  /* Fixed height (not min-height) so the option buttons can't push the panel taller than the moon. */
+  height: var(--snooze-h);
+  padding: 0 0.4rem;
   white-space: nowrap;
-  background: linear-gradient(180deg, rgba(40, 29, 82, 0.96), rgba(11, 9, 18, 0.96));
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), var(--glow-purple);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background:
+    linear-gradient(90deg, rgba(116, 88, 219, 0.28), rgba(87, 241, 252, 0.2)),
+    rgba(12, 10, 20, 0.95);
+  /* Solid purple border matching the trigger's hover border (not the see-through --border-bright). */
+  border: 1px solid var(--purple-light);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  /* Plain drop shadow for depth — no coloured glow, which haloed the seam into a hard line. */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  /* No backdrop blur: the fill is near-opaque, and the trigger has none — blurring only here would
+     make the two sample the backdrop differently and re-introduce a tone step at the seam. */
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%) translateX(-8px) scale(0.96);
+  transform: translateX(-8px) scale(0.96);
   transform-origin: left center;
   transition: opacity 0.14s ease, transform 0.14s ease;
   z-index: 30;
@@ -943,7 +965,32 @@ input[type='checkbox'] {
 .disc-snooze:focus-within .disc-snooze-flyout {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(-50%) translateX(0) scale(1);
+  transform: translateX(0) scale(1);
+}
+
+/* Frozen scale: week stays purple, month chills to sky blue, year freezes to ice. Each span hints at
+   its hue at rest and flares fully on hover; the remembered span (is-last) is pre-lit. */
+.disc-btn.snooze[data-duration='week'] { color: var(--purple-fg); }
+.disc-btn.snooze[data-duration='month'] { color: var(--blue); }
+.disc-btn.snooze[data-duration='year'] { color: var(--cyan); }
+
+.disc-btn.snooze[data-duration='week']:hover:not(:disabled),
+.disc-btn.snooze[data-duration='week'].is-last {
+  border-color: var(--purple-light);
+  color: var(--purple-fg);
+  box-shadow: var(--glow-purple);
+}
+.disc-btn.snooze[data-duration='month']:hover:not(:disabled),
+.disc-btn.snooze[data-duration='month'].is-last {
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: 0 0 18px rgba(81, 188, 250, 0.5);
+}
+.disc-btn.snooze[data-duration='year']:hover:not(:disabled),
+.disc-btn.snooze[data-duration='year'].is-last {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
 }
 
 .disc-undo {
