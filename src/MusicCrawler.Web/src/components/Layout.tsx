@@ -33,8 +33,8 @@ function AuthBox() {
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="brand">MusicCrawler</div>
+      <header className="topbar">
+        <div className="brand">Mycelium</div>
         <nav className="nav">
           <NavLink to="/" className={navClass} end>
             Discover
@@ -59,7 +59,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
         </nav>
         <AuthBox />
-      </aside>
+      </header>
       <main className="content">{children}</main>
     </div>
   )

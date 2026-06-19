@@ -58,7 +58,7 @@ export default function Artists() {
 
   return (
     <section>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem' }}>
         <h1>Artists</h1>
         {/* The catalog auto-syncs on startup and daily; this manual trigger is a dev-only
             convenience and is compiled out of production builds. */}

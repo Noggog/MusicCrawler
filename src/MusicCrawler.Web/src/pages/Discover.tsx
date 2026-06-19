@@ -25,23 +25,20 @@ const PAGE_SIZE = 20
 
 // The badge shown on each card so it's obvious what action a card is asking for, keyed by kind.
 const BADGE: Record<FeedKind, string> = {
-  RecommendedArtist: 'Consider new artist',
+  RecommendedArtist: 'Recommended New Artist',
   MissingAlbum: 'Add missing album',
-  RecommendedLibraryArtist: 'Rate existing artist',
-  SeedLibraryArtist: 'Seed: rate existing artist',
+  RecommendedLibraryArtist: 'Recommended Artist',
+  SeedLibraryArtist: 'Rate Unfamiliar Artist',
   LibraryArtist: 'Mark existing artist',
 }
 
-// The filter tree. "Recommended Artists" groups the two recommended sections (existing owned vs.
-// brand-new), each individually toggleable; the standalone rows sit beside it.
-const RECOMMENDED_KINDS: FeedKind[] = ['RecommendedLibraryArtist', 'RecommendedArtist']
-const FILTER_GROUP: { label: string; kind: FeedKind; tip: string }[] = [
-  { label: 'Existing', kind: 'RecommendedLibraryArtist', tip: "Recommends artists already in the library that you haven't rated" },
-  { label: 'New', kind: 'RecommendedArtist', tip: 'Recommends artists not yet in the library' },
-]
-const STANDALONE_FILTERS: { label: string; kind: FeedKind; tip: string }[] = [
-  { label: 'Missing albums', kind: 'MissingAlbum', tip: 'Recommends missing albums for artists you have rated up' },
-  { label: 'Seed Existing Artists', kind: 'SeedLibraryArtist', tip: "Asks you to rate existing artists that aren't yet recommended by anything you like." },
+// The category filters, shown up top as toggle-able tag chips styled exactly like the per-row
+// badges — clicking a chip shows/hides that kind in the feed. Order mirrors how they read on a card.
+const FILTER_CHIPS: { kind: FeedKind; tip: string }[] = [
+  { kind: 'RecommendedArtist', tip: 'Artists not yet in the library' },
+  { kind: 'RecommendedLibraryArtist', tip: "Unrated artists already in the library" },
+  { kind: 'SeedLibraryArtist', tip: "Rate artists not yet recommended to grow the frontier" },
+  { kind: 'MissingAlbum', tip: 'Missing albums for artists you like' },
 ]
 
 const ALL_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
@@ -107,7 +104,8 @@ const rowKeyFor = (item: FeedItem) =>
   item.album ? `${item.artist.artistName}::${item.album}` : `${item.kind}:${item.artist.artistName}`
 
 // The image a source supplied (artist photo or album art), or a coloured initial when missing.
-function FeedAvatar({ item, size }: { item: FeedItem; size: number }) {
+// `hero` renders the large readout image: drop the inline size so CSS (.detail-hero) drives it.
+function FeedAvatar({ item, size, hero }: { item: FeedItem; size: number; hero?: boolean }) {
   const label = item.album ?? item.artist.artistName
   const isArtist = !item.album
   // Existing/library artists usually carry no photo of their own — attempt a Deezer lookup for one.
@@ -120,10 +118,13 @@ function FeedAvatar({ item, size }: { item: FeedItem; size: number }) {
   })
   const src = item.imageUrl ?? (isArtist ? deezer?.imageUrl ?? null : null)
   if (src) {
-    return <img className="disc-avatar" src={src} alt={label} width={size} height={size} />
+    return <img className="disc-avatar" src={src} alt={label} width={hero ? undefined : size} height={hero ? undefined : size} />
   }
   return (
-    <div className="disc-avatar disc-avatar-fallback" style={{ width: size, height: size, fontSize: size / 2.5 }}>
+    <div
+      className="disc-avatar disc-avatar-fallback"
+      style={hero ? undefined : { width: size, height: size, fontSize: size / 2.5 }}
+    >
       {label.charAt(0).toUpperCase()}
     </div>
   )
@@ -219,6 +220,134 @@ function ArtistAlbumsPanel({
   )
 }
 
+// The right-hand readout (desktop) / bottom drawer (mobile) for the row currently selected in the
+// list. A big hero image, recommendation chips, a Deezer preview player, and — for a brand-new
+// recommended artist — their grabbable albums. All the rate/snooze/undo plumbing is threaded in from
+// the parent so a decision made here marks the matching list row in place too.
+function DetailPanel({
+  item,
+  rated,
+  busy,
+  rebuildPending,
+  playing,
+  togglePlay,
+  onRate,
+  onSnooze,
+  onUndo,
+  onClose,
+}: {
+  item: FeedItem | null
+  rated: Map<string, RowMark>
+  busy: boolean
+  rebuildPending: boolean
+  playing: Set<string>
+  togglePlay: (key: string) => void
+  onRate: (item: FeedItem, verdict: Verdict) => void
+  onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
+  onUndo: (item: FeedItem) => void
+  onClose: () => void
+}) {
+  if (!item) {
+    return (
+      <aside className="disc-detail is-empty">
+        <div className="disc-detail-empty">
+          <span className="detail-empty-icon">🎧</span>
+          <div>Select something on the left to preview it — photo, samples, and albums land here.</div>
+        </div>
+      </aside>
+    )
+  }
+
+  const name = item.artist.artistName
+  const isAlbum = !!item.album
+  const rowKey = rowKeyFor(item)
+  const verdict = rated.get(rowKey)
+  const canPlay = isAlbum ? !!item.deezerAlbumId : true
+
+  return (
+    <aside className="disc-detail">
+      <button className="detail-close" title="Close" onClick={onClose}>✕</button>
+
+      <div className="detail-hero">
+        <FeedAvatar item={item} size={0} hero />
+      </div>
+
+      <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
+      <h2 className="detail-name">{item.album ?? name}</h2>
+
+      {isAlbum ? (
+        <div className="detail-chips">
+          <span className="detail-chip">Album</span>
+          <span className="detail-chip via">{name}</span>
+        </div>
+      ) : item.sources.length > 0 ? (
+        <>
+          <div className="detail-section-label">Recommended via</div>
+          <div className="detail-chips">
+            {item.sources.slice(0, 8).map((s) => (
+              <span className="detail-chip via" key={s}>{s}</span>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      <div className="detail-actions">
+        {verdict ? (
+          <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
+        ) : (
+          <>
+            <button
+              className="disc-btn up"
+              title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
+              disabled={rebuildPending}
+              onClick={() => onRate(item, 'up')}
+            >
+              👍
+            </button>
+            <button
+              className="disc-btn down"
+              title="Not interested"
+              disabled={rebuildPending}
+              onClick={() => onRate(item, 'down')}
+            >
+              👎
+            </button>
+            <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={rebuildPending} />
+          </>
+        )}
+      </div>
+
+      {canPlay && (
+        <>
+          <div className="detail-section-label">{isAlbum ? 'Album tracks' : 'Top tracks'}</div>
+          {/* Key by row so switching selection remounts the player (stops the previous preview). */}
+          {isAlbum ? (
+            <DeezerSample key={rowKey} albumId={item.deezerAlbumId!} />
+          ) : (
+            <DeezerSample key={rowKey} artist={name} />
+          )}
+        </>
+      )}
+
+      {/* A brand-new recommended artist: show their acquirable albums so a find can be grabbed. */}
+      {item.kind === 'RecommendedArtist' && (
+        <>
+          <div className="detail-section-label">Albums</div>
+          <ArtistAlbumsPanel
+            artist={name}
+            rated={rated}
+            playing={playing}
+            togglePlay={togglePlay}
+            onRate={onRate}
+            onUndo={onUndo}
+            disabled={rebuildPending}
+          />
+        </>
+      )}
+    </aside>
+  )
+}
+
 // View state kept at module scope so navigating away from /discover and back restores the same feed
 // instead of remounting fresh — which regenerated `seed` (reshuffling the whole list) and dropped the
 // rated marks and a just-approved artist's inline albums. The QueryClient already caches the feed
@@ -230,7 +359,8 @@ type DiscoverState = {
   seed: number
   playing: Set<string>
   rated: Map<string, RowMark>
-  expandedAlbums: Set<string>
+  // The feed row open in the readout panel (desktop) / bottom drawer (mobile).
+  selected: FeedItem | null
 }
 const persisted: DiscoverState = {
   shown: new Set<FeedKind>(DEFAULT_KINDS),
@@ -238,7 +368,7 @@ const persisted: DiscoverState = {
   seed: newSeed(),
   playing: new Set<string>(),
   rated: new Map<string, RowMark>(),
-  expandedAlbums: new Set<string>(),
+  selected: null,
 }
 
 export default function Discover() {
@@ -252,10 +382,9 @@ export default function Discover() {
   // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
   // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
   const [rated, setRated] = useState<Map<string, RowMark>>(() => persisted.rated)
-  // Brand-new artists liked this view: their albums are fetched and surfaced inline beneath the card
-  // so the discovery can be acquired. Driven off state (not the feed item) so it survives the
-  // in-place "rated" mark; cleared on the next natural refresh alongside `rated`.
-  const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(() => persisted.expandedAlbums)
+  // The row whose readout is open on the right (desktop) / in the drawer (mobile). Liking a brand-new
+  // recommended artist auto-selects it so its grabbable albums surface in the panel.
+  const [selected, setSelected] = useState<FeedItem | null>(() => persisted.selected)
 
   // Mirror the live view state back into the module store every render so a later remount restores it.
   useEffect(() => {
@@ -264,7 +393,7 @@ export default function Discover() {
     persisted.seed = seed
     persisted.playing = playing
     persisted.rated = rated
-    persisted.expandedAlbums = expandedAlbums
+    persisted.selected = selected
   })
 
   // Keep a stable, sorted kinds list so the query key (and the server's interleave) are deterministic.
@@ -283,7 +412,8 @@ export default function Discover() {
     if (lastRefreshKey.current === key) return
     lastRefreshKey.current = key
     setRated(new Map())
-    setExpandedAlbums(new Set())
+    // The selected item has almost certainly left the freshly-fetched feed — close the readout.
+    setSelected(null)
   }, [page, seed, kindsKey])
 
   const togglePlay = (key: string) =>
@@ -297,19 +427,6 @@ export default function Discover() {
     setShown((prev) => {
       const next = new Set(prev)
       next.has(kind) ? next.delete(kind) : next.add(kind)
-      return next
-    })
-    setPage(0)
-  }
-
-  // The parent "Recommended Artists" checkbox: clear both children if all are on, else turn both on.
-  const recommendedAllOn = RECOMMENDED_KINDS.every((k) => shown.has(k))
-  const recommendedSomeOn = RECOMMENDED_KINDS.some((k) => shown.has(k))
-  const toggleRecommendedGroup = () => {
-    setShown((prev) => {
-      const next = new Set(prev)
-      const turnOff = RECOMMENDED_KINDS.every((k) => next.has(k))
-      RECOMMENDED_KINDS.forEach((k) => (turnOff ? next.delete(k) : next.add(k)))
       return next
     })
     setPage(0)
@@ -352,9 +469,9 @@ export default function Discover() {
     onSuccess: (_data, { item, verdict }) => {
       queryClient.invalidateQueries({ queryKey: ['purchases'] })
       queryClient.invalidateQueries({ queryKey: ['ratings'] })
-      // Liking a brand-new artist surfaces their albums inline so the find can be acquired.
+      // Liking a brand-new artist opens its readout so the albums-to-grab panel surfaces.
       if (verdict === 'up' && item.kind === 'RecommendedArtist') {
-        setExpandedAlbums((prev) => new Set(prev).add(item.artist.artistName))
+        setSelected(item)
       }
     },
   })
@@ -385,8 +502,8 @@ export default function Discover() {
 
   // Undo any decision (like / dislike / snooze, artist or album), clearing it back to actionable.
   // Optimistically drops the in-place mark so the card's 👍/👎/💤 reappear instantly; rolls back on
-  // failure. Undoing a recommended artist also clears the album decisions made in its inline panel
-  // (and collapses it) — you went back on the artist, so its album picks shouldn't linger.
+  // failure. Undoing a recommended artist also clears the album decisions made in its readout panel —
+  // you went back on the artist, so its album picks shouldn't linger.
   const undo = useMutation({
     mutationFn: async (item: FeedItem) => {
       await clearRating(item)
@@ -400,11 +517,6 @@ export default function Discover() {
       next.delete(rowKeyFor(item))
       if (item.kind === 'RecommendedArtist') {
         decidedAlbumsFor(item.artist.artistName).forEach((a) => next.delete(rowKeyFor(a)))
-        setExpandedAlbums((p) => {
-          const n = new Set(p)
-          n.delete(item.artist.artistName)
-          return n
-        })
       }
       setRated(next)
       return { prev }
@@ -435,6 +547,8 @@ export default function Discover() {
   const items = data?.items ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  // Identity of the row open in the readout, so the matching list row renders as selected.
+  const selectedKey = selected ? rowKeyFor(selected) : null
 
   if (!user) {
     return (
@@ -457,34 +571,23 @@ export default function Discover() {
         </button>
       </div>
 
+      {/* The category tags double as the filter: click a chip to show/hide that kind in the feed. */}
       <div className="feed-filters">
-        <div className="feed-filter-group">
-          <label className="feed-filter">
-            <input
-              type="checkbox"
-              checked={recommendedAllOn}
-              ref={(el) => {
-                if (el) el.indeterminate = recommendedSomeOn && !recommendedAllOn
-              }}
-              onChange={toggleRecommendedGroup}
-            />
-            Recommended Artists
-          </label>
-          <div className="feed-subfilters">
-            {FILTER_GROUP.map((c) => (
-              <label key={c.kind} className="feed-filter" title={c.tip}>
-                <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
-                {c.label}
-              </label>
-            ))}
-          </div>
-        </div>
-        {STANDALONE_FILTERS.map((c) => (
-          <label key={c.kind} className="feed-filter" title={c.tip}>
-            <input type="checkbox" checked={shown.has(c.kind)} onChange={() => toggleCategory(c.kind)} />
-            {c.label}
-          </label>
-        ))}
+        {FILTER_CHIPS.map(({ kind, tip }) => {
+          const on = shown.has(kind)
+          return (
+            <button
+              key={kind}
+              type="button"
+              title={tip}
+              aria-pressed={on}
+              className={`feed-chip feed-badge feed-badge-${kind}${on ? '' : ' off'}`}
+              onClick={() => toggleCategory(kind)}
+            >
+              {BADGE[kind]}
+            </button>
+          )
+        })}
       </div>
 
       <p className="disc-sub">
@@ -515,98 +618,95 @@ export default function Discover() {
       )}
 
       {items.length > 0 && (
-        <div className={isFetching ? 'disc-list fetching' : 'disc-list'}>
-          {items.map((item) => {
-            const name = item.artist.artistName
-            const isAlbum = !!item.album
-            const rowKey = isAlbum ? `${name}::${item.album}` : `${item.kind}:${name}`
-            const isPlaying = playing.has(rowKey)
-            // Artists sample by name; albums sample by their Deezer id (when we have one).
-            const canPlay = isAlbum ? !!item.deezerAlbumId : true
-            const verdict = rated.get(rowKey)
-            return (
-              <div className={verdict ? 'disc-row-wrap rated' : 'disc-row-wrap'} key={rowKey}>
-                <div className="disc-row">
-                  <FeedAvatar item={item} size={56} />
-                  <div className="disc-row-main">
-                    <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
-                    <div className="disc-name">{item.album ?? name}</div>
-                    {isAlbum ? (
-                      <span className="disc-provenance">{name}</span>
-                    ) : (
-                      <Provenance sources={item.sources} />
-                    )}
+        <div className="disc-layout">
+          <div className="disc-main">
+            <div className={isFetching ? 'disc-list fetching' : 'disc-list'}>
+              {items.map((item) => {
+                const name = item.artist.artistName
+                const isAlbum = !!item.album
+                const rowKey = isAlbum ? `${name}::${item.album}` : `${item.kind}:${name}`
+                const verdict = rated.get(rowKey)
+                const isSelected = selectedKey === rowKey
+                return (
+                  <div className={verdict ? 'disc-row-wrap rated' : 'disc-row-wrap'} key={rowKey}>
+                    {/* The whole row opens the readout; the action cluster stops the click so a
+                        thumb/snooze doesn't also yank the panel open. */}
+                    <div
+                      className={isSelected ? 'disc-row selected' : 'disc-row'}
+                      onClick={() => setSelected(item)}
+                    >
+                      <FeedAvatar item={item} size={56} />
+                      <div className="disc-row-main">
+                        <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
+                        <div className="disc-name">{item.album ?? name}</div>
+                        {isAlbum ? (
+                          <span className="disc-provenance">{name}</span>
+                        ) : (
+                          <Provenance sources={item.sources} />
+                        )}
+                      </div>
+                      <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
+                        {verdict ? (
+                          <DecisionMark mark={verdict} disabled={busy} onUndo={() => undo.mutate(item)} />
+                        ) : (
+                          <>
+                            <button
+                              className="disc-btn up"
+                              title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
+                              disabled={rebuild.isPending}
+                              onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
+                            >
+                              👍
+                            </button>
+                            <button
+                              className="disc-btn down"
+                              title="Not interested"
+                              disabled={rebuild.isPending}
+                              onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
+                            >
+                              👎
+                            </button>
+                            {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
+                            <SnoozeControl
+                              onPick={(duration) => snoozeMutation.mutate({ item, duration })}
+                              disabled={rebuild.isPending}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="disc-actions">
-                    {canPlay && (
-                      <button
-                        className={isPlaying ? 'disc-btn play active' : 'disc-btn play'}
-                        title={isPlaying ? 'Hide Deezer player' : 'Listen on Deezer'}
-                        onClick={() => togglePlay(rowKey)}
-                      >
-                        {isPlaying ? '▾' : '▶'}
-                      </button>
-                    )}
-                    {verdict ? (
-                      <DecisionMark mark={verdict} disabled={busy} onUndo={() => undo.mutate(item)} />
-                    ) : (
-                      <>
-                        <button
-                          className="disc-btn up"
-                          title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
-                          disabled={rebuild.isPending}
-                          onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
-                        >
-                          👍
-                        </button>
-                        <button
-                          className="disc-btn down"
-                          title="Not interested"
-                          disabled={rebuild.isPending}
-                          onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
-                        >
-                          👎
-                        </button>
-                        {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
-                        <SnoozeControl
-                          onPick={(duration) => snoozeMutation.mutate({ item, duration })}
-                          disabled={rebuild.isPending}
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-                {isPlaying && (isAlbum
-                  ? <DeezerSample albumId={item.deezerAlbumId!} />
-                  : <DeezerSample artist={name} />)}
-                {!isAlbum && expandedAlbums.has(name) && (
-                  <ArtistAlbumsPanel
-                    artist={name}
-                    rated={rated}
-                    playing={playing}
-                    togglePlay={togglePlay}
-                    onRate={(albumItem, v) => rateMutation.mutate({ item: albumItem, verdict: v })}
-                    onUndo={(albumItem) => undo.mutate(albumItem)}
-                    disabled={rebuild.isPending}
-                  />
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+                )
+              })}
+            </div>
 
-      {pageCount > 1 && (
-        <div className="disc-pager">
-          <button disabled={page === 0 || isFetching} onClick={() => setPage((p) => p - 1)}>
-            ‹ prev
-          </button>
-          <span>
-            page {page + 1} / {pageCount}
-          </span>
-          <button disabled={page >= pageCount - 1 || isFetching} onClick={() => setPage((p) => p + 1)}>
-            next ›
-          </button>
+            {pageCount > 1 && (
+              <div className="disc-pager">
+                <button disabled={page === 0 || isFetching} onClick={() => setPage((p) => p - 1)}>
+                  ‹ prev
+                </button>
+                <span>
+                  page {page + 1} / {pageCount}
+                </span>
+                <button disabled={page >= pageCount - 1 || isFetching} onClick={() => setPage((p) => p + 1)}>
+                  next ›
+                </button>
+              </div>
+            )}
+          </div>
+
+          <DetailPanel
+            item={selected}
+            rated={rated}
+            busy={busy}
+            rebuildPending={rebuild.isPending}
+            playing={playing}
+            togglePlay={togglePlay}
+            onRate={(item, verdict) => rateMutation.mutate({ item, verdict })}
+            onSnooze={(item, duration) => snoozeMutation.mutate({ item, duration })}
+            onUndo={(item) => undo.mutate(item)}
+            onClose={() => setSelected(null)}
+          />
         </div>
       )}
     </section>

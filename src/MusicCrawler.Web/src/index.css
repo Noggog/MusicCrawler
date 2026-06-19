@@ -1,96 +1,412 @@
+/* ============================================================================
+   MusicCrawler — "Neon Synapse" theme
+   A psychedelic cyberpunk skin lifted from the Synthesis palette: abyssal
+   purples, salmon/coral neon, and electric cyan. Dark glassmorphism panels,
+   glowing borders, an animated nebula backdrop and a faint scanline grid.
+   Class names mirror the components 1:1 so the markup stays untouched.
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #1a1a2e;
-  background: #f7f7fb;
+  /* --- Synthesis palette --- */
+  --abyss: #0b0912;
+  --abyss-2: #15131c;
+  --purple-deep: #211c4a;
+  --purple: #281d52;
+  --purple-mid: #372773;
+  --purple-light: #7458db;
+  --purple-fg: #8c76db;
+  --neon-purple: #4817ff;
+
+  --salmon: #e16063;
+  --salmon-light: #fa7376;
+  --salmon-white: #ff999b;
+  --salmon-dark: #8e4d4f;
+
+  --cyan: #57f1fc;
+  --cyan-hover: #a3f9ff;
+  --blue: #51bcfa;
+  --yellow: #f7b992;
+
+  /* --- Semantic --- */
+  --bg: var(--abyss);
+  --text: #ece8ff;
+  --text-dim: #a99fd6;
+  --text-faint: #6f6699;
+
+  --panel: rgba(40, 29, 82, 0.42);
+  --panel-solid: #1c1730;
+  --panel-2: rgba(55, 39, 115, 0.32);
+  --border: rgba(116, 88, 219, 0.32);
+  --border-bright: rgba(116, 88, 219, 0.6);
+
+  --good: #38e8a0;
+  --bad: var(--salmon-light);
+
+  --glow-salmon: 0 0 18px rgba(250, 115, 118, 0.55);
+  --glow-cyan: 0 0 18px rgba(87, 241, 252, 0.45);
+  --glow-purple: 0 0 22px rgba(116, 88, 219, 0.5);
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --topbar-h: 60px;
+
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  min-height: 100%;
 }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* Animated nebula backdrop — slow-drifting coloured glow blobs. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -2;
+  background:
+    radial-gradient(38% 42% at 18% 22%, rgba(225, 96, 99, 0.28), transparent 60%),
+    radial-gradient(34% 40% at 82% 18%, rgba(87, 241, 252, 0.18), transparent 60%),
+    radial-gradient(46% 50% at 70% 82%, rgba(72, 23, 255, 0.3), transparent 62%),
+    radial-gradient(40% 44% at 30% 88%, rgba(116, 88, 219, 0.24), transparent 60%);
+  filter: saturate(1.2);
+  animation: nebula 26s ease-in-out infinite alternate;
+}
+
+/* Faint cyber grid + scanline wash over the nebula. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(116, 88, 219, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 88, 219, 0.08) 1px, transparent 1px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 4px);
+  background-size: 44px 44px, 44px 44px, 100% 4px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 100%);
+  opacity: 0.5;
+}
+
+@keyframes nebula {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 2%, 0) scale(1.02);
+  }
+}
+
+::selection {
+  background: rgba(250, 115, 118, 0.35);
+  color: #fff;
+}
+
+/* Themed scrollbars. */
+* {
+  scrollbar-color: var(--purple-light) transparent;
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--purple-light), var(--salmon-dark));
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(var(--salmon-light), var(--purple-light));
+  background-clip: padding-box;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--cyan-hover);
+  text-shadow: var(--glow-cyan);
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Orbitron', 'Space Grotesk', sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+h1 {
+  font-size: 1.9rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-align: center;
+  background: linear-gradient(92deg, var(--salmon-white), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 14px rgba(250, 115, 118, 0.35));
+  margin: 0 0 0.4rem;
+}
+
+/* Pages read centered rather than hugging the left. */
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.content > section {
+  width: 100%;
+}
+.content > section > p {
+  text-align: center;
+}
+
+code {
+  font-family: 'Space Mono', ui-monospace, monospace;
+  background: rgba(72, 23, 255, 0.18);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.05rem 0.35rem;
+  color: var(--cyan-hover);
+}
+
+/* ========================================================================== */
+/* Shell                                                                       */
+/* ========================================================================== */
 
 .app {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
-.sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: #1a1a2e;
-  color: #fff;
-  padding: 1.25rem 1rem;
+/* Horizontal top bar: brand · nav · (auth pushed to the right). */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 0 1.75rem;
+  min-height: var(--topbar-h);
+  background: linear-gradient(90deg, rgba(33, 28, 74, 0.88), rgba(11, 9, 18, 0.88));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+/* Neon seam along the bar's bottom edge. */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--salmon), var(--cyan), transparent);
+  box-shadow: 0 0 12px rgba(250, 115, 118, 0.6);
 }
 
 .brand {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-bottom: 1.5rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  background: linear-gradient(120deg, var(--salmon-light) 10%, var(--purple-fg) 55%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgba(250, 115, 118, 0.5));
+  animation: flicker 6s infinite steps(1);
+}
+
+@keyframes flicker {
+  0%, 92%, 96%, 100% { opacity: 1; }
+  93% { opacity: 0.55; }
+  95% { opacity: 0.8; }
 }
 
 .nav {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  /* Centered between the brand (left) and the auth box (right). */
+  margin: 0 auto;
 }
 
 .nav-link {
+  position: relative;
   display: block;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  color: #cfcfe6;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: 0.02em;
   text-decoration: none;
+  border: 1px solid transparent;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  color: var(--text);
+  background: rgba(116, 88, 219, 0.14);
+  border-color: var(--border);
+  text-shadow: none;
 }
 
 .nav-link.active {
-  background: #4f46e5;
   color: #fff;
+  background: linear-gradient(90deg, rgba(225, 96, 99, 0.28), rgba(72, 23, 255, 0.16));
+  border-color: var(--salmon);
+  box-shadow: inset 0 0 18px rgba(225, 96, 99, 0.18), 0 0 14px rgba(225, 96, 99, 0.22);
+}
+/* Glowing underline on the active item. */
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 3px;
+  background: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
 }
 
 .content {
   flex: 1;
-  padding: 2rem;
+  min-width: 0;
+  padding: 2.25rem 2.5rem 3rem;
+  background: transparent;
+}
+
+/* ========================================================================== */
+/* Auth box                                                                    */
+/* ========================================================================== */
+
+/* Sits at the right end of the bar — the centered nav's right auto-margin pushes it there. */
+.auth-box {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.auth-name {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.auth-btn {
+  background: linear-gradient(120deg, var(--neon-purple), var(--purple-light));
+  color: #fff;
+  border: 1px solid var(--purple-light);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: box-shadow 0.15s ease, transform 0.08s ease;
+}
+.auth-btn:hover {
+  box-shadow: var(--glow-purple);
+  transform: translateY(-1px);
+}
+
+/* ========================================================================== */
+/* Shared surfaces — tables, controls, buttons                                 */
+/* ========================================================================== */
+
+.error {
+  color: var(--salmon-light);
+  text-shadow: 0 0 10px rgba(250, 115, 118, 0.4);
+}
+
+em {
+  color: var(--text-dim);
 }
 
 .table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  max-width: 640px;
-  background: #fff;
-  border-radius: 8px;
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 
 .table th,
 .table td {
   text-align: left;
-  padding: 0.6rem 0.9rem;
-  border-bottom: 1px solid #ececf3;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
 }
 
 .table th {
-  background: #f0f0f7;
+  background: rgba(72, 23, 255, 0.16);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
 }
 
-.error {
-  color: #b00020;
+.table tbody tr {
+  transition: background 0.12s ease;
+}
+.table tbody tr:hover {
+  background: rgba(116, 88, 219, 0.12);
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   margin: 1rem 0;
   flex-wrap: wrap;
@@ -98,32 +414,79 @@ body {
 
 .controls input:not([type]),
 .controls input[type='text'] {
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   min-width: 220px;
+  background: rgba(11, 9, 18, 0.6);
+  color: var(--text);
 }
+.controls input:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+/* Generic buttons that aren't otherwise classed (e.g. dev "Refresh from Plex"). */
+button {
+  font-family: inherit;
+}
+.content button:not([class]) {
+  background: rgba(116, 88, 219, 0.16);
+  color: var(--text);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+.content button:not([class]):hover:not(:disabled) {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-1px);
+}
+.content button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+input[type='checkbox'] {
+  accent-color: var(--salmon);
+  width: 16px;
+  height: 16px;
+}
+
+/* ========================================================================== */
+/* Related (dev) grid                                                          */
+/* ========================================================================== */
 
 .related-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  justify-content: center;
   gap: 1rem;
-  max-width: 900px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .related-card {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   text-align: center;
   padding-bottom: 0.6rem;
   cursor: pointer;
-  transition: box-shadow 0.12s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: box-shadow 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
 }
-
 .related-card:hover {
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  border-color: var(--salmon);
+  box-shadow: var(--glow-salmon);
+  transform: translateY(-3px);
 }
 
 .related-card img,
@@ -132,23 +495,20 @@ body {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   display: block;
-  background: #ececf3;
+  background: var(--purple-deep);
 }
-
 .related-card-noimg {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9a9ab0;
+  color: var(--text-faint);
   font-size: 0.8rem;
 }
-
 .related-card-name {
   font-weight: 600;
   margin: 0.5rem 0.4rem 0.3rem;
   font-size: 0.9rem;
 }
-
 .related-card-sources {
   display: flex;
   flex-wrap: wrap;
@@ -157,112 +517,111 @@ body {
 }
 
 .source-badge {
-  background: #4f46e5;
+  background: linear-gradient(120deg, var(--neon-purple), var(--purple-light));
   color: #fff;
   border-radius: 10px;
   padding: 0.05rem 0.5rem;
   font-size: 0.7rem;
+  box-shadow: 0 0 10px rgba(72, 23, 255, 0.4);
 }
 
-/* Auth box pinned to the bottom of the sidebar. */
-.auth-box {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
+/* ========================================================================== */
+/* Artists thumbs cell                                                         */
+/* ========================================================================== */
 
-.auth-name {
-  font-size: 0.85rem;
-  color: #cfcfe6;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.auth-btn {
-  background: #4f46e5;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.auth-btn:hover {
-  background: #4338ca;
-}
-
-/* Per-row 👍/👎 cell on the Artists table. */
 .rate-cell {
   display: inline-flex;
   gap: 0.35rem;
 }
 
-/* --- Discovery (swipe loop) --- */
+/* ========================================================================== */
+/* Discovery                                                                   */
+/* ========================================================================== */
+
 .disc-header {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
 .disc-sub {
-  max-width: 640px;
-  color: #55556b;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  color: var(--text-dim);
 }
 
-/* List ⇄ Swipe segmented toggle. */
 .disc-toggle {
   display: inline-flex;
-  border: 1px solid #d6d6e3;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
-
 .disc-toggle button {
-  background: #fff;
+  background: transparent;
   border: none;
-  padding: 0.35rem 0.9rem;
+  padding: 0.4rem 0.95rem;
   cursor: pointer;
   font-size: 0.85rem;
-  color: #55556b;
+  color: var(--text-dim);
 }
-
 .disc-toggle button.active {
-  background: #4f46e5;
+  background: linear-gradient(120deg, var(--neon-purple), var(--purple-light));
   color: #fff;
 }
 
+/* Pill-style secondary action buttons (Shuffle / Rebuild / Cleanup). */
 .disc-rebuild {
-  margin-left: auto;
-  background: #fff;
-  border: 1px solid #d6d6e3;
-  border-radius: 6px;
-  padding: 0.4rem 0.7rem;
+  background: rgba(116, 88, 219, 0.14);
+  border: 1px solid var(--border-bright);
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
   cursor: pointer;
   font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.08s ease, color 0.15s ease;
 }
-
 .disc-rebuild:hover:not(:disabled) {
-  border-color: #4f46e5;
-  color: #4f46e5;
+  border-color: var(--cyan);
+  color: var(--cyan-hover);
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-1px);
 }
-
 .disc-rebuild:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
-/* Ranked list of pending candidates. */
+/* --- Two-pane Discover layout: list on the left, readout on the right --- */
+.disc-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+/* The list is the secondary column: it stays compact so the readout takes the freed width. */
+.disc-main {
+  flex: 0 1 580px;
+  min-width: 0;
+}
+.disc-main .disc-list {
+  max-width: none;
+}
+
 .disc-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  max-width: 640px;
+  gap: 0.55rem;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 .disc-row-wrap {
@@ -272,17 +631,16 @@ body {
 }
 
 .disc-list.fetching {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
-/* A row rated this view: kept in place but dimmed so it reads as "done" until the next refresh. */
 .disc-row-wrap.rated .disc-row {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .disc-rated {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-dim);
   white-space: nowrap;
 }
 
@@ -290,46 +648,60 @@ body {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  background: #fff;
-  border-radius: 8px;
-  padding: 0.6rem 0.85rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.9rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, background 0.15s ease;
+}
+.disc-row:hover {
+  border-color: var(--border-bright);
+  background: rgba(55, 39, 115, 0.4);
+}
+/* Clickable rows in the two-pane view get a pointer + lift. */
+.disc-main .disc-row {
+  cursor: pointer;
+}
+.disc-main .disc-row:hover {
+  transform: translateX(2px);
+}
+/* The row currently open in the readout panel. */
+.disc-row.selected {
+  border-color: var(--salmon);
+  background: rgba(225, 96, 99, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(250, 115, 118, 0.35), var(--glow-salmon);
 }
 
-/* Albums surfaced inline under a just-liked brand-new artist, indented to read as a child of the card. */
 .disc-sub-albums {
   margin-left: 2.4rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.75rem;
-  background: #f7f7fb;
-  border-left: 2px solid #d6d6e3;
-  border-radius: 0 8px 8px 0;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(11, 9, 18, 0.45);
+  border-left: 2px solid var(--salmon-dark);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-
 .disc-sub-note {
   font-size: 0.8rem;
-  color: #8888a0;
+  color: var(--text-faint);
 }
-
-/* Each album: the title+actions row on top, its Deezer player (when expanded) stacked beneath. */
 .disc-sub-album-wrap {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
-
 .disc-sub-album {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  background: #fff;
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
 }
-
 .disc-sub-album-name {
   flex: 1;
   min-width: 0;
@@ -338,152 +710,388 @@ body {
 }
 
 .disc-avatar {
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   flex-shrink: 0;
-  background: #ececf3;
+  background: var(--purple-deep);
+  border: 1px solid var(--border);
 }
-
 .disc-avatar-fallback {
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-weight: 700;
-  background: #4f46e5;
+  font-weight: 800;
+  font-family: 'Orbitron', sans-serif;
+  background: linear-gradient(135deg, var(--neon-purple), var(--salmon-dark));
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
 }
 
 .disc-row-main {
   flex: 1;
   min-width: 0;
 }
-
 .disc-name {
   font-weight: 600;
+  color: var(--text);
 }
-
 .disc-provenance {
   display: block;
   font-size: 0.8rem;
-  color: #8888a0;
+  color: var(--text-faint);
 }
 
 .disc-actions {
   display: flex;
   gap: 0.4rem;
+  align-items: center;
 }
 
+/* Neon icon buttons (thumbs / play / snooze / clear). */
 .disc-btn {
-  background: #fff;
-  border: 1px solid #d6d6e3;
-  border-radius: 8px;
+  background: rgba(11, 9, 18, 0.55);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
   padding: 0.35rem 0.6rem;
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 0.12s ease, transform 0.08s ease;
+  color: var(--text);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease, background 0.12s ease;
 }
-
 .disc-btn:hover:not(:disabled) {
   transform: translateY(-1px);
 }
-
 .disc-btn.up:hover:not(:disabled) {
-  border-color: #16a34a;
+  border-color: var(--good);
+  box-shadow: 0 0 14px rgba(56, 232, 160, 0.5);
 }
-
 .disc-btn.down:hover:not(:disabled) {
-  border-color: #b00020;
+  border-color: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
 }
-
 .disc-btn.play {
   font-size: 0.85rem;
 }
-
 .disc-btn.play.active {
-  border-color: #4f46e5;
-  color: #4f46e5;
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
 }
-
-/* Selected verdict (Ratings page + Artists thumbs). */
 .disc-btn.up.active {
-  border-color: #16a34a;
-  background: #e9f8ee;
+  border-color: var(--good);
+  background: rgba(56, 232, 160, 0.16);
+  color: var(--good);
+  box-shadow: 0 0 14px rgba(56, 232, 160, 0.35);
 }
-
 .disc-btn.down.active {
-  border-color: #b00020;
-  background: #fdeaed;
+  border-color: var(--salmon-light);
+  background: rgba(225, 96, 99, 0.18);
+  color: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
 }
 
-/* Snooze: a 💤 label plus the three durations shown inline as direct buttons (no popover), so a
-   "remind me later" is a single click. */
 .disc-snooze {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
 }
-
 .disc-snooze-label {
   font-size: 1rem;
   opacity: 0.7;
 }
-
 .disc-btn.snooze {
   font-size: 0.8rem;
-  padding: 0.3rem 0.5rem;
+  padding: 0.32rem 0.55rem;
 }
-
 .disc-btn.snooze:hover:not(:disabled) {
-  border-color: #4f46e5;
-  color: #4f46e5;
+  border-color: var(--purple-light);
+  color: var(--purple-fg);
+  box-shadow: var(--glow-purple);
 }
 
-/* Undo affordance shown next to an in-place decision mark (👍 Added · undo). */
 .disc-undo {
   margin-left: 0.4rem;
   background: none;
   border: none;
   padding: 0;
   font-size: 0.8rem;
-  color: #4f46e5;
+  color: var(--cyan);
   text-decoration: underline;
   cursor: pointer;
 }
-
 .disc-undo:disabled {
   opacity: 0.5;
   cursor: default;
 }
-
 .disc-snooze-note {
-  color: #4f46e5;
+  color: var(--purple-fg);
 }
 
-/* --- Discovery feed categories --- */
+.disc-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.disc-btn.big {
+  font-size: 1.8rem;
+  padding: 0.6rem 1.1rem;
+}
+
+.disc-pager {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  justify-content: center;
+  color: var(--text-dim);
+}
+.disc-pager button {
+  background: rgba(116, 88, 219, 0.14);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.disc-pager button:hover:not(:disabled) {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.disc-pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* --- Swipe (single card) view --- */
+.disc-swipe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.disc-card {
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 18px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), var(--glow-purple);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 340px;
+  max-width: 100%;
+}
+.disc-card .disc-avatar {
+  border-radius: 14px;
+}
+.disc-card-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+}
+.disc-swipe-actions {
+  display: flex;
+  gap: 2rem;
+}
+.disc-hint {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+/* ========================================================================== */
+/* Discover readout / detail panel                                             */
+/* ========================================================================== */
+
+.disc-detail {
+  /* Primary column — grows to take the width the compact list leaves behind. */
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 380px;
+  max-width: 820px;
+  position: sticky;
+  top: calc(var(--topbar-h) + 1rem);
+  max-height: calc(100vh - var(--topbar-h) - 2rem);
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(40, 29, 82, 0.55), rgba(11, 9, 18, 0.55));
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.45);
+  padding: 1.25rem;
+}
+
+.disc-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  min-height: 320px;
+  color: var(--text-faint);
+  padding: 2rem 1rem;
+}
+.disc-detail-empty .detail-empty-icon {
+  font-size: 2.4rem;
+  filter: drop-shadow(0 0 16px rgba(116, 88, 219, 0.6));
+  animation: nebula 8s ease-in-out infinite alternate;
+}
+
+.detail-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 2;
+  background: rgba(11, 9, 18, 0.6);
+  border: 1px solid var(--border-bright);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: none; /* shown only as a drawer on mobile */
+  align-items: center;
+  justify-content: center;
+}
+.detail-close:hover {
+  border-color: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
+}
+
+/* Hero image with a neon halo. */
+.detail-hero {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+.detail-hero img,
+.detail-hero .disc-avatar-fallback {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-bright);
+  box-shadow: 0 0 40px rgba(225, 96, 99, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.4);
+  font-size: 4rem;
+}
+/* Coloured scrim along the bottom of the hero. */
+.detail-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: linear-gradient(transparent, rgba(11, 9, 18, 0.7));
+  pointer-events: none;
+}
+
+.detail-name {
+  font-size: 1.5rem;
+  margin: 0.2rem 0 0.5rem;
+  line-height: 1.15;
+}
+
+.detail-meta {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 0.85rem;
+}
+.detail-meta .disc-provenance {
+  display: inline;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* Recommendation / metadata chips ("via …", album by, etc.). */
+.detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.25rem 0 1rem;
+}
+.detail-chip {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--cyan-hover);
+  background: rgba(87, 241, 252, 0.1);
+  border: 1px solid rgba(87, 241, 252, 0.4);
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+}
+.detail-chip.via {
+  color: var(--salmon-white);
+  background: rgba(225, 96, 99, 0.12);
+  border-color: rgba(250, 115, 118, 0.4);
+}
+
+.detail-section-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 1rem 0 0.4rem;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  padding-bottom: 0.4rem;
+}
+.detail-actions .disc-btn {
+  font-size: 1.2rem;
+}
+
+/* ========================================================================== */
+/* Feed filters + sections + badges                                            */
+/* ========================================================================== */
+
 .feed-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin: 0.5rem 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  /* Shrink-wrap the chips and centre the box itself rather than spanning full width. */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.5rem auto 1.25rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
-
 .feed-filter {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.9rem;
-  color: #55556b;
+  color: var(--text-dim);
   cursor: pointer;
 }
-
-/* "Recommended Artists" parent with its indented "Existing" / "New" sub-toggles. */
+.feed-filter:hover {
+  color: var(--text);
+}
 .feed-filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
-
 .feed-subfilters {
   display: flex;
   flex-wrap: wrap;
@@ -494,95 +1102,136 @@ body {
 .feed-section {
   margin-bottom: 2rem;
 }
-
 .feed-section-title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin: 0 0 0.25rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
 }
-
 .feed-count {
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: #fff;
-  background: #4f46e5;
+  background: linear-gradient(120deg, var(--neon-purple), var(--salmon-dark));
   border-radius: 999px;
-  padding: 0.05rem 0.5rem;
+  padding: 0.1rem 0.55rem;
+  box-shadow: 0 0 12px rgba(72, 23, 255, 0.4);
 }
 
-/* Per-card "what is this" badge. */
 .feed-badge {
   display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  border-radius: 4px;
-  padding: 0.08rem 0.4rem;
-  margin-bottom: 0.2rem;
-  /* Neutral default; the per-kind modifiers below override colour where one applies. */
-  color: #555;
-  background: #ececed;
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-dim);
+  background: rgba(116, 88, 219, 0.16);
+  border: 1px solid var(--border);
+}
+
+.feed-badge-RecommendedArtist {
+  color: var(--purple-fg);
+  background: rgba(72, 23, 255, 0.16);
+  border-color: rgba(116, 88, 219, 0.5);
+}
+.feed-badge-MissingAlbum {
+  color: var(--cyan);
+  background: rgba(87, 241, 252, 0.1);
+  border-color: rgba(87, 241, 252, 0.4);
+}
+.feed-badge-LibraryArtist,
+.feed-badge-RecommendedLibraryArtist,
+.feed-badge-SeedLibraryArtist {
+  color: var(--yellow);
+  background: rgba(247, 185, 146, 0.1);
+  border-color: rgba(247, 185, 146, 0.35);
+}
+
+/* Filter chips: the per-kind badge styling made into a clickable on/off toggle. */
+.feed-chip {
+  font-family: inherit;
+  font-size: 0.76rem;
+  margin: 0;
+  padding: 0.32rem 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: filter 0.15s ease, transform 0.08s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.feed-chip:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.2);
+}
+/* Active chip gets a soft glow in its own hue so "on" reads at a glance. */
+.feed-chip:not(.off) {
+  box-shadow: 0 0 12px rgba(116, 88, 219, 0.35), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+.feed-chip.feed-badge-MissingAlbum:not(.off) {
+  box-shadow: 0 0 12px rgba(87, 241, 252, 0.35), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+.feed-chip.feed-badge-RecommendedLibraryArtist:not(.off),
+.feed-chip.feed-badge-SeedLibraryArtist:not(.off) {
+  box-shadow: 0 0 12px rgba(247, 185, 146, 0.32), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+/* Off chip: desaturated, dashed, dimmed — clearly toggled out. */
+.feed-chip.off {
+  opacity: 0.42;
+  filter: grayscale(0.55);
+  border-style: dashed;
+}
+.feed-chip.off:hover {
+  opacity: 0.72;
 }
 
 .cleanup-list {
   margin-top: 0.75rem;
 }
-
 .cleanup-done {
-  color: #166534;
+  color: var(--good);
   font-weight: 600;
+  text-shadow: 0 0 12px rgba(56, 232, 160, 0.4);
 }
 
-.feed-badge-RecommendedArtist {
-  color: #3730a3;
-  background: #e7e6fb;
-}
+/* ========================================================================== */
+/* Deezer sample player                                                        */
+/* ========================================================================== */
 
-.feed-badge-MissingAlbum {
-  color: #075985;
-  background: #e0f2fe;
-}
-
-.feed-badge-LibraryArtist {
-  color: #4f5b1f;
-  background: #eef3d6;
-}
-
-/* Deezer 30-second preview sample player: top-5 tracks + link out. */
 .deezer-sample {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
-  background: #f0f0f7;
-  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  background: rgba(11, 9, 18, 0.5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
-  color: #55556b;
+  color: var(--text-dim);
 }
-
 .deezer-sample.muted {
   flex-direction: row;
   justify-content: center;
-  color: #9a9ab0;
+  color: var(--text-faint);
 }
-
 .sample-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
 }
-
 .sample-label {
-  font-size: 0.7rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.64rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #8888a0;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
 }
-
 .sample-list {
   list-style: none;
   margin: 0;
@@ -591,15 +1240,13 @@ body {
   flex-direction: column;
   gap: 0.3rem;
 }
-
 .sample-list li {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-
 .sample-btn {
-  background: #4f46e5;
+  background: linear-gradient(120deg, var(--neon-purple), var(--purple-light));
   color: #fff;
   border: none;
   border-radius: 50%;
@@ -612,187 +1259,185 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: box-shadow 0.12s ease, transform 0.08s ease;
 }
-
 .sample-btn:hover {
-  background: #4338ca;
+  box-shadow: var(--glow-purple);
+  transform: scale(1.08);
 }
-
 .sample-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-dim);
 }
-
 .sample-title.active {
-  color: #4f46e5;
+  color: var(--cyan);
   font-weight: 600;
+  text-shadow: var(--glow-cyan);
 }
-
 .sample-title.muted {
-  color: #9a9ab0;
+  color: var(--text-faint);
 }
-
 .deezer-link {
   flex-shrink: 0;
-  color: #4f46e5;
+  color: var(--cyan);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.8rem;
 }
-
 .deezer-link:hover {
-  text-decoration: underline;
+  color: var(--cyan-hover);
+  text-shadow: var(--glow-cyan);
 }
 
-.disc-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+/* ========================================================================== */
+/* Download monitor                                                            */
+/* ========================================================================== */
 
-.disc-btn.big {
-  font-size: 1.8rem;
-  padding: 0.6rem 1.1rem;
-}
-
-.disc-pager {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  max-width: 640px;
-  justify-content: center;
-  color: #55556b;
-}
-
-.disc-pager button {
-  background: #fff;
-  border: 1px solid #d6d6e3;
-  border-radius: 6px;
-  padding: 0.35rem 0.8rem;
-  cursor: pointer;
-}
-
-.disc-pager button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* Single-card swipe view. */
-.disc-swipe {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-
-.disc-card {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 18px rgba(26, 26, 46, 0.16);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  width: 340px;
-  max-width: 100%;
-}
-
-.disc-card .disc-avatar {
-  border-radius: 12px;
-}
-
-.disc-card-name {
-  font-size: 1.3rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.disc-swipe-actions {
-  display: flex;
-  gap: 2rem;
-}
-
-.disc-hint {
-  color: #8888a0;
-  font-size: 0.85rem;
-}
-
-/* --- Download monitor panel --- */
 .dl-monitor {
-  border: 1px solid #d6d6e3;
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  margin: 0.75rem 0 1rem;
-  background: #fafaff;
-  max-width: 640px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.1rem;
+  margin: 0.75rem auto 1.25rem;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  max-width: 720px;
 }
-
 .dl-monitor-head {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   font-size: 0.8rem;
-  color: #55556b;
+  color: var(--text-dim);
 }
-
 .dl-badge {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
-
 .dl-badge.on {
-  color: #1f9d55;
+  color: var(--good);
+  text-shadow: 0 0 12px rgba(56, 232, 160, 0.5);
 }
-
 .dl-badge.off {
-  color: #9a9ab0;
+  color: var(--text-faint);
 }
-
 .dl-backend {
-  color: #8888a0;
+  color: var(--text-faint);
 }
-
 .dl-activity {
-  margin-top: 0.4rem;
+  margin-top: 0.45rem;
   font-size: 0.95rem;
-  color: #33334a;
+  color: var(--text);
 }
-
 .dl-activity.active {
   font-weight: 600;
-  color: #1f9d55;
+  color: var(--good);
 }
-
 .dl-counts {
   display: flex;
-  gap: 1.2rem;
+  gap: 1.4rem;
   flex-wrap: wrap;
-  margin-top: 0.55rem;
+  margin-top: 0.6rem;
   font-size: 0.85rem;
-  color: #55556b;
+  color: var(--text-dim);
 }
-
 .dl-counts strong {
-  color: #33334a;
+  color: var(--cyan);
 }
-
 .dl-throttle {
-  margin-top: 0.45rem;
+  margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: #9a9ab0;
+  color: var(--text-faint);
 }
-
 .dl-spinner {
   font-size: 1.2rem;
+  color: var(--good);
   animation: dl-bounce 1s ease-in-out infinite;
 }
 
 @keyframes dl-bounce {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50% { transform: translateY(2px); opacity: 1; }
+}
+
+/* ========================================================================== */
+/* Responsive — collapse the readout into a bottom drawer on small screens     */
+/* ========================================================================== */
+
+@media (max-width: 960px) {
+  .content {
+    padding: 1.5rem 1.1rem 2.5rem;
+  }
+
+  .disc-layout {
+    display: block;
+  }
+  .disc-main .disc-list {
+    max-width: none;
+  }
+
+  /* Readout slides up from the bottom as a drawer when a row is selected. */
+  .disc-detail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: 82vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: none;
+    z-index: 40;
+    box-shadow: 0 -12px 50px rgba(0, 0, 0, 0.6);
+    animation: drawer-up 0.22s ease;
+  }
+  .detail-close {
+    display: flex;
+  }
+  /* The empty placeholder is pointless on mobile — only render the drawer when selected. */
+  .disc-detail.is-empty {
+    display: none;
+  }
+  .detail-hero img,
+  .detail-hero .disc-avatar-fallback {
+    max-width: 220px;
+    margin: 0 auto;
+  }
+}
+
+@keyframes drawer-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Let the top bar wrap to two rows on small screens (brand + auth, then nav). */
+@media (max-width: 640px) {
+  .topbar {
+    padding: 0.6rem 1rem;
+    gap: 0.4rem 1rem;
+  }
+  .nav {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+  .auth-box {
+    margin-left: auto;
+    max-width: 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  .brand,
+  .disc-detail,
+  .disc-detail-empty .detail-empty-icon {
+    animation: none !important;
+  }
 }
