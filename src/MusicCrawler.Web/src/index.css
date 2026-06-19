@@ -749,6 +749,10 @@ input[type='checkbox'] {
 .disc-main .disc-row {
   cursor: pointer;
   position: relative;
+  /* Promote to its own compositor layer so the hover nudge slides a cached texture instead of
+     re-rasterizing the text + 1px border at each sub-pixel offset (which made them shimmer/squish
+     against the backdrop-filter blur as they snapped between pixels). */
+  will-change: transform;
 }
 .disc-main .disc-row:hover {
   transform: translateX(2px);
