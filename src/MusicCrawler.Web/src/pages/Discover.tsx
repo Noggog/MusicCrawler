@@ -20,6 +20,7 @@ import { getDeezerPlayInfo } from '../api/deezer'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
+import { IconApprove, IconMoon, IconReject } from '../components/icons'
 
 const PAGE_SIZE = 20
 
@@ -48,17 +49,20 @@ const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'Recomme
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
-// How a row was marked this view (👍 / 👎 / 💤) so it stays in place until the next natural refresh.
+// How a row was marked this view (approve / reject / snooze) so it stays in place until the next
+// natural refresh.
 type RowMark = Verdict | 'snoozed'
-const markChip = (mark: RowMark) =>
-  mark === 'up' ? '👍 Added' : mark === 'down' ? '👎 Dismissed' : '💤 Snoozed'
+const MARK_LABEL: Record<RowMark, string> = { up: 'Added', down: 'Dismissed', snoozed: 'Snoozed' }
+const MarkIcon = ({ mark }: { mark: RowMark }) =>
+  mark === 'up' ? <IconApprove size={15} /> : mark === 'down' ? <IconReject size={15} /> : <IconMoon size={15} />
 
-// An in-place decision marker with an undo: "👍 Added · undo". Every decision (like / dislike /
+// An in-place decision marker with an undo: "✓ Added · undo". Every decision (approve / reject /
 // snooze, on artists or albums) is reversible from the feed so a misclick is one click to fix.
 function DecisionMark({ mark, onUndo, disabled }: { mark: RowMark; onUndo: () => void; disabled: boolean }) {
   return (
-    <span className="disc-rated">
-      {markChip(mark)}
+    <span className={`disc-rated mark-${mark}`}>
+      <span className="disc-rated-icon"><MarkIcon mark={mark} /></span>
+      {MARK_LABEL[mark]}
       <button className="disc-undo" title="Undo this decision" disabled={disabled} onClick={onUndo}>
         undo
       </button>
@@ -72,8 +76,9 @@ const SNOOZE_OPTIONS: { label: string; duration: SnoozeDuration }[] = [
   { label: 'Year', duration: 'year' },
 ]
 
-// The 💤 snooze action. The three durations (Week / Month / Year) are shown inline as direct
-// buttons — no popover — so a "not now, remind me later" is a single click.
+// The 💤 snooze action. Collapsed to just the icon; hovering (or focusing) springs a flyout out to
+// the right with the three durations (Week / Month / Year). The flyout is absolutely positioned so
+// it overflows the row without resizing it or nudging the thumbs up/down beside it.
 function SnoozeControl({
   onPick,
   disabled,
@@ -83,17 +88,29 @@ function SnoozeControl({
 }) {
   return (
     <span className="disc-snooze" title="Snooze — hide for a while, then resurface">
-      <span className="disc-snooze-label">💤</span>
-      {SNOOZE_OPTIONS.map((o) => (
-        <button
-          key={o.duration}
-          className="disc-btn snooze"
-          disabled={disabled}
-          onClick={() => onPick(o.duration)}
-        >
-          {o.label}
-        </button>
-      ))}
+      <button
+        type="button"
+        className="disc-btn snooze snooze-trigger"
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-label="Snooze"
+      >
+        <IconMoon size={18} />
+      </button>
+      <span className="disc-snooze-flyout" role="menu">
+        {SNOOZE_OPTIONS.map((o) => (
+          <button
+            key={o.duration}
+            type="button"
+            className="disc-btn snooze"
+            role="menuitem"
+            disabled={disabled}
+            onClick={() => onPick(o.duration)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </span>
     </span>
   )
 }
@@ -178,7 +195,7 @@ function ArtistAlbumsPanel({
 
   return (
     <div className="disc-sub-albums">
-      <div className="disc-sub-note">Albums by {artist} — 👍 the ones to grab:</div>
+      <div className="disc-sub-note">Albums by {artist} — approve the ones to grab:</div>
       {data.map((album) => {
         const rowKey = `${album.artist.artistName}::${album.album}`
         const verdict = rated.get(rowKey)
@@ -203,10 +220,10 @@ function ArtistAlbumsPanel({
                 ) : (
                   <>
                     <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
-                      👍
+                      <IconApprove />
                     </button>
                     <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
-                      👎
+                      <IconReject />
                     </button>
                   </>
                 )}
@@ -298,11 +315,11 @@ function DetailPanel({
           <>
             <button
               className="disc-btn up"
-              title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
+              title={isAlbum ? 'Queue album to buy' : 'Approve'}
               disabled={rebuildPending}
               onClick={() => onRate(item, 'up')}
             >
-              👍
+              <IconApprove />
             </button>
             <button
               className="disc-btn down"
@@ -310,7 +327,7 @@ function DetailPanel({
               disabled={rebuildPending}
               onClick={() => onRate(item, 'down')}
             >
-              👎
+              <IconReject />
             </button>
             <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={rebuildPending} />
           </>
@@ -590,13 +607,6 @@ export default function Discover() {
         })}
       </div>
 
-      <p className="disc-sub">
-        <em>
-          A mix of things to react to. 👍 / 👎 each one — adjust anytime on the{' '}
-          <Link to="/ratings">Ratings</Link> page. {total} in the feed.
-        </em>
-      </p>
-
       {rebuild.isError && <p className="error">Rebuild failed: {(rebuild.error as Error).message}</p>}
       {rateMutation.isError && <p className="error">Rating failed: {(rateMutation.error as Error).message}</p>}
       {snoozeMutation.isError && <p className="error">Snooze failed: {(snoozeMutation.error as Error).message}</p>}
@@ -652,11 +662,11 @@ export default function Discover() {
                           <>
                             <button
                               className="disc-btn up"
-                              title={isAlbum ? 'Queue album to buy' : 'Thumbs up'}
+                              title={isAlbum ? 'Queue album to buy' : 'Approve'}
                               disabled={rebuild.isPending}
                               onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
                             >
-                              👍
+                              <IconApprove />
                             </button>
                             <button
                               className="disc-btn down"
@@ -664,7 +674,7 @@ export default function Discover() {
                               disabled={rebuild.isPending}
                               onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
                             >
-                              👎
+                              <IconReject />
                             </button>
                             {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
                             <SnoozeControl

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { clearRating, getRatings, rate, type Verdict } from '../api/discovery'
 import type { RatedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
+import { IconApprove, IconClear, IconMoon, IconReject } from '../components/icons'
 
 function Avatar({ item }: { item: RatedItem }) {
   const label = item.album ?? item.artist.artistName
@@ -103,7 +104,8 @@ export default function Ratings() {
                     {item.album ? ` · ${name}` : ''}
                     {item.verdict === 'Snoozed' && (
                       <span className="disc-snooze-note">
-                        {' · 💤 Snoozed'}
+                        {' · '}
+                        <IconMoon size={12} className="inline-icon" /> Snoozed
                         {item.snoozeUntil ? ` until ${new Date(item.snoozeUntil).toLocaleDateString()}` : ''}
                       </span>
                     )}
@@ -112,19 +114,19 @@ export default function Ratings() {
                 <div className="disc-actions">
                   <button
                     className={item.verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
-                    title={item.verdict === 'Liked' ? 'Clear rating' : 'Thumbs up'}
+                    title={item.verdict === 'Liked' ? 'Clear rating' : 'Approve'}
                     disabled={busy}
                     onClick={() => reRate.mutate({ item, verdict: 'up' })}
                   >
-                    👍
+                    <IconApprove />
                   </button>
                   <button
                     className={item.verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
-                    title={item.verdict === 'Disliked' ? 'Clear rating' : 'Thumbs down'}
+                    title={item.verdict === 'Disliked' ? 'Clear rating' : 'Reject'}
                     disabled={busy}
                     onClick={() => reRate.mutate({ item, verdict: 'down' })}
                   >
-                    👎
+                    <IconReject />
                   </button>
                   <button
                     className="disc-btn"
@@ -132,7 +134,7 @@ export default function Ratings() {
                     disabled={busy}
                     onClick={() => clear.mutate(item)}
                   >
-                    ✕
+                    <IconClear />
                   </button>
                 </div>
               </div>

@@ -639,9 +639,29 @@ input[type='checkbox'] {
 }
 
 .disc-rated {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.85rem;
   color: var(--text-dim);
   white-space: nowrap;
+}
+.disc-rated-icon {
+  display: inline-flex;
+}
+.disc-rated.mark-up .disc-rated-icon {
+  color: var(--good);
+}
+.disc-rated.mark-down .disc-rated-icon {
+  color: var(--salmon-light);
+}
+.disc-rated.mark-snoozed .disc-rated-icon {
+  color: var(--purple-fg);
+}
+
+/* An icon sitting inline within a run of text (e.g. the "· 🌙 Snoozed" note). */
+.inline-icon {
+  vertical-align: -0.15em;
 }
 
 .disc-row {
@@ -660,12 +680,15 @@ input[type='checkbox'] {
   border-color: var(--border-bright);
   background: rgba(55, 39, 115, 0.4);
 }
-/* Clickable rows in the two-pane view get a pointer + lift. */
+/* Clickable rows in the two-pane view get a pointer + lift. position:relative + a raised z-index on
+   hover lets the snooze flyout overflow *above* the readout pane instead of being painted under it. */
 .disc-main .disc-row {
   cursor: pointer;
+  position: relative;
 }
 .disc-main .disc-row:hover {
   transform: translateX(2px);
+  z-index: 60;
 }
 /* The row currently open in the readout panel. */
 .disc-row.selected {
@@ -747,20 +770,30 @@ input[type='checkbox'] {
   align-items: center;
 }
 
-/* Neon icon buttons (thumbs / play / snooze / clear). */
+/* Neon icon buttons (approve / reject / play / snooze / clear). */
 .disc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(11, 9, 18, 0.55);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-sm);
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.6rem;
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
   color: var(--text);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease, background 0.12s ease;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease, background 0.12s ease, color 0.12s ease;
 }
 .disc-btn:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+/* Approve / reject icons carry their hue at rest, then flare on hover/active. */
+.disc-btn.up {
+  color: var(--good);
+}
+.disc-btn.down {
+  color: var(--salmon-light);
 }
 .disc-btn.up:hover:not(:disabled) {
   border-color: var(--good);
@@ -791,14 +824,11 @@ input[type='checkbox'] {
   box-shadow: var(--glow-salmon);
 }
 
+/* Collapsed snooze: just the 💤 trigger, with a flyout that springs out to the right on hover. */
 .disc-snooze {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-}
-.disc-snooze-label {
-  font-size: 1rem;
-  opacity: 0.7;
 }
 .disc-btn.snooze {
   font-size: 0.8rem;
@@ -808,6 +838,48 @@ input[type='checkbox'] {
   border-color: var(--purple-light);
   color: var(--purple-fg);
   box-shadow: var(--glow-purple);
+}
+/* The lone moon icon matches the approve/reject footprint, tinted purple at rest. */
+.disc-btn.snooze-trigger {
+  font-size: 1.05rem;
+  padding: 0.4rem 0.55rem;
+  color: var(--purple-fg);
+}
+.disc-snooze:hover .disc-btn.snooze-trigger,
+.disc-snooze:focus-within .disc-btn.snooze-trigger {
+  border-color: var(--purple-light);
+  color: var(--purple-fg);
+  box-shadow: var(--glow-purple);
+}
+
+/* Absolutely positioned so it overflows the container — the row/actions never reflow. The box starts
+   flush at the trigger's right edge (no dead gap) so hover carries from icon into the flyout. */
+.disc-snooze-flyout {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.45rem;
+  white-space: nowrap;
+  background: linear-gradient(180deg, rgba(40, 29, 82, 0.96), rgba(11, 9, 18, 0.96));
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), var(--glow-purple);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-8px) scale(0.96);
+  transform-origin: left center;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 30;
+}
+.disc-snooze:hover .disc-snooze-flyout,
+.disc-snooze:focus-within .disc-snooze-flyout {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0) scale(1);
 }
 
 .disc-undo {
@@ -917,6 +989,8 @@ input[type='checkbox'] {
   top: calc(var(--topbar-h) + 1rem);
   max-height: calc(100vh - var(--topbar-h) - 2rem);
   overflow-y: auto;
+  /* Below a hovered row so its snooze flyout can spill over the top of this pane. */
+  z-index: 1;
   background: linear-gradient(180deg, rgba(40, 29, 82, 0.55), rgba(11, 9, 18, 0.55));
   border: 1px solid var(--border-bright);
   border-radius: var(--radius);

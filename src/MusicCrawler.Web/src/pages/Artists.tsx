@@ -3,6 +3,7 @@ import { getArtists, refreshCatalog } from '../api/artists'
 import { clearRating, getRatings, rate, type Verdict } from '../api/discovery'
 import type { DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
+import { IconApprove, IconReject } from '../components/icons'
 
 const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
@@ -71,7 +72,7 @@ export default function Artists() {
 
       {user && (
         <p>
-          <em>Thumb the bands you own — 👍 feeds your recommendations, 👎 marks them off-taste.</em>
+          <em>Rate the bands you own — approve feeds your recommendations, reject marks them off-taste.</em>
         </p>
       )}
 
@@ -117,19 +118,19 @@ export default function Artists() {
                       <div className="rate-cell">
                         <button
                           className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
-                          title={verdict === 'Liked' ? 'Clear rating' : 'Thumbs up'}
+                          title={verdict === 'Liked' ? 'Clear rating' : 'Approve'}
                           disabled={rateArtist.isPending}
                           onClick={() => rateArtist.mutate({ artist: name, verdict: 'up', current: verdict })}
                         >
-                          👍
+                          <IconApprove />
                         </button>
                         <button
                           className={verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
-                          title={verdict === 'Disliked' ? 'Clear rating' : 'Thumbs down'}
+                          title={verdict === 'Disliked' ? 'Clear rating' : 'Reject'}
                           disabled={rateArtist.isPending}
                           onClick={() => rateArtist.mutate({ artist: name, verdict: 'down', current: verdict })}
                         >
-                          👎
+                          <IconReject />
                         </button>
                       </div>
                     </td>

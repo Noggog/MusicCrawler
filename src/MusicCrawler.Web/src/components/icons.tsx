@@ -1,0 +1,62 @@
+// Small inline SVG icons used by the rate / snooze / clear actions. They draw with `currentColor`
+// and stroke, so they inherit the button's neon colour (and any glow comes from the button's CSS).
+// Sized in px via `size`; default 18 sits well inside a .disc-btn.
+
+type IconProps = { size?: number; className?: string }
+
+function Svg({ size = 18, className, children }: IconProps & { children: React.ReactNode }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  )
+}
+
+// Approve — an upward chevron/spark. Reads as "boost / yes", no boomer thumb.
+export function IconApprove(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4 5 13h4v7h6v-7h4z" />
+    </Svg>
+  )
+}
+
+// Reject — a downward chevron/spark, the mirror of approve.
+export function IconReject(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 20 5 11h4V4h6v7h4z" />
+    </Svg>
+  )
+}
+
+// Snooze — a crescent moon.
+export function IconMoon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M20 14.2A8 8 0 1 1 9.8 4 6.3 6.3 0 0 0 20 14.2Z" />
+    </Svg>
+  )
+}
+
+// Clear a rating — an eraser/backspace wedge with a cross, distinct from Reject.
+export function IconClear(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 5h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9L3 12z" />
+      <path d="M14.5 9.5 9.5 14.5M9.5 9.5l5 5" />
+    </Svg>
+  )
+}
