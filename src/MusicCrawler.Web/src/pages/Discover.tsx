@@ -327,7 +327,6 @@ function DetailPanel({
       <aside className="disc-detail is-empty">
         <div className="disc-detail-empty">
           <span className="detail-empty-icon">🎧</span>
-          <div>Select something on the left to preview it — photo, samples, and albums land here.</div>
         </div>
       </aside>
     )
