@@ -50,6 +50,26 @@ public interface IArtistCatalogRepo
     /// parts that already exist keep their data and just absorb any albums.
     /// </summary>
     Task SplitCombinedArtist(string combinedName, IReadOnlyList<string> parts, DateTimeOffset syncedAt);
+
+    /// <summary>
+    /// The stored Deezer identity for an artist plus whether it's a sticky user override, or null
+    /// if the artist isn't cataloged or has never been resolved.
+    /// </summary>
+    Task<(DeezerIdentity Identity, bool IsOverride)?> GetDeezer(ArtistKey artist);
+
+    /// <summary>
+    /// Persists the Deezer identity an artist resolved to. <paramref name="isOverride"/> marks a
+    /// user pin (resolved by id, never auto-changed). Opportunistic callers pass false and must not
+    /// clobber an existing override — those writes are ignored for overridden rows. Never creates
+    /// entries for artists outside the catalog (IsUpsert=false).
+    /// </summary>
+    Task SetDeezerIdentity(ArtistKey artist, DeezerIdentity identity, bool isOverride);
+
+    /// <summary>
+    /// Drops the override flag and clears the stored Deezer fields for an artist, so the next
+    /// resolution re-derives the identity from a name search.
+    /// </summary>
+    Task ClearDeezerOverride(ArtistKey artist);
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);

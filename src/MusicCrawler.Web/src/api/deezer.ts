@@ -2,6 +2,8 @@
 // Deezer page. Returns null when Deezer has no match (the backend answers 404). artist goes in the
 // query string so names with '/' work.
 
+import type { DeezerCandidate } from '../types'
+
 export interface DeezerPreviewTrack {
   title: string
   previewUrl: string
@@ -38,4 +40,14 @@ export async function getDeezerAlbumPlayInfo(albumId: number): Promise<DeezerAlb
     throw new Error(`Failed to resolve Deezer album: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as DeezerAlbumPlayInfo
+}
+
+// Free-text Deezer artist search powering the "Correct association" picker — candidates in
+// relevance order (id, name, fans, link, photo).
+export async function searchDeezerArtists(q: string): Promise<DeezerCandidate[]> {
+  const res = await fetch(`/api/deezer/search?${new URLSearchParams({ q })}`)
+  if (!res.ok) {
+    throw new Error(`Failed to search Deezer artists: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as DeezerCandidate[]
 }

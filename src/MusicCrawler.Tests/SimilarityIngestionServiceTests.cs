@@ -1,5 +1,8 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using MusicCrawler.Backend;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Deezer.Models;
@@ -21,8 +24,12 @@ public class SimilarityIngestionServiceTests
 
     public SimilarityIngestionServiceTests()
     {
+        // Use a real resolver (concrete class) wired to the mocked Deezer API + an in-memory cache;
+        // ingestion now resolves through it so a pinned override is honored and the id is captured.
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var resolver = new DeezerArtistResolver(_deezer, cache, _catalog);
         _sut = new SimilarityIngestionService(
-            _deezer, _repo, _catalog,
+            _deezer, resolver, _repo, _catalog,
             new RelatedStalenessPolicy(TimeSpan.FromDays(30)),
             NullLogger<SimilarityIngestionService>.Instance);
     }

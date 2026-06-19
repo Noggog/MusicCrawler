@@ -139,9 +139,62 @@ var api = app.MapGroup("/api");
 
 api.MapGet("/artists", (ILibraryProvider libraryProvider) =>
     {
-        return libraryProvider.GetAllArtistMetadata();
+        return libraryProvider.GetArtistList();
     })
     .WithName("GetArtists");
+
+// Pin a library artist to a specific Deezer artist id — the fix for a misassociation (e.g. a
+// common name like "Alex" resolving to the wrong, more popular act). Stores a sticky override and
+// force-refreshes that artist's similarity edges so the graph re-derives from the correct id, then
+// rebuilds the caller's recommendation queue so candidates from the old (wrong) edges drop off
+// immediately rather than lingering until the next manual rebuild.
+// Auth-gated: this is a maintainer correction. artist is a query param so '/' in names works.
+api.MapPost("/artists/deezer-id", async (HttpContext http, string artist, long id,
+        DeezerArtistResolver resolver, RelatedArtistInteractor interactor, DiscoveryEngine engine) =>
+    {
+        var identity = await resolver.SetOverride(artist, id);
+        if (identity is null)
+        {
+            return Results.NotFound();
+        }
+
+        await interactor.GetRelated(new ArtistKey(artist), forceRefresh: true);
+        await engine.Rebuild(http.User.GetSubject()!);
+        return Results.Ok(identity);
+    })
+    .RequireAuthorization()
+    .WithName("SetArtistDeezerId");
+
+// Clear a Deezer override so the artist re-resolves from a name search next time. Auth-gated.
+api.MapDelete("/artists/deezer-id", async (string artist, DeezerArtistResolver resolver) =>
+    {
+        await resolver.ClearOverride(artist);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("ClearArtistDeezerId");
+
+// Free-text Deezer artist search powering the "Correct association" picker: candidate artists
+// (id, name, fans, link, photo) in relevance order. Public Deezer metadata, so no auth.
+api.MapGet("/deezer/search", async (string q, int? limit, DeezerArtistResolver resolver) =>
+        Results.Ok(await resolver.SearchArtists(q, Math.Clamp(limit ?? 10, 1, 25))))
+    .WithName("SearchDeezerArtists");
+
+// Backfill the Deezer identity for every present artist (id/name/fans/link/photo) into the catalog
+// so the Artists page can flag misassociations. Heavy (one lookup per artist), so it's a one-shot
+// maintenance trigger; afterwards ids are captured opportunistically as artists are sampled/rated.
+api.MapPost("/artists/deezer/resolve-all", async (ILibraryProvider library, DeezerArtistResolver resolver) =>
+    {
+        var artists = await library.GetAllArtistMetadata();
+        var resolved = 0;
+        foreach (var a in artists)
+        {
+            if (await resolver.ResolveIdentity(a.ArtistKey.ArtistName) != null) resolved++;
+        }
+        return Results.Ok(new { total = artists.Length, resolved });
+    })
+    .RequireAuthorization()
+    .WithName("ResolveAllDeezer");
 
 // The Library Catalog sync job: pull the artist list from Plex into the local catalog.
 // Daily reads (GET /artists) serve from that catalog, so this is the only Plex-touching path.

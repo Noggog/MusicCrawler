@@ -766,14 +766,9 @@ input[type='checkbox'] {
 }
 
 .disc-sub-albums {
-  margin-left: 2.4rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  padding: 0.6rem 0.8rem;
-  background: rgba(11, 9, 18, 0.45);
-  border-left: 2px solid var(--salmon-dark);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .disc-sub-note {
   font-size: 0.8rem;
@@ -792,6 +787,26 @@ input[type='checkbox'] {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.disc-sub-album:hover {
+  border-color: var(--border-bright);
+  background: rgba(55, 39, 115, 0.4);
+}
+/* Albums with no Deezer preview can't expand — leave them static. */
+.disc-sub-album.no-play {
+  cursor: default;
+}
+.disc-sub-album.no-play:hover {
+  border-color: var(--border);
+  background: var(--panel-2);
+}
+/* The album whose preview is open. */
+.disc-sub-album.selected {
+  border-color: var(--salmon);
+  background: rgba(225, 96, 99, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(250, 115, 118, 0.35), var(--glow-salmon);
 }
 .disc-sub-album-name {
   flex: 1;
@@ -1698,4 +1713,233 @@ input[type='checkbox'] {
   .disc-detail-empty .detail-empty-icon {
     animation: none !important;
   }
+}
+
+/* ========================================================================== */
+/* Artists page — search filter, Deezer column, correction picker              */
+/* ========================================================================== */
+
+.artist-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0.5rem auto 1.25rem;
+}
+.artist-search input {
+  width: min(380px, 80vw);
+  padding: 0.5rem 0.8rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+.artist-search input:focus {
+  outline: none;
+  border-color: var(--salmon);
+  box-shadow: var(--glow-salmon);
+}
+.artist-search-count {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+/* Artist name cell — thumbnail · (name + genre tags) · wrench (revealed on row hover). */
+.artist-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.artist-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.artist-thumb.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: linear-gradient(135deg, var(--purple-mid), var(--abyss-2));
+}
+.artist-name-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.artist-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.artist-name-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.artist-name-link:hover {
+  color: var(--cyan-hover);
+  text-shadow: var(--glow-cyan);
+}
+.genre-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.genre-tag {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  color: var(--text-dim);
+  background: rgba(116, 88, 219, 0.16);
+  border: 1px solid var(--border);
+}
+.wrench-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.artist-row:hover .wrench-btn,
+.wrench-btn:focus-visible {
+  opacity: 1;
+}
+.wrench-btn:hover {
+  color: var(--cyan);
+}
+.warn-badge {
+  font-size: 0.95rem;
+  filter: drop-shadow(0 0 6px rgba(250, 115, 118, 0.6));
+  cursor: help;
+}
+
+/* A plain text button styled as an inline link (the "Correct" / "Reset" actions). */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cyan);
+  font: inherit;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--cyan-hover);
+  text-shadow: var(--glow-cyan);
+}
+.link-btn:disabled {
+  color: var(--text-faint);
+  cursor: default;
+  text-shadow: none;
+}
+
+/* Correction picker — a centered modal panel over a dimmed backdrop. */
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 1rem;
+  background: rgba(7, 5, 14, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.picker-panel {
+  width: min(560px, 100%);
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 1.25rem 1.4rem 1.5rem;
+  background: var(--panel-solid);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-purple);
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.picker-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.picker-search {
+  width: 100%;
+  margin: 0.4rem 0 0.8rem;
+  padding: 0.5rem 0.8rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+}
+.picker-search:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.picker-pinned {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.picker-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.picker-result {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.picker-result.current {
+  border-color: var(--salmon);
+  box-shadow: inset 0 0 14px rgba(225, 96, 99, 0.18);
+}
+.picker-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.picker-thumb.placeholder {
+  background: linear-gradient(135deg, var(--purple-mid), var(--abyss-2));
+}
+.picker-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.picker-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.picker-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
 }

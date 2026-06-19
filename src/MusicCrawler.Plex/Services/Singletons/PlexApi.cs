@@ -123,6 +123,15 @@ public record PlexMusicArtist
     public string Key { get; set; }
     public string Guid { get; set; }
     public string Title { get; set; }
+
+    // Plex returns genre tags inline on the section listing, e.g. "Genre":[{"tag":"Pop/Rock"}].
+    public PlexTag[]? Genre { get; set; }
+}
+
+/// <summary>A Plex tag entry — genres, moods, styles all serialize as <c>{ "tag": "..." }</c>.</summary>
+public record PlexTag
+{
+    public string Tag { get; set; }
 }
 
 public record PlexMusicAlbum

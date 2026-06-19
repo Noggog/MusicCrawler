@@ -5,7 +5,26 @@ namespace MusicCrawler.Backend.Services.Singletons;
 public interface ILibraryProvider
 {
     Task<ArtistMetadata[]> GetAllArtistMetadata();
+
+    /// <summary>
+    /// The artist library enriched with each artist's resolved Deezer identity (for the Artists
+    /// page: link-out, fan count, and spotting/fixing misassociations). Reads only the local
+    /// catalog — no live Deezer calls.
+    /// </summary>
+    Task<ArtistListItem[]> GetArtistList();
 }
+
+/// <summary>One Artists-page row: the library artist, its genre tags, and whatever Deezer identity
+/// it resolved to.</summary>
+public record ArtistListItem(
+    ArtistKey ArtistKey,
+    string? ArtistImageUrl,
+    IReadOnlyList<string> Genres,
+    long? DeezerId,
+    string? DeezerName,
+    int? DeezerFans,
+    string? DeezerLink,
+    bool DeezerOverride);
 
 /// <summary>
 /// Serves the artist library for daily reads from the local catalog store — not from
@@ -25,6 +44,21 @@ public class LibraryProvider : ILibraryProvider
     {
         return (await _catalog.GetAllPresent())
             .Select(x => new ArtistMetadata(x.ArtistKey, x.ArtistImageUrl))
+            .ToArray();
+    }
+
+    public async Task<ArtistListItem[]> GetArtistList()
+    {
+        return (await _catalog.GetAllPresent())
+            .Select(x => new ArtistListItem(
+                x.ArtistKey,
+                x.ArtistImageUrl,
+                x.Genres ?? Array.Empty<string>(),
+                x.Deezer?.Id,
+                x.Deezer?.Name,
+                x.Deezer?.Fans,
+                x.Deezer?.Link,
+                x.DeezerOverride))
             .ToArray();
     }
 }

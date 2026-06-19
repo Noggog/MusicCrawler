@@ -10,6 +10,29 @@ export interface ArtistMetadata {
   artistImageUrl: string | null
 }
 
+// Mirror ArtistListItem (LibraryProvider.cs) — one Artists-page row enriched with the artist's
+// resolved Deezer identity, for the link-out and for spotting/fixing misassociations.
+// All deezer* fields are null until the artist has been resolved.
+export interface ArtistListItem {
+  artistKey: ArtistKey
+  artistImageUrl: string | null
+  genres: string[]
+  deezerId: number | null
+  deezerName: string | null
+  deezerFans: number | null
+  deezerLink: string | null
+  deezerOverride: boolean
+}
+
+// Mirror DeezerIdentity (Artist.cs) — a Deezer artist candidate in the "Correct association" picker.
+export interface DeezerCandidate {
+  id: number
+  name: string | null
+  fans: number | null
+  link: string | null
+  imageUrl: string | null
+}
+
 // Mirrors CatalogSyncResult (IArtistCatalogRepo.cs) — returned by POST /catalog/refresh.
 export interface CatalogSyncResult {
   upserted: number

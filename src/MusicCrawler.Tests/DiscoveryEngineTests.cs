@@ -28,7 +28,7 @@ public class DiscoveryEngineTests
     public DiscoveryEngineTests()
     {
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
-        var resolver = new DeezerArtistResolver(_deezer, cache);
+        var resolver = new DeezerArtistResolver(_deezer, cache, _catalog);
         var refresher = new MissingAlbumRefresher(
             _catalog, resolver, _deezer, _missing, NullLogger<MissingAlbumRefresher>.Instance);
         _sut = new DiscoveryEngine(

@@ -60,3 +60,12 @@ export function IconClear(props: IconProps) {
     </Svg>
   )
 }
+
+// Wrench — the "correct/fix the Deezer association" action.
+export function IconWrench(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-2.4z" />
+    </Svg>
+  )
+}

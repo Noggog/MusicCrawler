@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
+using MusicCrawler.Deezer.Models;
 using MusicCrawler.Deezer.Services;
+using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.Backend.Services.Singletons;
 
@@ -44,57 +46,123 @@ public class DeezerArtistResolver
 
     private readonly IDeezerApi _deezer;
     private readonly IDistributedCache _cache;
+    private readonly IArtistCatalogRepo _catalog;
 
-    public DeezerArtistResolver(IDeezerApi deezer, IDistributedCache cache)
+    public DeezerArtistResolver(IDeezerApi deezer, IDistributedCache cache, IArtistCatalogRepo catalog)
     {
         _deezer = deezer;
         _cache = cache;
+        _catalog = catalog;
     }
 
     /// <summary>Full sample/link/image info for an artist name, or null if Deezer has no match.</summary>
     public async Task<DeezerPlayInfo?> ResolvePlayInfo(string artistName)
     {
-        var artist = await ResolveArtist(artistName);
-        if (artist is null)
+        var identity = await ResolveIdentity(artistName);
+        if (identity is null)
         {
             return null;
         }
 
-        var tracks = await ResolveTopTracks(artist.Id);
+        var tracks = await ResolveTopTracks(identity.Id);
         return new DeezerPlayInfo(
-            artist.Id,
-            $"https://www.deezer.com/artist/{artist.Id}",
-            artist.ImageUrl,
+            identity.Id,
+            identity.Link ?? $"https://www.deezer.com/artist/{identity.Id}",
+            identity.ImageUrl,
             tracks);
     }
 
     /// <summary>The Deezer artist id for a name, or null if Deezer has no match. Cached.</summary>
     public async Task<long?> ResolveArtistId(string artistName) =>
-        (await ResolveArtist(artistName))?.Id;
+        (await ResolveIdentity(artistName))?.Id;
 
-    /// <summary>The Deezer id + photo for an artist name (or null on no match). Cached as JSON so the
-    /// id and image come from one search — the "no match" case is an empty-string sentinel.</summary>
-    private async Task<CachedArtist?> ResolveArtist(string artistName)
+    /// <summary>
+    /// The Deezer artist a name resolves to (id, name, fans, link, photo), or null on no match.
+    /// Honors a user override pinned on the catalog (resolved by id, never re-searched); otherwise
+    /// takes Deezer's top name-search hit. Every successful resolution is persisted to the catalog
+    /// so the id is captured opportunistically (e.g. when an artist is sampled or thumbed-up), and
+    /// cached so cards never re-hit Deezer for something already looked up.
+    /// </summary>
+    public async Task<DeezerIdentity?> ResolveIdentity(string artistName)
     {
-        var key = $"deezer:artist:{artistName.ToLowerInvariant()}";
+        // A user pin wins outright — the whole point is to stop guessing by name.
+        var stored = await _catalog.GetDeezer(new ArtistKey(artistName));
+        if (stored is { IsOverride: true })
+        {
+            return stored.Value.Identity;
+        }
+
+        var key = NameCacheKey(artistName);
+        DeezerIdentity? identity;
 
         var cached = await _cache.GetStringAsync(key);
         if (cached != null)
         {
-            return cached.Length == 0 ? null : JsonSerializer.Deserialize<CachedArtist>(cached);
+            identity = cached.Length == 0 ? null : JsonSerializer.Deserialize<DeezerIdentity>(cached);
+        }
+        else
+        {
+            identity = ToIdentity(await _deezer.SearchArtist(artistName));
+            await _cache.SetStringAsync(key, identity is null ? "" : JsonSerializer.Serialize(identity), IdCacheOptions);
         }
 
-        var artist = await _deezer.SearchArtist(artistName);
-        var resolved = artist is null ? null : new CachedArtist(artist.id, artist.BestImageUrl);
-        await _cache.SetStringAsync(
-            key,
-            resolved is null ? "" : JsonSerializer.Serialize(resolved),
-            IdCacheOptions);
-        return resolved;
+        // Opportunistic capture onto the catalog (for the Artists page). Done on cache hits too, not
+        // just misses — otherwise a warm cache (Redis) means nothing ever lands in the catalog. Skip
+        // the write when the catalog already has this id, and never overturn an override (repo guards).
+        if (identity != null && stored?.Identity.Id != identity.Id)
+        {
+            await _catalog.SetDeezerIdentity(new ArtistKey(artistName), identity, isOverride: false);
+        }
+
+        return identity;
     }
 
-    /// <summary>The cached identity of a Deezer artist: its id and best photo URL.</summary>
-    private record CachedArtist(long Id, string? ImageUrl);
+    /// <summary>
+    /// Pins an artist to a specific Deezer id (a user correction). Fetches that artist by id,
+    /// persists it as a sticky override, and evicts any stale name-resolution. Returns the pinned
+    /// identity, or null if Deezer has no artist with that id.
+    /// </summary>
+    public async Task<DeezerIdentity?> SetOverride(string artistName, long deezerId)
+    {
+        var identity = ToIdentity(await _deezer.GetArtist(deezerId));
+        if (identity is null)
+        {
+            return null;
+        }
+
+        await _catalog.SetDeezerIdentity(new ArtistKey(artistName), identity, isOverride: true);
+        await _cache.RemoveAsync(NameCacheKey(artistName));
+        return identity;
+    }
+
+    /// <summary>Clears a user pin so the artist re-resolves from a name search next time.</summary>
+    public async Task ClearOverride(string artistName)
+    {
+        await _catalog.ClearDeezerOverride(new ArtistKey(artistName));
+        await _cache.RemoveAsync(NameCacheKey(artistName));
+    }
+
+    /// <summary>Free-text Deezer artist search for the "Correct association" picker.</summary>
+    public async Task<IReadOnlyList<DeezerIdentity>> SearchArtists(string query, int limit) =>
+        (await _deezer.SearchArtists(query, limit))
+            .Select(ToIdentity)
+            .Where(i => i != null)
+            .Select(i => i!)
+            .ToArray();
+
+    // v2: the cached value changed shape (CachedArtist -> DeezerIdentity), so bump the key to ignore
+    // any stale v1 entries lingering in a persistent cache (Redis) rather than mis-deserializing them.
+    private static string NameCacheKey(string artistName) => $"deezer:artist:v2:{artistName.ToLowerInvariant()}";
+
+    private static DeezerIdentity? ToIdentity(DeezerArtist? artist) =>
+        artist is null
+            ? null
+            : new DeezerIdentity(
+                artist.id,
+                artist.name,
+                artist.nb_fan,
+                artist.link ?? $"https://www.deezer.com/artist/{artist.id}",
+                artist.BestImageUrl);
 
     /// <summary>
     /// Sample/link info for a specific Deezer album id. The album id is already known (it comes from

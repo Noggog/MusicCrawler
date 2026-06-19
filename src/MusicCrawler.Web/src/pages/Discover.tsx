@@ -224,20 +224,20 @@ function Provenance({ sources }: { sources: string[] }) {
 function ArtistAlbumsPanel({
   artist,
   rated,
-  playing,
-  togglePlay,
   onRate,
   onUndo,
   disabled,
 }: {
   artist: string
   rated: Map<string, RowMark>
-  playing: Set<string>
-  togglePlay: (key: string) => void
   onRate: (item: FeedItem, verdict: Verdict) => void
   onUndo: (item: FeedItem) => void
   disabled: boolean
 }) {
+  // Which album's Deezer preview is expanded — one at a time, like selecting a row in the left-hand
+  // list. Clicking anywhere on a row toggles its player (and collapses whichever was open before).
+  const [openAlbum, setOpenAlbum] = useState<string | null>(null)
+
   const { data, isPending, isError } = useQuery({
     queryKey: ['artist-albums', artist],
     queryFn: () => getArtistAlbums(artist),
@@ -253,26 +253,22 @@ function ArtistAlbumsPanel({
 
   return (
     <div className="disc-sub-albums">
-      <div className="disc-sub-note">Albums by {artist} — approve the ones to grab:</div>
       {data.map((album) => {
         const rowKey = `${album.artist.artistName}::${album.album}`
         const verdict = rated.get(rowKey)
-        const isPlaying = playing.has(rowKey)
+        const canPlay = !!album.deezerAlbumId
+        const isOpen = openAlbum === rowKey
         return (
           <div className="disc-sub-album-wrap" key={rowKey}>
-            <div className="disc-sub-album">
+            {/* The whole row toggles the preview; the action cluster stops the click so a thumb
+                doesn't also open/close the player. */}
+            <div
+              className={`disc-sub-album${isOpen ? ' selected' : ''}${canPlay ? '' : ' no-play'}`}
+              onClick={canPlay ? () => setOpenAlbum((cur) => (cur === rowKey ? null : rowKey)) : undefined}
+            >
               <FeedAvatar item={album} size={36} />
               <div className="disc-sub-album-name">{album.album}</div>
-              <div className="disc-actions">
-                {album.deezerAlbumId && (
-                  <button
-                    className={isPlaying ? 'disc-btn play active' : 'disc-btn play'}
-                    title={isPlaying ? 'Hide Deezer player' : 'Listen on Deezer'}
-                    onClick={() => togglePlay(rowKey)}
-                  >
-                    {isPlaying ? '▾' : '▶'}
-                  </button>
-                )}
+              <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
                 {verdict ? (
                   <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
                 ) : (
@@ -287,7 +283,7 @@ function ArtistAlbumsPanel({
                 )}
               </div>
             </div>
-            {isPlaying && album.deezerAlbumId && <DeezerSample albumId={album.deezerAlbumId} />}
+            {isOpen && album.deezerAlbumId && <DeezerSample albumId={album.deezerAlbumId} />}
           </div>
         )
       })}
@@ -304,8 +300,6 @@ function DetailPanel({
   rated,
   busy,
   rebuildPending,
-  playing,
-  togglePlay,
   onRate,
   onSnooze,
   onUndo,
@@ -315,8 +309,6 @@ function DetailPanel({
   rated: Map<string, RowMark>
   busy: boolean
   rebuildPending: boolean
-  playing: Set<string>
-  togglePlay: (key: string) => void
   onRate: (item: FeedItem, verdict: Verdict) => void
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
@@ -417,8 +409,6 @@ function DetailPanel({
           <ArtistAlbumsPanel
             artist={name}
             rated={rated}
-            playing={playing}
-            togglePlay={togglePlay}
             onRate={onRate}
             onUndo={onUndo}
             disabled={rebuildPending}
@@ -438,7 +428,6 @@ type DiscoverState = {
   shown: Set<FeedKind>
   page: number
   seed: number
-  playing: Set<string>
   rated: Map<string, RowMark>
   // The feed row open in the readout panel (desktop) / bottom drawer (mobile).
   selected: FeedItem | null
@@ -447,7 +436,6 @@ const persisted: DiscoverState = {
   shown: new Set<FeedKind>(DEFAULT_KINDS),
   page: 0,
   seed: newSeed(),
-  playing: new Set<string>(),
   rated: new Map<string, RowMark>(),
   selected: null,
 }
@@ -458,8 +446,6 @@ export default function Discover() {
   const [shown, setShown] = useState<Set<FeedKind>>(() => persisted.shown)
   const [page, setPage] = useState(() => persisted.page)
   const [seed, setSeed] = useState(() => persisted.seed)
-  // Artists whose Deezer player is expanded (kept collapsed by default so we don't mount many iframes).
-  const [playing, setPlaying] = useState<Set<string>>(() => persisted.playing)
   // Rows rated this view, by row key -> verdict. They stay in place (marked, not removed) until the
   // next natural refresh, so a 👍/👎 doesn't reflow the whole list out from under you.
   const [rated, setRated] = useState<Map<string, RowMark>>(() => persisted.rated)
@@ -472,7 +458,6 @@ export default function Discover() {
     persisted.shown = shown
     persisted.page = page
     persisted.seed = seed
-    persisted.playing = playing
     persisted.rated = rated
     persisted.selected = selected
   })
@@ -496,13 +481,6 @@ export default function Discover() {
     // The selected item has almost certainly left the freshly-fetched feed — close the readout.
     setSelected(null)
   }, [page, seed, kindsKey])
-
-  const togglePlay = (key: string) =>
-    setPlaying((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
 
   const toggleCategory = (kind: FeedKind) => {
     setShown((prev) => {
@@ -627,6 +605,18 @@ export default function Discover() {
   const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending || rebuild.isPending
   const items = data?.items ?? []
   const total = data?.total ?? 0
+
+  // Open the first row by default once the feed is populated, so the readout shows a recommendation
+  // instead of the empty headphones placeholder — that placeholder is only meaningful when there's
+  // literally nothing to show. Desktop only: on mobile the readout is a drawer that slides over the
+  // list, so we leave it closed until the user actually taps a row. Re-runs after a natural refresh
+  // (which clears the selection) to land on the new first item, but never overrides a live selection.
+  useEffect(() => {
+    if (items.length === 0) return
+    if (selected && items.some((it) => rowKeyFor(it) === rowKeyFor(selected))) return
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 961px)').matches) return
+    setSelected(items[0])
+  }, [items, selected])
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   // Identity of the row open in the readout, so the matching list row renders as selected.
   const selectedKey = selected ? rowKeyFor(selected) : null
@@ -774,8 +764,6 @@ export default function Discover() {
             rated={rated}
             busy={busy}
             rebuildPending={rebuild.isPending}
-            playing={playing}
-            togglePlay={togglePlay}
             onRate={(item, verdict) => rateMutation.mutate({ item, verdict })}
             onSnooze={(item, duration) => snoozeMutation.mutate({ item, duration })}
             onUndo={(item) => undo.mutate(item)}

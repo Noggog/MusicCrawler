@@ -25,7 +25,7 @@ public class MissingAlbumRefresherTests
     public MissingAlbumRefresherTests()
     {
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
-        var resolver = new DeezerArtistResolver(_deezer, cache);
+        var resolver = new DeezerArtistResolver(_deezer, cache, _catalog);
         _sut = new MissingAlbumRefresher(_catalog, resolver, _deezer, _missing, NullLogger<MissingAlbumRefresher>.Instance);
 
         _catalog.GetAllPresent().Returns(new[] { new CatalogArtist(new ArtistKey(Artist), null, default) });

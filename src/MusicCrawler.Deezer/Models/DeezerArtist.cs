@@ -10,6 +10,14 @@ public class DeezerArtist
     public long id { get; set; }
     public string? name { get; set; }
 
+    // Canonical deezer.com page; present on /artist/{id} and search results.
+    public string? link { get; set; }
+
+    // Popularity signals — handy for telling apart same-named artists (e.g. the pop "Alex Warren"
+    // with 100k+ fans vs a niche "ALEX" with ~1.5k). Absent on some partial payloads, hence nullable.
+    public int? nb_fan { get; set; }
+    public int? nb_album { get; set; }
+
     // Deezer ships several image sizes; we prefer the largest available.
     public string? picture_xl { get; set; }
     public string? picture_big { get; set; }

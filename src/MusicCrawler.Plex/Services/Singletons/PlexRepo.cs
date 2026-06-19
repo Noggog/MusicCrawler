@@ -29,17 +29,24 @@ public class PlexRepo : ILibraryQuery
     {
         var plexLibrary = await _plexApi.ResolveLibrary();
         // Plex joins collaborators into one title with ';' — split them so "Nina Simone;Hot Chip"
-        // becomes two artists, then dedup (the split halves can collide with standalone entries).
+        // becomes two artists, then group by name (the split halves can collide with standalone
+        // entries) and union each artist's genre tags across every title they appear in.
         return (await _plexApi.GetMusicArtists(plexLibrary.Key))
-            .SelectMany(plexMusicArtist => ArtistNames.Split(plexMusicArtist.Title))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(name =>
-                    new ArtistMetadata(
-                        ArtistKey: new ArtistKey(name),
-                        ArtistImageUrl: null) // TODO: Shouldn't just be null
-            )
+            .SelectMany(a => ArtistNames.Split(a.Title).Select(name => (Name: name, Genres: ExtractGenres(a))))
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ArtistMetadata(
+                ArtistKey: new ArtistKey(g.Key),
+                ArtistImageUrl: null, // Plex supplies no public image URL; backfilled from Deezer later.
+                Genres: g.SelectMany(x => x.Genres).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
             .ToArray();
     }
+
+    private static IReadOnlyList<string> ExtractGenres(PlexMusicArtist artist) =>
+        artist.Genre?
+            .Select(t => t.Tag)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToArray()
+        ?? Array.Empty<string>();
 
     public async Task<ArtistAlbums[]> QueryAllAlbums()
     {

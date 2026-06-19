@@ -4,8 +4,21 @@ public record Recommendation(ArtistKey ArtistKey, ArtistKey[] SourceArtists);
 
 public record ArtistKey(string ArtistName);
 
-public record ArtistMetadata(ArtistKey ArtistKey, string? ArtistImageUrl);
+public record ArtistMetadata(ArtistKey ArtistKey, string? ArtistImageUrl, IReadOnlyList<string>? Genres = null);
 
-public record CatalogArtist(ArtistKey ArtistKey, string? ArtistImageUrl, DateTimeOffset LastSeenAt);
+/// <summary>
+/// The Deezer artist a library name resolves to: its id, Deezer's own spelling, popularity, page
+/// link and photo. Comparing <see cref="Name"/> to the library name (and eyeballing <see cref="Fans"/>)
+/// is how a misassociation is spotted — e.g. library "ALEX" resolving to Deezer's "Alex Warren".
+/// </summary>
+public record DeezerIdentity(long Id, string? Name, int? Fans, string? Link, string? ImageUrl);
+
+public record CatalogArtist(
+    ArtistKey ArtistKey,
+    string? ArtistImageUrl,
+    DateTimeOffset LastSeenAt,
+    DeezerIdentity? Deezer = null,
+    bool DeezerOverride = false,
+    IReadOnlyList<string>? Genres = null);
 
 public record ArtistPackage(ArtistMetadata Metadata, Album[] Albums);

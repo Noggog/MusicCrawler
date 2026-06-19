@@ -30,13 +30,25 @@ public class DeezerApi : IDeezerApi
 
     public async Task<DeezerArtist?> SearchArtist(string artistName)
     {
-        var query = HttpUtility.ParseQueryString(string.Empty);
-        query["q"] = artistName;
-        var url = $"{_endpointInfo.BaseUri}/search/artist?{query}";
+        // Deezer orders search results by relevance; the first is the strongest match.
+        return (await SearchArtists(artistName, 1)).FirstOrDefault();
+    }
+
+    public async Task<DeezerArtist[]> SearchArtists(string query, int limit)
+    {
+        var qs = HttpUtility.ParseQueryString(string.Empty);
+        qs["q"] = query;
+        qs["limit"] = limit.ToString();
+        var url = $"{_endpointInfo.BaseUri}/search/artist?{qs}";
 
         var result = await Get<DeezerArtistList>(url);
-        // Deezer orders search results by relevance; the first is the strongest match.
-        return result?.data.FirstOrDefault();
+        return result?.data.ToArray() ?? Array.Empty<DeezerArtist>();
+    }
+
+    public async Task<DeezerArtist?> GetArtist(long artistId)
+    {
+        var url = $"{_endpointInfo.BaseUri}/artist/{artistId}";
+        return await Get<DeezerArtist>(url);
     }
 
     public async Task<DeezerArtist[]> GetRelated(long artistId)

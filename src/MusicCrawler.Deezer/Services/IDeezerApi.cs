@@ -12,6 +12,15 @@ public interface IDeezerApi
     /// <summary>Resolve an artist name to its Deezer artist (strongest match), or null if none.</summary>
     Task<DeezerArtist?> SearchArtist(string artistName);
 
+    /// <summary>
+    /// Search Deezer for artists by name, in relevance order (empty if none/error). Used to offer
+    /// the user a choice when the top hit is wrong (the "Correct association" picker).
+    /// </summary>
+    Task<DeezerArtist[]> SearchArtists(string query, int limit);
+
+    /// <summary>Fetch a Deezer artist by its id (name, fans, image, link), or null if none/error.</summary>
+    Task<DeezerArtist?> GetArtist(long artistId);
+
     /// <summary>Deezer's "related artists" for the given artist id (empty if none/error).</summary>
     Task<DeezerArtist[]> GetRelated(long artistId);
 

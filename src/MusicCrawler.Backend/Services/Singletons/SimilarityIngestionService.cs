@@ -15,6 +15,7 @@ public class SimilarityIngestionService
     public const string SourceName = "deezer";
 
     private readonly IDeezerApi _deezerApi;
+    private readonly DeezerArtistResolver _resolver;
     private readonly IRelatedArtistRepo _repo;
     private readonly IArtistCatalogRepo _catalog;
     private readonly ILogger<SimilarityIngestionService> _logger;
@@ -22,12 +23,14 @@ public class SimilarityIngestionService
 
     public SimilarityIngestionService(
         IDeezerApi deezerApi,
+        DeezerArtistResolver resolver,
         IRelatedArtistRepo repo,
         IArtistCatalogRepo catalog,
         RelatedStalenessPolicy stalenessPolicy,
         ILogger<SimilarityIngestionService> logger)
     {
         _deezerApi = deezerApi;
+        _resolver = resolver;
         _repo = repo;
         _catalog = catalog;
         _logger = logger;
@@ -48,8 +51,10 @@ public class SimilarityIngestionService
             return existing;
         }
 
-        var deezerArtist = await _deezerApi.SearchArtist(artist.ArtistName);
-        if (deezerArtist == null)
+        // Resolve through the shared resolver so a user's pinned Deezer id (override) is honored and
+        // the id is captured onto the catalog — instead of blindly taking the top name-search hit.
+        var identity = await _resolver.ResolveIdentity(artist.ArtistName);
+        if (identity == null)
         {
             // No match or Deezer unreachable. Don't persist an empty result (it'd suppress
             // retries on a transient failure) — serve whatever we already have.
@@ -57,7 +62,7 @@ public class SimilarityIngestionService
             return existing ?? new ArtistRelations(artist, SourceName, Array.Empty<RelatedArtist>(), DateTimeOffset.UtcNow);
         }
 
-        var related = (await _deezerApi.GetRelated(deezerArtist.id))
+        var related = (await _deezerApi.GetRelated(identity.Id))
             .Where(r => !string.IsNullOrWhiteSpace(r.name))
             .Select(r => new RelatedArtist(new ArtistKey(r.name!), r.BestImageUrl))
             .ToArray();
@@ -65,7 +70,7 @@ public class SimilarityIngestionService
         var relations = new ArtistRelations(artist, SourceName, related, DateTimeOffset.UtcNow);
         await _repo.Upsert(relations);
 
-        await BackfillImages(artist, deezerArtist.BestImageUrl, related);
+        await BackfillImages(artist, identity.ImageUrl, related);
 
         _logger.LogInformation("Ingested {Count} Deezer related artists for {Artist}", related.Length, artist.ArtistName);
         return relations;

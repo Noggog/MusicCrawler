@@ -12,6 +12,12 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
     private const string FieldLastSeenAt = "lastSeenAt";
     private const string FieldPresent = "present";
     private const string FieldAlbums = "albums";
+    private const string FieldGenres = "genres";
+    private const string FieldDeezerId = "deezerId";
+    private const string FieldDeezerName = "deezerName";
+    private const string FieldDeezerFans = "deezerFans";
+    private const string FieldDeezerLink = "deezerLink";
+    private const string FieldDeezerOverride = "deezerOverride";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -35,7 +41,10 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             var update = Builders<BsonDocument>.Update
                 .Set(FieldName, name)
                 .Set(FieldLastSeenAt, syncedAtUtc)
-                .Set(FieldPresent, true);
+                .Set(FieldPresent, true)
+                // Plex is the source of truth for genres, so write them every sync (an empty array
+                // clears stale tags). Absent on the Deezer backfill path, which never touches this.
+                .Set(FieldGenres, new BsonArray(artist.Genres ?? Array.Empty<string>()));
 
             // Only set the image when we actually have one, so a Plex sync (which
             // currently supplies no image) never clobbers one backfilled elsewhere
@@ -204,6 +213,77 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             .ToArray();
     }
 
+    public async Task<(DeezerIdentity Identity, bool IsOverride)?> GetDeezer(ArtistKey artist)
+    {
+        var doc = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName))).FirstOrDefaultAsync();
+        if (doc == null) return null;
+
+        var identity = ToDeezerIdentity(doc);
+        if (identity == null) return null;
+
+        var isOverride = doc.TryGetValue(FieldDeezerOverride, out var o) && o.IsBoolean && o.AsBoolean;
+        return (identity, isOverride);
+    }
+
+    public async Task SetDeezerIdentity(ArtistKey artist, DeezerIdentity identity, bool isOverride)
+    {
+        BsonValue name = identity.Name != null ? new BsonString(identity.Name) : BsonNull.Value;
+        BsonValue fans = identity.Fans.HasValue ? new BsonInt32(identity.Fans.Value) : BsonNull.Value;
+        BsonValue link = identity.Link != null ? new BsonString(identity.Link) : BsonNull.Value;
+
+        var update = Builders<BsonDocument>.Update
+            .Set(FieldDeezerId, new BsonInt64(identity.Id))
+            .Set(FieldDeezerName, name)
+            .Set(FieldDeezerFans, fans)
+            .Set(FieldDeezerLink, link)
+            .Set(FieldDeezerOverride, isOverride);
+
+        // The photo doubles as the displayed artist image; only set it when Deezer supplied one
+        // so a missing image never blanks an existing photo.
+        if (identity.ImageUrl != null)
+        {
+            update = update.Set(FieldImageUrl, identity.ImageUrl);
+        }
+
+        var filter = Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName);
+        if (!isOverride)
+        {
+            // Opportunistic writes must never overturn a user's pin.
+            filter = Builders<BsonDocument>.Filter.And(
+                filter,
+                Builders<BsonDocument>.Filter.Ne(FieldDeezerOverride, true));
+        }
+
+        // Never create entries for artists outside the catalog.
+        await Collection.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = false });
+    }
+
+    public async Task ClearDeezerOverride(ArtistKey artist)
+    {
+        var update = Builders<BsonDocument>.Update
+            .Unset(FieldDeezerId)
+            .Unset(FieldDeezerName)
+            .Unset(FieldDeezerFans)
+            .Unset(FieldDeezerLink)
+            .Unset(FieldDeezerOverride);
+
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update);
+    }
+
+    private static DeezerIdentity? ToDeezerIdentity(BsonDocument doc)
+    {
+        if (!doc.TryGetValue(FieldDeezerId, out var id) || !id.IsNumeric) return null;
+
+        var name = doc.TryGetValue(FieldDeezerName, out var n) && !n.IsBsonNull ? n.AsString : null;
+        var fans = doc.TryGetValue(FieldDeezerFans, out var f) && f.IsNumeric ? f.ToInt32() : (int?)null;
+        var link = doc.TryGetValue(FieldDeezerLink, out var l) && !l.IsBsonNull ? l.AsString : null;
+        var image = doc.TryGetValue(FieldImageUrl, out var img) && !img.IsBsonNull ? img.AsString : null;
+
+        return new DeezerIdentity(id.ToInt64(), name, fans, link, image);
+    }
+
     private static CatalogArtist ToCatalogArtist(BsonDocument doc)
     {
         var name = doc.TryGetValue(FieldName, out var n) && !n.IsBsonNull
@@ -218,6 +298,13 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             ? new DateTimeOffset(ls.ToUniversalTime(), TimeSpan.Zero)
             : default;
 
-        return new CatalogArtist(new ArtistKey(name), imageUrl, lastSeenAt);
+        var deezer = ToDeezerIdentity(doc);
+        var deezerOverride = doc.TryGetValue(FieldDeezerOverride, out var o) && o.IsBoolean && o.AsBoolean;
+
+        var genres = doc.TryGetValue(FieldGenres, out var g) && g.IsBsonArray
+            ? g.AsBsonArray.Where(x => !x.IsBsonNull).Select(x => x.AsString).ToArray()
+            : Array.Empty<string>();
+
+        return new CatalogArtist(new ArtistKey(name), imageUrl, lastSeenAt, deezer, deezerOverride, genres);
     }
 }
