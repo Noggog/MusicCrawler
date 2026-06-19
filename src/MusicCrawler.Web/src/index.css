@@ -310,6 +310,70 @@ code {
 }
 
 /* ========================================================================== */
+/* Volume control                                                              */
+/* ========================================================================== */
+
+.volume-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.volume-icon {
+  display: block;
+  flex-shrink: 0;
+  color: var(--cyan);
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.55));
+}
+
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 90px;
+  /* Tall, transparent hit area so the whole strip is clickable — the thin line is drawn by the
+     track pseudo-elements below, but you no longer have to land exactly on it. */
+  height: 22px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Visible track (thin) */
+.volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  /* Center the thumb on the 4px track within the 22px box. */
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--salmon-light);
+  box-shadow: var(--glow-salmon);
+  cursor: pointer;
+}
+
+/* ========================================================================== */
 /* Auth box                                                                    */
 /* ========================================================================== */
 

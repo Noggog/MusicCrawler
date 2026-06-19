@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import VolumeControl from './VolumeControl'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'nav-link active' : 'nav-link'
@@ -58,6 +59,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           )}
         </nav>
+        <VolumeControl />
         <AuthBox />
       </header>
       <main className="content">{children}</main>

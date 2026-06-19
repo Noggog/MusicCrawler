@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getDeezerAlbumPlayInfo, getDeezerPlayInfo } from '../api/deezer'
+import { getVolume, useVolume } from '../audio/volume'
 
 // Only one preview should play at a time across the whole page; track the active element so
 // starting a new one pauses the previous (e.g. expanding a second row in the list view).
@@ -30,6 +31,12 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
+  const volume = useVolume()
+
+  // Keep the live element in sync while the global slider moves mid-playback.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume
+  }, [volume])
 
   const play = (index: number) => {
     const el = audioRef.current
@@ -37,6 +44,7 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
     if (!el || !track) return
     if (currentAudio && currentAudio !== el) currentAudio.pause()
     currentAudio = el
+    el.volume = getVolume()
     el.src = track.previewUrl
     setSelected(index)
     el.play().catch(() => {
