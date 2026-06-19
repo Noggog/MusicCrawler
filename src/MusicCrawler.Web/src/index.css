@@ -1186,12 +1186,35 @@ input[type='checkbox'] {
   box-shadow: var(--glow-salmon);
 }
 
-/* Hero image with a neon halo. */
+/* Header band: art pinned left, badge/title/chips/actions filling the space to its right. */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+/* Right-hand metadata column beside the art. */
+.detail-headinfo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* The "Recommended via" label leads the column, so it shouldn't carry the big top margin it gets
+   when it sits mid-stack below the hero. */
+.detail-headinfo > .detail-section-label:first-child {
+  margin-top: 0;
+}
+
+/* Hero image with a neon halo — now left-aligned in the header rather than centred in the pane. */
 .detail-hero {
   position: relative;
+  flex: 0 0 auto;
+  /* Scales with the pane but never dominates it or starves the metadata column. */
+  width: clamp(150px, 34%, 240px);
   display: flex;
-  justify-content: center;
-  margin-bottom: 1rem;
+  justify-content: flex-start;
 }
 .detail-hero img,
 .detail-hero .disc-avatar-fallback {
@@ -1624,6 +1647,20 @@ input[type='checkbox'] {
   /* The empty placeholder is pointless on mobile — only render the drawer when selected. */
   .disc-detail.is-empty {
     display: none;
+  }
+  /* The drawer is narrow — drop the side-by-side header back to a centred stack. */
+  .detail-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .detail-hero {
+    width: 100%;
+    justify-content: center;
+  }
+  .detail-headinfo {
+    width: 100%;
+    align-items: center;
+    text-align: center;
   }
   .detail-hero img,
   .detail-hero .disc-avatar-fallback {

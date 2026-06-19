@@ -342,58 +342,65 @@ function DetailPanel({
     <aside className="disc-detail">
       <button className="detail-close" title="Close" onClick={onClose}>✕</button>
 
-      <div className="detail-hero">
-        <FeedAvatar item={item} size={0} hero />
-      </div>
-
-      <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
-      <h2 className="detail-name">{item.album ?? name}</h2>
-
-      {isAlbum ? (
-        <div className="detail-chips">
-          <span className="detail-chip">Album</span>
-          <span className="detail-chip via">{name}</span>
+      {/* Header: art aligned left with the badge / title / chips / actions stacked to its right, so the
+          square no longer floats alone in a sea of empty space. Tracks + albums stay full-width below. */}
+      <div className="detail-header">
+        <div className="detail-hero">
+          <FeedAvatar item={item} size={0} hero />
         </div>
-      ) : item.sources.length > 0 ? (
-        <>
-          <div className="detail-section-label">Recommended via</div>
-          <div className="detail-chips">
-            {item.sources.slice(0, 8).map((s) => (
-              <span className="detail-chip via" key={s}>{s}</span>
-            ))}
-          </div>
-        </>
-      ) : null}
 
-      <div className="detail-actions">
-        {verdict ? (
-          <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
-        ) : (
-          <>
-            <button
-              className="disc-btn up"
-              title={isAlbum ? 'Queue album to buy' : 'Approve'}
-              disabled={rebuildPending}
-              onClick={() => onRate(item, 'up')}
-            >
-              <IconApprove />
-            </button>
-            <button
-              className="disc-btn down"
-              title="Not interested"
-              disabled={rebuildPending}
-              onClick={() => onRate(item, 'down')}
-            >
-              <IconReject />
-            </button>
-            <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={rebuildPending} />
-          </>
-        )}
+        <div className="detail-headinfo">
+          <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
+          <h2 className="detail-name">{item.album ?? name}</h2>
+
+          {isAlbum ? (
+            <div className="detail-chips">
+              <span className="detail-chip">Album</span>
+              <span className="detail-chip via">{name}</span>
+            </div>
+          ) : item.sources.length > 0 ? (
+            <>
+              <div className="detail-section-label">Recommended via</div>
+              <div className="detail-chips">
+                {item.sources.slice(0, 8).map((s) => (
+                  <span className="detail-chip via" key={s}>{s}</span>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          <div className="detail-actions">
+            {verdict ? (
+              <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
+            ) : (
+              <>
+                <button
+                  className="disc-btn up"
+                  title={isAlbum ? 'Queue album to buy' : 'Approve'}
+                  disabled={rebuildPending}
+                  onClick={() => onRate(item, 'up')}
+                >
+                  <IconApprove />
+                </button>
+                <button
+                  className="disc-btn down"
+                  title="Not interested"
+                  disabled={rebuildPending}
+                  onClick={() => onRate(item, 'down')}
+                >
+                  <IconReject />
+                </button>
+                <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={rebuildPending} />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {canPlay && (
         <>
-          <div className="detail-section-label">{isAlbum ? 'Album tracks' : 'Top tracks'}</div>
+          {/* DeezerSample renders its own "Album tracks" / "Top tracks" header (with the Deezer link),
+              so no separate detail-section-label here — that produced a duplicate heading. */}
           {/* Key by row so switching selection remounts the player (stops the previous preview). */}
           {isAlbum ? (
             <DeezerSample key={rowKey} albumId={item.deezerAlbumId!} />
