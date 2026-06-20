@@ -18,5 +18,9 @@ export function login(returnUrl: string = window.location.pathname): void {
 }
 
 export function logout(): void {
+  // Mark that we deliberately signed out so the auto-login redirect doesn't fire
+  // the moment we land back unauthenticated (see AuthContext). The user gets the
+  // manual "Log in" button instead.
+  sessionStorage.setItem('mc.autoLoginAttempted', '1')
   window.location.href = '/auth/logout'
 }
