@@ -2,13 +2,15 @@ import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
+  clearRating,
   downloadPurchase,
   getDownloadStatus,
   getPurchases,
   unsendPurchase,
 } from '../api/discovery'
-import type { DownloadSnapshot, PurchaseItem } from '../types'
+import type { DownloadSnapshot, FeedItem, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
+import { IconClear } from '../components/icons'
 
 function Avatar({ item }: { item: PurchaseItem }) {
   const label = item.album ?? item.artist.artistName
@@ -78,24 +80,60 @@ export default function Purchases() {
   }
   const download = useMutation({ mutationFn: (id: string) => downloadPurchase(id), onSuccess: invalidate })
   const unsend = useMutation({ mutationFn: (id: string) => unsendPurchase(id), onSuccess: invalidate })
-  const busy = download.isPending || unsend.isPending
+
+  // "Nevermind" — clearing the underlying like drops the item from the queue on the next reconcile
+  // (the list is derived from liked-but-unowned ratings), so this intercepts an item before download.
+  // clearRating only reads artist/album, so a minimal feed item from the row is enough.
+  const remove = useMutation({
+    mutationFn: (item: PurchaseItem) => {
+      const feedItem: FeedItem = {
+        kind: item.kind,
+        artist: item.artist,
+        album: item.album,
+        imageUrl: item.imageUrl,
+        score: 0,
+        sources: [],
+        deezerAlbumId: item.deezerAlbumId,
+      }
+      return clearRating(feedItem)
+    },
+    onSuccess: () => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    },
+  })
+  const busy = download.isPending || unsend.isPending || remove.isPending
+
+  // The remove (✕) action shared by pending/failed rows — cancels the want before it downloads.
+  const removeBtn = (item: PurchaseItem) => (
+    <button
+      className="disc-btn"
+      title="Remove from queue"
+      disabled={busy}
+      onClick={() => remove.mutate(item)}
+    >
+      <IconClear />
+    </button>
+  )
 
   if (!user) {
     return (
       <section>
-        <h1>To Buy</h1>
-        <p><em>Log in to see the artists and albums you've queued to buy.</em></p>
+        <h1>Download</h1>
+        <p><em>Log in to see the albums you've queued to download.</em></p>
       </section>
     )
   }
 
   const items = data ?? []
-  // Albums are what the downloader can actually grab; artists are wishlist reminders only.
-  const downloading = items.filter((i) => i.status === 'Downloading')
+  // Only albums are actionable here — they're what the downloader can grab. Liked artists still seed
+  // recommendations, but they're managed on the Artists page, not shown as wishlist rows.
+  const downloading = items.filter((i) => i.status === 'Downloading' && i.album)
   const pendingAlbums = items.filter((i) => i.status === 'Pending' && i.album)
-  const pendingArtists = items.filter((i) => i.status === 'Pending' && !i.album)
-  const sent = items.filter((i) => i.status === 'Sent')
-  const failed = items.filter((i) => i.status === 'Failed')
+  const sent = items.filter((i) => i.status === 'Sent' && i.album)
+  const failed = items.filter((i) => i.status === 'Failed' && i.album)
+  const shownCount = downloading.length + pendingAlbums.length + sent.length + failed.length
 
   const row = (item: PurchaseItem, actions: ReactNode) => (
     <div className="disc-row" key={item.id}>
@@ -116,27 +154,18 @@ export default function Purchases() {
 
   return (
     <section>
-      <h1>To Buy {items.length > 0 ? `(${items.length})` : ''}</h1>
+      <h1>Downloading {shownCount > 0 ? `(${shownCount})` : ''}</h1>
 
       {status && <Monitor s={status} />}
-
-      <p className="disc-sub">
-        <em>
-          The shared acquisition queue. Thumbs-up items from <Link to="/">Discover</Link> land here.
-          Hit <strong>Download now</strong> on an album to grab it (or turn on automatic downloads to
-          drain the queue in the background); items drop off once they appear in the library. Artists
-          are wishlist reminders — only albums download.
-        </em>
-      </p>
 
       {isError && <p className="error">Failed to load wishlist: {(error as Error).message}</p>}
       {isPending && <p><em>Loading…</em></p>}
 
-      {data && items.length === 0 && (
+      {data && shownCount === 0 && (
         <p>
           <em>
-            Nothing here yet. Thumbs-up artists or albums on the <Link to="/">Discover</Link>{' '}
-            page to queue them.
+            Nothing here yet. Thumbs-up albums on the <Link to="/">Discover</Link> page, or add an
+            artist's albums from the <Link to="/artists">Artists</Link> page, to queue them.
           </em>
         </p>
       )}
@@ -162,14 +191,17 @@ export default function Purchases() {
             {failed.map((item) =>
               row(
                 item,
-                <button
-                  className="disc-btn up"
-                  title="Retry download"
-                  disabled={busy}
-                  onClick={() => download.mutate(item.id)}
-                >
-                  Retry
-                </button>,
+                <>
+                  <button
+                    className="disc-btn up"
+                    title="Retry download"
+                    disabled={busy}
+                    onClick={() => download.mutate(item.id)}
+                  >
+                    Retry
+                  </button>
+                  {removeBtn(item)}
+                </>,
               ),
             )}
           </div>
@@ -178,21 +210,21 @@ export default function Purchases() {
 
       {pendingAlbums.length > 0 && (
         <>
-          <h2 className="feed-section-title">
-            Albums — queued <span className="feed-count">{pendingAlbums.length}</span>
-          </h2>
           <div className="disc-list">
             {pendingAlbums.map((item) =>
               row(
                 item,
-                <button
-                  className="disc-btn up"
-                  title="Download now"
-                  disabled={busy}
-                  onClick={() => download.mutate(item.id)}
-                >
-                  Download now
-                </button>,
+                <>
+                  <button
+                    className="disc-btn up"
+                    title="Download now"
+                    disabled={busy}
+                    onClick={() => download.mutate(item.id)}
+                  >
+                    Download now
+                  </button>
+                  {removeBtn(item)}
+                </>,
               ),
             )}
           </div>
@@ -220,16 +252,6 @@ export default function Purchases() {
               ),
             )}
           </div>
-        </>
-      )}
-
-      {pendingArtists.length > 0 && (
-        <>
-          <h2 className="feed-section-title">
-            Artists — wishlist <span className="feed-count">{pendingArtists.length}</span>
-          </h2>
-          <p className="disc-sub"><em>Not auto-downloaded. Queue specific albums to actually grab them.</em></p>
-          <div className="disc-list">{pendingArtists.map((item) => row(item, null))}</div>
         </>
       )}
     </section>

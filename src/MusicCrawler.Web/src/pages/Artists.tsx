@@ -280,7 +280,7 @@ export default function Artists() {
     enabled: !!user,
   })
 
-  // artist name -> current verdict (artist ratings only; albums live on the Ratings/Discover pages).
+  // artist name -> current verdict (artist ratings only; album verdicts live in the album drill-down).
   const verdictByArtist = new Map<string, DiscoveryStatus>()
   for (const r of ratings ?? []) {
     if (!r.album) verdictByArtist.set(r.artist.artistName, r.verdict)
