@@ -4,7 +4,7 @@ import Artists from './pages/Artists'
 import Discover from './pages/Discover'
 import Purchases from './pages/Purchases'
 import Cleanup from './pages/Cleanup'
-import Related from './pages/Related'
+import Dev from './pages/Dev'
 
 export default function App() {
   return (
@@ -18,8 +18,11 @@ export default function App() {
         <Route path="/ratings" element={<Navigate to="/artists" replace />} />
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/cleanup" element={<Cleanup />} />
-        {/* Dev-only debug view for the Deezer similarity graph. */}
-        {import.meta.env.DEV && <Route path="/related" element={<Related />} />}
+        {/* Old similarity debugger; folded into the dev panel. Keep the link working. */}
+        <Route path="/related" element={<Navigate to="/dev" replace />} />
+        {/* Dev panel (Plex tag tooling + similarity debug). Visible only to DEV_USERNAMES; the
+            page itself gates on isDev and every endpoint re-checks server-side. */}
+        <Route path="/dev" element={<Dev />} />
       </Routes>
     </Layout>
   )

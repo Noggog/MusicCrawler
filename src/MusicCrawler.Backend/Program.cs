@@ -116,19 +116,36 @@ app.MapGet("/auth/logout", () =>
     .WithName("Logout");
 
 // Current user (200 with profile, or 401 if not signed in) — the SPA polls this to know auth state.
-app.MapGet("/auth/me", (HttpContext http) =>
+app.MapGet("/auth/me", (HttpContext http, DevUsers devUsers, ILoggerFactory loggerFactory) =>
     {
         var user = http.User;
         if (user.Identity?.IsAuthenticated != true)
         {
             return Results.Unauthorized();
         }
+
+        var isDev = devUsers.Includes(user);
+
+        // Diagnostic: dump every claim and the dev-match decision so we can see exactly what the IdP
+        // sends (e.g. whether preferred_username is present, and under what value). Remove once the
+        // DEV_USERNAMES match is confirmed.
+        /*var log = loggerFactory.CreateLogger("AuthMe");
+        log.LogInformation(
+            "auth/me claims: [{Claims}]; preferred_username={Username}; DEV_USERNAMES=[{DevUsers}]; isDev={IsDev}",
+            string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}")),
+            user.FindFirst("preferred_username")?.Value ?? "(none)",
+            string.Join(", ", devUsers.Configured),
+            isDev);*/
+
         return Results.Ok(new
         {
             subject = user.GetSubject(),
             username = user.FindFirst("preferred_username")?.Value,
             email = user.FindFirst("email")?.Value,
             displayName = user.FindFirst("name")?.Value,
+            // Drives the in-app dev panel's visibility (DEV_USERNAMES). The dev endpoints enforce the
+            // same check server-side, so this only governs what the UI bothers to show.
+            isDev,
         });
     })
     .WithName("Me");
@@ -307,7 +324,7 @@ api.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engin
 // Rate an artist or (when album is supplied) a missing album. verdict = "up" (Liked) | "down" (Disliked).
 api.MapPost("/discovery/rate", async (
         string artist, string? album, string? albumArt, string verdict,
-        HttpContext http, DiscoveryEngine engine) =>
+        HttpContext http, DiscoveryEngine engine, IArtistTagger tagger) =>
     {
         var status = verdict.Equals("up", StringComparison.OrdinalIgnoreCase)
             ? DiscoveryStatus.Liked
@@ -316,6 +333,13 @@ api.MapPost("/discovery/rate", async (
         if (string.IsNullOrEmpty(album))
         {
             await engine.RateArtist(userId, artist, status);
+            // Mirror the verdict into Plex as a per-user label ("<username>_liked"/"_disliked"). The
+            // tagger is best-effort (never throws), so a Plex hiccup can't fail the rating.
+            var tag = ArtistTag.For(http.User.FindFirst("preferred_username")?.Value, status);
+            if (tag != null)
+            {
+                await tagger.AddTag(artist, tag);
+            }
         }
         else
         {
@@ -394,6 +418,31 @@ api.MapGet("/discovery/ratings", async (HttpContext http, DiscoveryEngine engine
         Results.Ok(await engine.GetRatings(http.User.GetSubject()!)))
     .RequireAuthorization()
     .WithName("GetRatings");
+
+// --- Dev panel: Plex tag maintenance ---
+// Wipe and/or rebuild the per-user like/dislike labels so we can iterate on the tagging logic
+// without leaving orphaned tags scattered across the library. Gated by the "DevUser" policy
+// (DEV_USERNAMES) — the clear is destructive (it nukes every "_liked"/"_disliked" label), so these
+// stay restricted to dev users rather than any signed-in user.
+var dev = api.MapGroup("/dev/plex-tags").RequireAuthorization("DevUser");
+
+// Strip every managed tag from every artist (clean slate).
+dev.MapPost("/clear", async (PlexTagMaintenance maint) =>
+        Results.Ok(new { cleared = await maint.ClearManagedTags() }))
+    .WithName("DevClearPlexTags");
+
+// Reapply tags from every user's stored ratings (additive; doesn't remove stale ones).
+dev.MapPost("/reapply", async (PlexTagMaintenance maint) =>
+        Results.Ok(new { applied = await maint.ReapplyFromRatings() }))
+    .WithName("DevReapplyPlexTags");
+
+// Nuke then reapply — the full reset.
+dev.MapPost("/rebuild", async (PlexTagMaintenance maint) =>
+    {
+        var result = await maint.Rebuild();
+        return Results.Ok(new { cleared = result.Cleared, applied = result.Applied });
+    })
+    .WithName("DevRebuildPlexTags");
 
 // The shared "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
 // persisted with a status (pending → sent → in-library). Reconciles on read so it's always current.

@@ -162,4 +162,6 @@ export interface CurrentUser {
   username: string | null
   email: string | null
   displayName: string | null
+  // True when this user is in DEV_USERNAMES — unlocks the in-app dev panel.
+  isDev: boolean
 }

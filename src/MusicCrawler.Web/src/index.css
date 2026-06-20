@@ -554,6 +554,25 @@ input[type='checkbox'] {
 /* Related (dev) grid                                                          */
 /* ========================================================================== */
 
+/* Dev panel: each tool is a bordered panel so the page reads as distinct sections. */
+.dev-tool {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 0 auto 1.5rem;
+  max-width: 1000px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.dev-tool h2 {
+  margin-top: 0;
+}
+.dev-status {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 .related-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

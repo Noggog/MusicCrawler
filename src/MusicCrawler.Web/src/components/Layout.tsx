@@ -33,6 +33,8 @@ function AuthBox() {
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+
   return (
     <div className="app">
       <MyceliumBackdrop />
@@ -51,10 +53,10 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/cleanup" className={navClass}>
             Cleanup
           </NavLink>
-          {/* Dev-only debug view for the similarity graph; compiled out of production builds. */}
-          {import.meta.env.DEV && (
-            <NavLink to="/related" className={navClass}>
-              Related (dev)
+          {/* Dev panel — shown only to DEV_USERNAMES users (Plex tag tooling + similarity debug). */}
+          {user?.isDev && (
+            <NavLink to="/dev" className={navClass}>
+              Dev
             </NavLink>
           )}
         </nav>

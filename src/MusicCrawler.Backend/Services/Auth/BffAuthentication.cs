@@ -122,7 +122,14 @@ public static class BffAuthentication
                 };
             });
 
-        builder.Services.AddAuthorization();
+        // Who may use the in-app dev panel and its endpoints — comma-separated preferred_usernames
+        // from DEV_USERNAMES (empty = nobody). Registered so /auth/me can flag the current user and
+        // the "DevUser" policy can gate the dev routes server-side (a UI-only gate wouldn't protect
+        // the destructive tag-maintenance endpoints).
+        var devUsers = new DevUsers(Environment.GetEnvironmentVariable("DEV_USERNAMES"));
+        builder.Services.AddSingleton(devUsers);
+        builder.Services.AddAuthorization(options =>
+            options.AddPolicy("DevUser", policy => policy.RequireAssertion(ctx => devUsers.Includes(ctx.User))));
     }
 
     /// <summary>The OIDC subject ("sub") of the current user, or null if unauthenticated.</summary>

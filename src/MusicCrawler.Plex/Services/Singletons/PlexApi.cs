@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Text;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace MusicCrawler.Plex.Services.Singletons;
@@ -70,6 +71,27 @@ public class PlexApi
     }
 
     /// <summary>
+    /// Replaces an artist's full Label set in section <paramref name="library"/>. Plex's metadata edit
+    /// is a whole-field replace, so callers must merge in the existing labels first (see
+    /// <see cref="GetLabels"/>). <c>type=8</c> is the artist metadata type; <c>label.locked=1</c> pins
+    /// the field so a later metadata refresh won't drop the tags.
+    /// </summary>
+    public async Task SetArtistLabels(int library, int ratingKey, IReadOnlyList<string> labels)
+    {
+        var url = new StringBuilder(
+            $"{_endpointInfo.BaseUri}/library/sections/{library}/all?type=8&id={ratingKey}");
+        for (var i = 0; i < labels.Count; i++)
+        {
+            url.Append($"&label[{i}].tag.tag={Uri.EscapeDataString(labels[i])}");
+        }
+        url.Append("&label.locked=1");
+
+        _logger.LogDebug("Plex SetArtistLabels for {RatingKey}: {Count} label(s)", ratingKey, labels.Count);
+        var response = await httpClient.PutAsync(url.ToString(), content: null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
     /// Resolves the music library to operate on: the one named by <c>PLEX_LIBRARY</c> when it matches,
     /// otherwise the first artist-type library. Logs which path it took. Shared by the catalog reads
     /// and the post-download rescan so they always target the same section.
@@ -126,6 +148,14 @@ public record PlexMusicArtist
 
     // Plex returns genre tags inline on the section listing, e.g. "Genre":[{"tag":"Pop/Rock"}].
     public PlexTag[]? Genre { get; set; }
+
+    // User-set tags. Plex returns these inline on the section listing too, e.g. "Label":[{"tag":"x"}],
+    // in a field separate from Genre/Mood/Style — so editing labels never disturbs those.
+    public PlexTag[]? Label { get; set; }
+
+    /// <summary>The artist's current label strings (the user-set tag field); empty when it has none.</summary>
+    public string[] Labels() =>
+        Label?.Select(t => t.Tag).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray() ?? Array.Empty<string>();
 }
 
 /// <summary>A Plex tag entry — genres, moods, styles all serialize as <c>{ "tag": "..." }</c>.</summary>
