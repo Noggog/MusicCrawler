@@ -2,7 +2,7 @@
    MusicCrawler — "Neon Synapse" theme
    A psychedelic cyberpunk skin lifted from the Synthesis palette: abyssal
    purples, salmon/coral neon, and electric cyan. Dark glassmorphism panels,
-   glowing borders, an animated nebula backdrop and a faint scanline grid.
+   glowing borders, an animated nebula backdrop and living mycelium growth.
    Class names mirror the components 1:1 so the markup stays untouched.
    ============================================================================ */
 
@@ -77,7 +77,7 @@ body {
   /* No background here: :root/html already carries var(--bg), which is
      propagated to the viewport canvas (painted at the very bottom). Painting it
      again on body would put an opaque layer ABOVE the negative-z backdrop
-     elements (nebula, grid, far spores) and bury them. */
+     elements (nebula, mycelium, far spores) and bury them. */
   color: var(--text);
   overflow-x: hidden;
 }
@@ -97,23 +97,6 @@ body::before {
   animation: nebula 26s ease-in-out infinite alternate;
 }
 
-/* Faint cyber grid + scanline wash over the nebula. */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(116, 88, 219, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(116, 88, 219, 0.08) 1px, transparent 1px),
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 4px);
-  background-size: 44px 44px, 44px 44px, 100% 4px;
-  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 100%);
-  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 100%);
-  opacity: 0.5;
-}
-
 /* Floating-spore canvases — two parallax layers (see MyceliumBackdrop.tsx).
    Both are fixed, full-screen and pointer-transparent; simulation tuning lives
    in effects/sporeField.ts. */
@@ -125,7 +108,15 @@ body::after {
   pointer-events: none;
 }
 
-/* Far layer: the calm bulk, behind the content but above the grid (-2) and
+/* Mycelium growth layer: living hyphae as the deepest backdrop, above the
+   nebula (-3) but below the far spores (-1), so the strands read as a substrate
+   the spores drift over. Softly blurred so it stays atmosphere, not detail. */
+.mycelium-growth {
+  z-index: -2;
+  filter: blur(0.5px);
+}
+
+/* Far layer: the calm bulk, behind the content but above the mycelium (-2) and
    nebula (-3), so spores glint through the semi-transparent panels as
    atmosphere. A negative z-index is required — a fixed element at z-index 0
    still paints above static in-flow content. */

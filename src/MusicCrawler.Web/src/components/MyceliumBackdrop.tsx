@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createSporeField, type SporeFieldOptions } from '../effects/sporeField'
+import { createMyceliumField, type MyceliumFieldOptions } from '../effects/myceliumField'
 import {
   registerSporeField,
   setSporePointer,
@@ -34,20 +35,33 @@ const NEAR: SporeFieldOptions = {
   alphaScale: 0.7,
 }
 
+// Mycelium growth layer — slow, deep atmosphere behind everything (see
+// effects/myceliumField.ts). Kept dim so it reads as a living substrate the
+// spores float over rather than competing with the content.
+const GROWTH: MyceliumFieldOptions = {
+  alphaScale: 0.85,
+}
+
 export default function MyceliumBackdrop() {
+  const growthRef = useRef<HTMLCanvasElement>(null)
   const farRef = useRef<HTMLCanvasElement>(null)
   const nearRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
+    const growthCanvas = growthRef.current
     const farCanvas = farRef.current
     const nearCanvas = nearRef.current
-    if (!farCanvas || !nearCanvas) return
+    if (!growthCanvas || !farCanvas || !nearCanvas) return
 
-    const fields = [
+    const spores = [
       createSporeField(farCanvas, FAR),
       createSporeField(nearCanvas, NEAR),
     ]
-    const unregister = fields.map(registerSporeField)
+    const growth = createMyceliumField(growthCanvas, GROWTH)
+    // All layers share resize / reduced-motion / visibility plumbing; only the
+    // spore fields register on the effects bus (the bus drives spore reactions).
+    const fields = [...spores, growth]
+    const unregister = spores.map(registerSporeField)
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -67,8 +81,12 @@ export default function MyceliumBackdrop() {
     const onPointerMove = (e: PointerEvent) => {
       if (reduceMotion.matches) return
       setSporePointer(e.clientX, e.clientY)
+      growth.setPointer(e.clientX, e.clientY)
     }
-    const onPointerLeave = () => clearSporePointer()
+    const onPointerLeave = () => {
+      clearSporePointer()
+      growth.clearPointer()
+    }
 
     sync()
     if (!reduceMotion.matches && !document.hidden) for (const f of fields) f.start()
@@ -94,6 +112,7 @@ export default function MyceliumBackdrop() {
 
   return (
     <>
+      <canvas ref={growthRef} className="spore-backdrop mycelium-growth" aria-hidden="true" />
       <canvas ref={farRef} className="spore-backdrop spore-far" aria-hidden="true" />
       <canvas ref={nearRef} className="spore-backdrop spore-near" aria-hidden="true" />
     </>
