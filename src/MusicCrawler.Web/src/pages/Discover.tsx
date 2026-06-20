@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -17,6 +17,7 @@ import {
   type Verdict,
 } from '../api/discovery'
 import { getDeezerPlayInfo } from '../api/deezer'
+import { useArtAccent } from '../art/artColors'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
@@ -207,20 +208,28 @@ function SnoozeControl({
 const rowKeyFor = (item: FeedItem) =>
   item.album ? `${item.artist.artistName}::${item.album}` : `${item.kind}:${item.artist.artistName}`
 
+// The artwork URL a source supplied (artist photo or album art), resolving the Deezer fallback for
+// library artists that carry no photo of their own. Cached and shared with the sample player; null
+// when nothing is available (the caller draws a coloured initial instead). Accepts null so callers
+// that must run hooks before an early return (e.g. the detail panel) can call it unconditionally.
+function useArtUrl(item: FeedItem | null): string | null {
+  const name = item?.artist.artistName ?? ''
+  const isArtist = !!item && !item.album
+  const { data: deezer } = useQuery({
+    queryKey: ['deezer-play', name],
+    queryFn: () => getDeezerPlayInfo(name),
+    enabled: isArtist && !item!.imageUrl,
+    staleTime: 60 * 60 * 1000,
+  })
+  if (!item) return null
+  return item.imageUrl ?? (isArtist ? deezer?.imageUrl ?? null : null)
+}
+
 // The image a source supplied (artist photo or album art), or a coloured initial when missing.
 // `hero` renders the large readout image: drop the inline size so CSS (.detail-hero) drives it.
 function FeedAvatar({ item, size, hero }: { item: FeedItem; size: number; hero?: boolean }) {
   const label = item.album ?? item.artist.artistName
-  const isArtist = !item.album
-  // Existing/library artists usually carry no photo of their own — attempt a Deezer lookup for one.
-  // Cached and shared with the sample player; falls back to the coloured initial on a Deezer miss.
-  const { data: deezer } = useQuery({
-    queryKey: ['deezer-play', item.artist.artistName],
-    queryFn: () => getDeezerPlayInfo(item.artist.artistName),
-    enabled: isArtist && !item.imageUrl,
-    staleTime: 60 * 60 * 1000,
-  })
-  const src = item.imageUrl ?? (isArtist ? deezer?.imageUrl ?? null : null)
+  const src = useArtUrl(item)
   if (src) {
     return <img className="disc-avatar" src={src} alt={label} width={hero ? undefined : size} height={hero ? undefined : size} />
   }
@@ -244,6 +253,60 @@ function Provenance({ sources }: { sources: string[] }) {
       via {shown}
       {extra}
     </span>
+  )
+}
+
+// One album under the inline panel below — themed from its cover via `--art-accent`, matching the
+// feed rows / Download queue. Owns its accent so the per-row hook stays out of the parent's `.map`.
+function SubAlbumRow({
+  album,
+  verdict,
+  isOpen,
+  canPlay,
+  disabled,
+  onToggle,
+  onRate,
+  onUndo,
+}: {
+  album: FeedItem
+  verdict: RowMark | undefined
+  isOpen: boolean
+  canPlay: boolean
+  disabled: boolean
+  onToggle: () => void
+  onRate: (item: FeedItem, verdict: Verdict) => void
+  onUndo: (item: FeedItem) => void
+}) {
+  const accent = useArtAccent(useArtUrl(album))
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  return (
+    <div className="disc-sub-album-wrap">
+      {/* The whole row toggles the preview; the action cluster stops the click so a thumb
+          doesn't also open/close the player. */}
+      <div
+        className={`disc-sub-album${isOpen ? ' selected' : ''}${canPlay ? '' : ' no-play'}`}
+        style={accentStyle}
+        onClick={canPlay ? onToggle : undefined}
+      >
+        <FeedAvatar item={album} size={36} />
+        <div className="disc-sub-album-name">{album.album}</div>
+        <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
+          {verdict ? (
+            <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
+          ) : (
+            <>
+              <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
+                <IconApprove />
+              </button>
+              <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
+                <IconReject />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {isOpen && album.deezerAlbumId && <DeezerSample albumId={album.deezerAlbumId} />}
+    </div>
   )
 }
 
@@ -284,36 +347,18 @@ function ArtistAlbumsPanel({
     <div className="disc-sub-albums">
       {data.map((album) => {
         const rowKey = `${album.artist.artistName}::${album.album}`
-        const verdict = rated.get(rowKey)
-        const canPlay = !!album.deezerAlbumId
-        const isOpen = openAlbum === rowKey
         return (
-          <div className="disc-sub-album-wrap" key={rowKey}>
-            {/* The whole row toggles the preview; the action cluster stops the click so a thumb
-                doesn't also open/close the player. */}
-            <div
-              className={`disc-sub-album${isOpen ? ' selected' : ''}${canPlay ? '' : ' no-play'}`}
-              onClick={canPlay ? () => setOpenAlbum((cur) => (cur === rowKey ? null : rowKey)) : undefined}
-            >
-              <FeedAvatar item={album} size={36} />
-              <div className="disc-sub-album-name">{album.album}</div>
-              <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
-                {verdict ? (
-                  <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
-                ) : (
-                  <>
-                    <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
-                      <IconApprove />
-                    </button>
-                    <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
-                      <IconReject />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            {isOpen && album.deezerAlbumId && <DeezerSample albumId={album.deezerAlbumId} />}
-          </div>
+          <SubAlbumRow
+            key={rowKey}
+            album={album}
+            verdict={rated.get(rowKey)}
+            isOpen={openAlbum === rowKey}
+            canPlay={!!album.deezerAlbumId}
+            disabled={disabled}
+            onToggle={() => setOpenAlbum((cur) => (cur === rowKey ? null : rowKey))}
+            onRate={onRate}
+            onUndo={onUndo}
+          />
         )
       })}
     </div>
@@ -343,6 +388,9 @@ function DetailPanel({
   onUndo: (item: FeedItem) => void
   onClose: () => void
 }) {
+  // Resolve artwork + accent unconditionally (hooks must run before the empty-state early return) so
+  // the focused card's hero halo glows in its own colour. `useArtUrl` tolerates a null item.
+  const accent = useArtAccent(useArtUrl(item))
   if (!item) {
     return (
       <aside className="disc-detail is-empty">
@@ -353,6 +401,7 @@ function DetailPanel({
     )
   }
 
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
   const name = item.artist.artistName
   const isAlbum = !!item.album
   const rowKey = rowKeyFor(item)
@@ -360,7 +409,7 @@ function DetailPanel({
   const canPlay = isAlbum ? !!item.deezerAlbumId : true
 
   return (
-    <aside className="disc-detail">
+    <aside className="disc-detail" style={accentStyle}>
       <button className="detail-close" title="Close" onClick={onClose}>✕</button>
 
       {/* Header: art aligned left with the badge / title / chips / actions stacked to its right, so the
@@ -445,6 +494,88 @@ function DetailPanel({
         </>
       )}
     </aside>
+  )
+}
+
+// A single feed row. Extracted into its own component so it can resolve the card's artwork and derive
+// an art-driven accent colour per row (calling those hooks inside the parent's `.map` would break the
+// rules of hooks). The accent is published as the `--art-accent` CSS variable so the row + its avatar
+// theme themselves from the art — a soft border/glow tint over the dark base (see index.css).
+function DiscRow({
+  item,
+  selected,
+  verdict,
+  busy,
+  rebuildPending,
+  onSelect,
+  onRate,
+  onSnooze,
+  onUndo,
+}: {
+  item: FeedItem
+  selected: boolean
+  verdict: RowMark | undefined
+  busy: boolean
+  rebuildPending: boolean
+  onSelect: (item: FeedItem) => void
+  onRate: (item: FeedItem, verdict: Verdict) => void
+  onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
+  onUndo: (item: FeedItem) => void
+}) {
+  const name = item.artist.artistName
+  const isAlbum = !!item.album
+  const accent = useArtAccent(useArtUrl(item))
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  return (
+    <div className={verdict ? 'disc-row-wrap rated' : 'disc-row-wrap'}>
+      {/* The whole row opens the readout; the action cluster stops the click so a
+          thumb/snooze doesn't also yank the panel open. */}
+      <div
+        className={selected ? 'disc-row selected' : 'disc-row'}
+        style={accentStyle}
+        onClick={() => onSelect(item)}
+      >
+        <FeedAvatar item={item} size={56} />
+        <div className="disc-row-main">
+          <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
+          <div className="disc-name">{item.album ?? name}</div>
+          {isAlbum ? (
+            <span className="disc-provenance">{name}</span>
+          ) : (
+            <Provenance sources={item.sources} />
+          )}
+        </div>
+        <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
+          {verdict ? (
+            <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
+          ) : (
+            <>
+              <button
+                className="disc-btn up"
+                title={isAlbum ? 'Queue album to buy' : 'Approve'}
+                disabled={rebuildPending}
+                onClick={() => onRate(item, 'up')}
+              >
+                <IconApprove />
+              </button>
+              <button
+                className="disc-btn down"
+                title="Not interested"
+                disabled={rebuildPending}
+                onClick={() => onRate(item, 'down')}
+              >
+                <IconReject />
+              </button>
+              {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
+              <SnoozeControl
+                onPick={(duration) => onSnooze(item, duration)}
+                disabled={rebuildPending}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -719,57 +850,19 @@ export default function Discover() {
                 const name = item.artist.artistName
                 const isAlbum = !!item.album
                 const rowKey = isAlbum ? `${name}::${item.album}` : `${item.kind}:${name}`
-                const verdict = rated.get(rowKey)
-                const isSelected = selectedKey === rowKey
                 return (
-                  <div className={verdict ? 'disc-row-wrap rated' : 'disc-row-wrap'} key={rowKey}>
-                    {/* The whole row opens the readout; the action cluster stops the click so a
-                        thumb/snooze doesn't also yank the panel open. */}
-                    <div
-                      className={isSelected ? 'disc-row selected' : 'disc-row'}
-                      onClick={() => setSelected(item)}
-                    >
-                      <FeedAvatar item={item} size={56} />
-                      <div className="disc-row-main">
-                        <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
-                        <div className="disc-name">{item.album ?? name}</div>
-                        {isAlbum ? (
-                          <span className="disc-provenance">{name}</span>
-                        ) : (
-                          <Provenance sources={item.sources} />
-                        )}
-                      </div>
-                      <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
-                        {verdict ? (
-                          <DecisionMark mark={verdict} disabled={busy} onUndo={() => undo.mutate(item)} />
-                        ) : (
-                          <>
-                            <button
-                              className="disc-btn up"
-                              title={isAlbum ? 'Queue album to buy' : 'Approve'}
-                              disabled={rebuild.isPending}
-                              onClick={() => rateMutation.mutate({ item, verdict: 'up' })}
-                            >
-                              <IconApprove />
-                            </button>
-                            <button
-                              className="disc-btn down"
-                              title="Not interested"
-                              disabled={rebuild.isPending}
-                              onClick={() => rateMutation.mutate({ item, verdict: 'down' })}
-                            >
-                              <IconReject />
-                            </button>
-                            {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
-                            <SnoozeControl
-                              onPick={(duration) => snoozeMutation.mutate({ item, duration })}
-                              disabled={rebuild.isPending}
-                            />
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <DiscRow
+                    key={rowKey}
+                    item={item}
+                    selected={selectedKey === rowKey}
+                    verdict={rated.get(rowKey)}
+                    busy={busy}
+                    rebuildPending={rebuild.isPending}
+                    onSelect={setSelected}
+                    onRate={(it, verdict) => rateMutation.mutate({ item: it, verdict })}
+                    onSnooze={(it, duration) => snoozeMutation.mutate({ item: it, duration })}
+                    onUndo={(it) => undo.mutate(it)}
+                  />
                 )
               })}
             </div>

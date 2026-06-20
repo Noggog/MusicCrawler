@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -8,6 +8,7 @@ import {
   getPurchases,
   unsendPurchase,
 } from '../api/discovery'
+import { useArtAccent } from '../art/artColors'
 import type { DownloadSnapshot, FeedItem, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { IconClear } from '../components/icons'
@@ -20,6 +21,29 @@ function Avatar({ item }: { item: PurchaseItem }) {
   return (
     <div className="disc-avatar disc-avatar-fallback" style={{ width: 48, height: 48, fontSize: 20 }}>
       {label.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
+// A queue row, themed from its album/artist art (same `--art-accent` plumbing as the Discover feed):
+// the shared `.disc-row` styling turns that into the tinted background + border + glow automatically.
+function PurchaseRow({ item, actions }: { item: PurchaseItem; actions: ReactNode }) {
+  const accent = useArtAccent(item.imageUrl)
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  return (
+    <div className="disc-row" style={accentStyle}>
+      <Avatar item={item} />
+      <div className="disc-row-main">
+        <div className="disc-name">{item.album ?? item.artist.artistName}</div>
+        <span className="disc-provenance">
+          {item.album
+            ? `Album · ${item.artist.artistName}`
+            : item.sources.length > 0
+              ? `Artist · via ${item.sources.slice(0, 3).join(', ')}`
+              : 'Artist'}
+        </span>
+      </div>
+      <div className="disc-actions">{actions}</div>
     </div>
   )
 }
@@ -136,20 +160,7 @@ export default function Purchases() {
   const shownCount = downloading.length + pendingAlbums.length + sent.length + failed.length
 
   const row = (item: PurchaseItem, actions: ReactNode) => (
-    <div className="disc-row" key={item.id}>
-      <Avatar item={item} />
-      <div className="disc-row-main">
-        <div className="disc-name">{item.album ?? item.artist.artistName}</div>
-        <span className="disc-provenance">
-          {item.album
-            ? `Album · ${item.artist.artistName}`
-            : item.sources.length > 0
-              ? `Artist · via ${item.sources.slice(0, 3).join(', ')}`
-              : 'Artist'}
-        </span>
-      </div>
-      <div className="disc-actions">{actions}</div>
-    </div>
+    <PurchaseRow key={item.id} item={item} actions={actions} />
   )
 
   return (

@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clearDeezerId, getArtists, refreshCatalog, resolveAllDeezer, setDeezerId } from '../api/artists'
 import { searchDeezerArtists } from '../api/deezer'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
+import { useArtAccent } from '../art/artColors'
 import type { ArtistAlbumItem, ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
@@ -164,6 +165,60 @@ const ALBUM_VERDICT_LABEL: Partial<Record<DiscoveryStatus, string>> = {
   Snoozed: 'Snoozed',
 }
 
+// A single album in the discography drill-down, themed from its cover art via `--art-accent` (the
+// shared `.disc-sub-album` styling turns that into the tinted card + the cover's glow).
+function AlbumSubRow({
+  a,
+  busy,
+  onRate,
+  onClear,
+}: {
+  a: ArtistAlbumItem
+  busy: boolean
+  onRate: (a: ArtistAlbumItem, verdict: Verdict) => void
+  onClear: (a: ArtistAlbumItem) => void
+}) {
+  const accent = useArtAccent(a.imageUrl)
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  const label = a.verdict ? ALBUM_VERDICT_LABEL[a.verdict] : null
+  return (
+    <div className="disc-sub-album-wrap">
+      <div className={`disc-sub-album no-play${a.owned ? ' owned' : ''}`} style={accentStyle}>
+        <AlbumThumb item={a} />
+        <div className="disc-sub-album-name">{a.album}</div>
+        <div className="disc-actions">
+          {a.owned ? (
+            <span className="album-owned" title="Already in your library">
+              <IconCheck size={15} /> In library
+            </span>
+          ) : label ? (
+            <AlbumState label={label} busy={busy} onClear={() => onClear(a)} />
+          ) : (
+            <>
+              <button
+                className="disc-btn up"
+                title="Queue album to buy"
+                disabled={busy}
+                onClick={() => onRate(a, 'up')}
+              >
+                <IconApprove />
+              </button>
+              <button
+                className="disc-btn down"
+                title="Not interested"
+                disabled={busy}
+                onClick={() => onRate(a, 'down')}
+              >
+                <IconReject />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // The drill-down under an expanded artist: their full Deezer discography, owned albums flagged and
 // missing ones thumbable so they can be queued to buy (or dismissed) right here — no trip through
 // Discover. Fetched on demand (one Deezer call) only when the row is expanded.
@@ -214,46 +269,137 @@ function ArtistAlbums({ artist }: { artist: string }) {
 
   return (
     <div className="disc-sub-albums">
-      {data.map((a) => {
-        const label = a.verdict ? ALBUM_VERDICT_LABEL[a.verdict] : null
-        return (
-          <div className="disc-sub-album-wrap" key={a.album}>
-            <div className={`disc-sub-album no-play${a.owned ? ' owned' : ''}`}>
-              <AlbumThumb item={a} />
-              <div className="disc-sub-album-name">{a.album}</div>
-              <div className="disc-actions">
-                {a.owned ? (
-                  <span className="album-owned" title="Already in your library">
-                    <IconCheck size={15} /> In library
-                  </span>
-                ) : label ? (
-                  <AlbumState label={label} busy={busy} onClear={() => clearAlbum.mutate(a)} />
+      {data.map((a) => (
+        <AlbumSubRow
+          key={a.album}
+          a={a}
+          busy={busy}
+          onRate={(album, verdict) => rateAlbum.mutate({ a: album, verdict })}
+          onClear={(album) => clearAlbum.mutate(album)}
+        />
+      ))}
+    </div>
+  )
+}
+
+// One artist in the table, themed from its photo via `--art-accent` (see index.css `.artist-row`) so
+// the row + thumbnail glow in the artist's own colour, matching the Discover feed / Download queue.
+function ArtistRow({
+  artist,
+  verdict,
+  isOpen,
+  user,
+  ratePending,
+  onRate,
+  onToggle,
+  onCorrect,
+}: {
+  artist: ArtistListItem
+  verdict: DiscoveryStatus | undefined
+  isOpen: boolean
+  user: boolean
+  ratePending: boolean
+  onRate: (name: string, verdict: Verdict, current?: DiscoveryStatus) => void
+  onToggle: (name: string) => void
+  onCorrect: (artist: ArtistListItem) => void
+}) {
+  const name = artist.artistKey.artistName
+  const suspect = isSuspect(artist)
+  const accent = useArtAccent(artist.artistImageUrl)
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  return (
+    <Fragment>
+      <tr
+        className={user ? (isOpen ? 'artist-row clickable open' : 'artist-row clickable') : 'artist-row'}
+        style={accentStyle}
+        onClick={user ? () => onToggle(name) : undefined}
+      >
+        {user && (
+          <td onClick={(e) => e.stopPropagation()}>
+            <div className="rate-cell">
+              <button
+                className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
+                title={verdict === 'Liked' ? 'Clear rating' : 'Approve'}
+                disabled={ratePending}
+                onClick={() => onRate(name, 'up', verdict)}
+              >
+                <IconApprove />
+              </button>
+              <button
+                className={verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
+                title={verdict === 'Disliked' ? 'Clear rating' : 'Reject'}
+                disabled={ratePending}
+                onClick={() => onRate(name, 'down', verdict)}
+              >
+                <IconReject />
+              </button>
+            </div>
+          </td>
+        )}
+        <td>
+          <div className="artist-name-cell">
+            {artist.artistImageUrl ? (
+              <img className="artist-thumb" src={artist.artistImageUrl} alt="" loading="lazy" />
+            ) : (
+              <div className="artist-thumb placeholder">{name.charAt(0).toUpperCase()}</div>
+            )}
+            <div className="artist-name-main">
+              <div className="artist-name-row">
+                {/* The name itself links out to Deezer once resolved; plain text until then. */}
+                {artist.deezerId == null ? (
+                  <span>{name}</span>
                 ) : (
-                  <>
-                    <button
-                      className="disc-btn up"
-                      title="Queue album to buy"
-                      disabled={busy}
-                      onClick={() => rateAlbum.mutate({ a, verdict: 'up' })}
-                    >
-                      <IconApprove />
-                    </button>
-                    <button
-                      className="disc-btn down"
-                      title="Not interested"
-                      disabled={busy}
-                      onClick={() => rateAlbum.mutate({ a, verdict: 'down' })}
-                    >
-                      <IconReject />
-                    </button>
-                  </>
+                  <a
+                    className="artist-name-link"
+                    href={artist.deezerLink ?? `https://www.deezer.com/artist/${artist.deezerId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={
+                      suspect && artist.deezerName
+                        ? `Deezer: ${artist.deezerName} — likely the wrong artist`
+                        : artist.deezerName ?? undefined
+                    }
+                  >
+                    {name}
+                  </a>
+                )}
+                {suspect && (
+                  <span className="warn-badge" title="Deezer name doesn't match — likely the wrong artist">⚠</span>
                 )}
               </div>
+              {artist.genres.length > 0 && (
+                <div className="genre-tags">
+                  {artist.genres.slice(0, 3).map((g) => (
+                    <span className="genre-tag" key={g}>{g}</span>
+                  ))}
+                </div>
+              )}
             </div>
+            {user && (
+              <button
+                className="wrench-btn"
+                title="Correct the Deezer association"
+                aria-label={`Correct the Deezer association for ${name}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onCorrect(artist)
+                }}
+              >
+                <IconWrench size={22} />
+              </button>
+            )}
           </div>
-        )
-      })}
-    </div>
+        </td>
+      </tr>
+      {user && isOpen && (
+        <tr className="album-drill-row">
+          <td colSpan={2}>
+            <ArtistAlbums artist={name} />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   )
 }
 
@@ -404,101 +550,20 @@ export default function Artists() {
             <tbody>
               {filtered.map((artist) => {
                 const name = artist.artistKey.artistName
-                const verdict = verdictByArtist.get(name)
-                const suspect = isSuspect(artist)
-                const isOpen = expanded === name
                 return (
-                  <Fragment key={name}>
-                  <tr
-                    className={user ? (isOpen ? 'artist-row clickable open' : 'artist-row clickable') : 'artist-row'}
-                    onClick={user ? () => toggleExpanded(name) : undefined}
-                  >
-                    {user && (
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="rate-cell">
-                          <button
-                            className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
-                            title={verdict === 'Liked' ? 'Clear rating' : 'Approve'}
-                            disabled={rateArtist.isPending}
-                            onClick={() => rateArtist.mutate({ artist: name, verdict: 'up', current: verdict })}
-                          >
-                            <IconApprove />
-                          </button>
-                          <button
-                            className={verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
-                            title={verdict === 'Disliked' ? 'Clear rating' : 'Reject'}
-                            disabled={rateArtist.isPending}
-                            onClick={() => rateArtist.mutate({ artist: name, verdict: 'down', current: verdict })}
-                          >
-                            <IconReject />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                    <td>
-                      <div className="artist-name-cell">
-                        {artist.artistImageUrl ? (
-                          <img className="artist-thumb" src={artist.artistImageUrl} alt="" loading="lazy" />
-                        ) : (
-                          <div className="artist-thumb placeholder">{name.charAt(0).toUpperCase()}</div>
-                        )}
-                        <div className="artist-name-main">
-                          <div className="artist-name-row">
-                            {/* The name itself links out to Deezer once resolved; plain text until then. */}
-                            {artist.deezerId == null ? (
-                              <span>{name}</span>
-                            ) : (
-                              <a
-                                className="artist-name-link"
-                                href={artist.deezerLink ?? `https://www.deezer.com/artist/${artist.deezerId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                title={
-                                  suspect && artist.deezerName
-                                    ? `Deezer: ${artist.deezerName} — likely the wrong artist`
-                                    : artist.deezerName ?? undefined
-                                }
-                              >
-                                {name}
-                              </a>
-                            )}
-                            {suspect && (
-                              <span className="warn-badge" title="Deezer name doesn't match — likely the wrong artist">⚠</span>
-                            )}
-                          </div>
-                          {artist.genres.length > 0 && (
-                            <div className="genre-tags">
-                              {artist.genres.slice(0, 3).map((g) => (
-                                <span className="genre-tag" key={g}>{g}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {user && (
-                          <button
-                            className="wrench-btn"
-                            title="Correct the Deezer association"
-                            aria-label={`Correct the Deezer association for ${name}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setCorrecting(artist)
-                            }}
-                          >
-                            <IconWrench size={22} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {user && isOpen && (
-                    <tr className="album-drill-row">
-                      <td colSpan={2}>
-                        <ArtistAlbums artist={name} />
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
+                  <ArtistRow
+                    key={name}
+                    artist={artist}
+                    verdict={verdictByArtist.get(name)}
+                    isOpen={expanded === name}
+                    user={!!user}
+                    ratePending={rateArtist.isPending}
+                    onRate={(artistName, verdict, current) =>
+                      rateArtist.mutate({ artist: artistName, verdict, current })
+                    }
+                    onToggle={toggleExpanded}
+                    onCorrect={setCorrecting}
+                  />
                 )
               })}
             </tbody>

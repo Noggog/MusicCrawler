@@ -41,6 +41,11 @@
   --border: rgba(116, 88, 219, 0.32);
   --border-bright: rgba(116, 88, 219, 0.6);
 
+  /* Art-driven accent (Spotify/Plexamp-style). Cards set `--art-accent` to a `r, g, b` triple pulled
+     from their artwork (see art/artColors.ts); everything below composes it at varying alpha. The
+     fallback keeps the stock purple theme for cards whose art hasn't been analysed (or has no colour). */
+  --art-accent-default: 116, 88, 219;
+
   --good: #38e8a0;
   --bad: var(--salmon-light);
 
@@ -598,13 +603,34 @@ input[type='checkbox'] {
   gap: 0.35rem;
 }
 
-/* The whole artist row is the expand toggle — pointer + a salmon accent on the open one. */
+/* The whole artist row is the expand toggle — pointer + an art-driven accent on the open one. */
 .artist-row.clickable {
   cursor: pointer;
 }
+/* Art-driven theming for the Artists table rows, mirroring the Discover feed: a faint art wash + a
+   thumbnail glow at rest, brighter on hover, boldest on the open (drilled-down) row. Each falls back
+   to the stock purple/salmon when a row's photo has no analysed colour. */
+.artist-row {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--art-accent, var(--art-accent-default)), 0.12),
+    rgba(var(--art-accent, var(--art-accent-default)), 0.03) 60%
+  );
+}
+.table tbody tr.artist-row:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--art-accent, var(--art-accent-default)), 0.2),
+    rgba(var(--art-accent, var(--art-accent-default)), 0.06) 60%
+  );
+}
 .artist-row.clickable.open {
-  background: rgba(225, 96, 99, 0.1);
-  box-shadow: inset 2px 0 0 var(--salmon);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--art-accent, 225, 96, 99), 0.26),
+    rgba(var(--art-accent, 225, 96, 99), 0.08) 65%
+  );
+  box-shadow: inset 2px 0 0 rgba(var(--art-accent, 225, 96, 99), 0.95);
 }
 
 /* The row holding the expanded discography — a flush nested panel, no table hover. Indent lightly so
@@ -772,8 +798,15 @@ input[type='checkbox'] {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  /* Background washed with the card's artwork colour: a translucent accent gradient layered over the
+     stock glass panel, so the row reads as "themed from the art" while the dark base shows through. */
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, var(--art-accent-default)), 0.2),
+      rgba(var(--art-accent, var(--art-accent-default)), 0.05) 65%
+    ),
+    var(--panel);
+  border: 1px solid rgba(var(--art-accent, var(--art-accent-default)), 0.45);
   border-radius: var(--radius);
   padding: 0.65rem 0.9rem;
   backdrop-filter: blur(8px);
@@ -781,8 +814,14 @@ input[type='checkbox'] {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, background 0.15s ease;
 }
 .disc-row:hover {
-  border-color: var(--border-bright);
-  background: rgba(55, 39, 115, 0.4);
+  border-color: rgba(var(--art-accent, var(--art-accent-default)), 0.8);
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, var(--art-accent-default)), 0.32),
+      rgba(var(--art-accent, var(--art-accent-default)), 0.1) 65%
+    ),
+    var(--panel);
+  box-shadow: 0 0 24px -6px rgba(var(--art-accent, var(--art-accent-default)), 0.6);
 }
 /* Clickable rows in the two-pane view get a pointer + lift. position:relative + a raised z-index on
    hover lets the snooze flyout overflow *above* the readout pane instead of being painted under it. */
@@ -798,11 +837,19 @@ input[type='checkbox'] {
   transform: translateX(2px);
   z-index: 60;
 }
-/* The row currently open in the readout panel. */
+/* The row currently open in the readout panel — the boldest expression of the art colour: a strong
+   accent wash, a bright accent border + inner ring, and an outward glow. Falls back to the stock
+   salmon when a card has no analysed art colour, preserving the original "selected" look. */
 .disc-row.selected {
-  border-color: var(--salmon);
-  background: rgba(225, 96, 99, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(250, 115, 118, 0.35), var(--glow-salmon);
+  border-color: rgba(var(--art-accent, 225, 96, 99), 0.95);
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, 225, 96, 99), 0.42),
+      rgba(var(--art-accent, 225, 96, 99), 0.16) 70%
+    ),
+    var(--panel);
+  box-shadow: inset 0 0 0 1px rgba(var(--art-accent, 225, 96, 99), 0.5),
+    0 0 26px -4px rgba(var(--art-accent, 225, 96, 99), 0.7);
 }
 
 .disc-sub-albums {
@@ -823,30 +870,52 @@ input[type='checkbox'] {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  /* Art-tinted card (cover colour washed over the stock panel), same pattern as the feed rows. */
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, var(--art-accent-default)), 0.14),
+      rgba(var(--art-accent, var(--art-accent-default)), 0.04) 65%
+    ),
+    var(--panel-2);
+  border: 1px solid rgba(var(--art-accent, var(--art-accent-default)), 0.4);
   border-radius: var(--radius-sm);
   padding: 0.45rem 0.6rem;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .disc-sub-album:hover {
-  border-color: var(--border-bright);
-  background: rgba(55, 39, 115, 0.4);
+  border-color: rgba(var(--art-accent, var(--art-accent-default)), 0.7);
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, var(--art-accent-default)), 0.26),
+      rgba(var(--art-accent, var(--art-accent-default)), 0.08) 65%
+    ),
+    var(--panel-2);
 }
-/* Albums with no Deezer preview can't expand — leave them static. */
+/* Albums with no Deezer preview can't expand — leave them static (keep the at-rest art tint). */
 .disc-sub-album.no-play {
   cursor: default;
 }
 .disc-sub-album.no-play:hover {
-  border-color: var(--border);
-  background: var(--panel-2);
+  border-color: rgba(var(--art-accent, var(--art-accent-default)), 0.4);
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, var(--art-accent-default)), 0.14),
+      rgba(var(--art-accent, var(--art-accent-default)), 0.04) 65%
+    ),
+    var(--panel-2);
 }
 /* The album whose preview is open. */
 .disc-sub-album.selected {
-  border-color: var(--salmon);
-  background: rgba(225, 96, 99, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(250, 115, 118, 0.35), var(--glow-salmon);
+  border-color: rgba(var(--art-accent, 225, 96, 99), 0.95);
+  background: linear-gradient(
+      135deg,
+      rgba(var(--art-accent, 225, 96, 99), 0.36),
+      rgba(var(--art-accent, 225, 96, 99), 0.14) 70%
+    ),
+    var(--panel-2);
+  box-shadow: inset 0 0 0 1px rgba(var(--art-accent, 225, 96, 99), 0.5),
+    0 0 22px -4px rgba(var(--art-accent, 225, 96, 99), 0.6);
 }
 .disc-sub-album-name {
   flex: 1;
@@ -861,6 +930,9 @@ input[type='checkbox'] {
   flex-shrink: 0;
   background: var(--purple-deep);
   border: 1px solid var(--border);
+  /* Soft halo in the artwork's own colour — the clearest "themed from the art" cue (the detail hero
+     overrides this with its larger glow below). */
+  box-shadow: 0 0 12px -3px rgba(var(--art-accent, var(--art-accent-default)), 0.5);
 }
 .disc-avatar-fallback {
   display: flex;
@@ -1193,8 +1265,13 @@ input[type='checkbox'] {
   overflow-y: auto;
   /* Below a hovered row so its snooze flyout can spill over the top of this pane. */
   z-index: 1;
-  background: linear-gradient(180deg, rgba(40, 29, 82, 0.55), rgba(11, 9, 18, 0.55));
-  border: 1px solid var(--border-bright);
+  /* The focused card's art colour washes the top of the readout, fading into the abyss below. */
+  background: linear-gradient(
+    180deg,
+    rgba(var(--art-accent, var(--art-accent-default)), 0.24),
+    rgba(11, 9, 18, 0.62) 70%
+  );
+  border: 1px solid rgba(var(--art-accent, var(--art-accent-default)), 0.6);
   border-radius: var(--radius);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1278,8 +1355,9 @@ input[type='checkbox'] {
   aspect-ratio: 1 / 1;
   height: auto;
   border-radius: var(--radius);
-  border: 1px solid var(--border-bright);
-  box-shadow: 0 0 40px rgba(225, 96, 99, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.4);
+  /* Outline + halo both tuned to the artwork; fall back to the stock salmon when no accent is set. */
+  border: 1px solid rgba(var(--art-accent, 225, 96, 99), 0.7);
+  box-shadow: 0 0 44px rgba(var(--art-accent, 225, 96, 99), 0.38), inset 0 0 30px rgba(0, 0, 0, 0.4);
   font-size: 4rem;
 }
 /* Coloured scrim along the bottom of the hero. */
@@ -1805,6 +1883,8 @@ input[type='checkbox'] {
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
+  /* Halo in the artist's own colour (falls back to the stock purple when unanalysed). */
+  box-shadow: 0 0 12px -3px rgba(var(--art-accent, var(--art-accent-default)), 0.5);
 }
 .artist-thumb.placeholder {
   display: flex;
