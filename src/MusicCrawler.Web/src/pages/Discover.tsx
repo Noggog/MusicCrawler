@@ -22,6 +22,7 @@ import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
 import { IconApprove, IconMoon, IconReject } from '../components/icons'
+import { vortex, disturbSpores, lastPointer } from '../effects/effectsBus'
 
 const PAGE_SIZE = 20
 
@@ -678,6 +679,11 @@ export default function Discover() {
     // what made the list re-interleave and jump. The mark drops away on the next natural refresh.
     onMutate: ({ item, verdict }) => {
       setRated((prev) => new Map(prev).set(rowKeyFor(item), verdict))
+      // Spore feedback at the cursor, acting on existing spores only: approve
+      // swirls them into a brief whirlpool, reject scatters the nearby spores.
+      const { x, y } = lastPointer()
+      if (verdict === 'up') vortex(x, y, 1)
+      else disturbSpores(x, y, 1.4)
     },
     onError: (_err, { item }) => {
       setRated((prev) => {

@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { createSporeField, type SporeFieldOptions } from '../effects/sporeField'
-import { registerSporeField } from '../effects/effectsBus'
+import {
+  registerSporeField,
+  setSporePointer,
+  clearSporePointer,
+} from '../effects/effectsBus'
 
 /**
  * Ambient floating-spore layers with parallax depth:
@@ -58,17 +62,31 @@ export default function MyceliumBackdrop() {
       for (const f of fields) (document.hidden ? f.stop() : f.start())
     }
 
+    // Canvases are fixed at the viewport origin, so client coords map straight
+    // to field coords. Skip cursor repulsion under reduced-motion.
+    const onPointerMove = (e: PointerEvent) => {
+      if (reduceMotion.matches) return
+      setSporePointer(e.clientX, e.clientY)
+    }
+    const onPointerLeave = () => clearSporePointer()
+
     sync()
     if (!reduceMotion.matches && !document.hidden) for (const f of fields) f.start()
 
     window.addEventListener('resize', sync)
     document.addEventListener('visibilitychange', onVisibility)
     reduceMotion.addEventListener('change', onVisibility)
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    document.addEventListener('pointerleave', onPointerLeave)
+    window.addEventListener('blur', onPointerLeave)
 
     return () => {
       window.removeEventListener('resize', sync)
       document.removeEventListener('visibilitychange', onVisibility)
       reduceMotion.removeEventListener('change', onVisibility)
+      window.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerleave', onPointerLeave)
+      window.removeEventListener('blur', onPointerLeave)
       for (const off of unregister) off()
       for (const f of fields) f.destroy()
     }

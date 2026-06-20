@@ -16,16 +16,16 @@
 type Rgb = readonly [number, number, number]
 
 /**
- * Palette pulled from index.css, weighted toward salmon by repetition so most
- * spores read warm with the odd cool cyan/purple accent.
+ * Warm-only palette pulled from the Synthesis colours in index.css — salmon
+ * tones with a peachy-yellow accent. No blues/purples. Weighted by repetition.
  */
 const PALETTE: readonly Rgb[] = [
   [250, 115, 118], // salmon-light
   [250, 115, 118], // salmon-light
   [255, 153, 155], // salmon-white
   [225, 96, 99], // salmon
-  [87, 241, 252], // cyan (accent)
-  [140, 118, 219], // purple-fg (accent)
+  [247, 185, 146], // yellow (--yellow, peachy accent)
+  [247, 185, 146], // yellow
 ]
 
 /** One drifting spore. */
@@ -46,6 +46,26 @@ interface Spore {
   flareVel: number
 }
 
+/**
+ * A transient whirlpool that swirls existing spores around a point, with a
+ * gentle inward gather (so spores aren't shoved off-screen) and a touch of
+ * chaos. Ramps up and decays over its lifetime.
+ */
+interface Vortex {
+  x: number
+  y: number
+  /** Elapsed seconds and total lifetime. */
+  t: number
+  dur: number
+  radius: number
+  /** Tangential (swirl), inward (gather) and turbulent (chaos) accelerations. */
+  swirl: number
+  pull: number
+  chaos: number
+  /** Swirl direction, ±1, alternates per trigger so it doesn't feel canned. */
+  spin: number
+}
+
 /** Tunables. Overridable per-layer via createSporeField options. */
 const DEFAULTS = {
   /** Spores per million CSS pixels of viewport, before the hard cap. */
@@ -61,6 +81,9 @@ const DEFAULTS = {
   flareChance: 0.035,
   /** Overall opacity multiplier for this layer. */
   alphaScale: 1,
+  /** Cursor repulsion: a wide, barely-there flow nudge rather than a kick. */
+  pointerRadius: 460,
+  pointerForce: 55,
   /** Max device-pixel-ratio we honour (perf guard on hi-dpi screens). */
   maxDpr: 2,
 }
@@ -87,10 +110,16 @@ export interface SporeFieldHandle {
   destroy: () => void
   /** Render a single static frame (used for prefers-reduced-motion). */
   renderStatic: () => void
-  /** --- Reactive API (wired up in later passes) --- */
+  /** --- Reactive API --- */
+  /** Set the cursor position so spores are continuously repelled from it. */
+  setPointer: (x: number, y: number) => void
+  /** Stop cursor repulsion (pointer left the window). */
+  clearPointer: () => void
   /** Disturb spores near a point, e.g. the cursor or a swipe origin. */
   disturb: (x: number, y: number, strength?: number) => void
-  /** Spawn a burst of spores at a point, e.g. on "approve". */
+  /** Swirl existing spores in a transient whirlpool, e.g. on "approve". */
+  vortex: (x: number, y: number, strength?: number) => void
+  /** Spawn a burst of new spores at a point. */
   burst: (x: number, y: number, count?: number, color?: Rgb) => void
   /** Global intensity 0..1, e.g. audio level — scales glow + drift energy. */
   setIntensity: (level: number) => void
@@ -105,17 +134,24 @@ export function createSporeField(
   options: SporeFieldOptions = {},
 ): SporeFieldHandle {
   const CONFIG = { ...DEFAULTS, ...options }
+  const POINTER_R2 = CONFIG.pointerRadius * CONFIG.pointerRadius
   const ctx = canvas.getContext('2d', { alpha: true })!
 
   let width = 0 // CSS pixels
   let height = 0
   let dpr = 1
   let spores: Spore[] = []
+  let vortices: Vortex[] = []
+  let spinFlip = 1
   let raf = 0
   let last = 0
   let running = false
   let intensity = 0
   let intensityTarget = 0
+  // Cursor "nutrient" — spores are gently pushed away from it while present.
+  let pointerX = 0
+  let pointerY = 0
+  let pointerActive = false
 
   const rand = (min: number, max: number) => min + Math.random() * (max - min)
   const pick = <T>(arr: readonly T[]): T => arr[(Math.random() * arr.length) | 0]
@@ -172,7 +208,13 @@ export function createSporeField(
 
   function step(dt: number, t: number) {
     intensity += (intensityTarget - intensity) * Math.min(1, dt * 3)
-    const energy = 1 + intensity * 0.8
+    const energy = 1 + intensity * 2.4
+
+    // Age active vortices and retire the spent ones.
+    if (vortices.length) {
+      for (const v of vortices) v.t += dt
+      vortices = vortices.filter((v) => v.t < v.dur)
+    }
 
     for (const s of spores) {
       const angle = flowAngle(s.x, s.y + s.wander, t)
@@ -182,6 +224,49 @@ export function createSporeField(
       const ty = Math.sin(angle) * sp - sp * 0.25 // slight upward bias: spores rise
       s.vx += (tx - s.vx) * CONFIG.flow * dt * 4
       s.vy += (ty - s.vy) * CONFIG.flow * dt * 4
+
+      // Cursor repulsion: nearer + closer-to-camera (higher z) spores flee
+      // harder, so the near layer parts around the pointer more visibly.
+      if (pointerActive) {
+        const dx = s.x - pointerX
+        const dy = s.y - pointerY
+        const d2 = dx * dx + dy * dy
+        if (d2 < POINTER_R2 && d2 > 0.01) {
+          const inv = 1 / Math.sqrt(d2)
+          // Linear falloff over a wide radius — a soft pressure gradient, not a
+          // sharp shove near the centre.
+          const falloff = 1 - Math.sqrt(d2) / CONFIG.pointerRadius
+          const push = falloff * CONFIG.pointerForce * (0.5 + s.z) * dt
+          s.vx += dx * inv * push
+          s.vy += dy * inv * push
+        }
+      }
+
+      // Vortices: swirl the spore around the point, gather it gently inward, and
+      // add a little turbulence so it churns rather than spinning like a rigid
+      // disc. Smooth ramp-up/decay envelope over the vortex lifetime.
+      for (const v of vortices) {
+        const dx = s.x - v.x
+        const dy = s.y - v.y
+        const d = Math.sqrt(dx * dx + dy * dy)
+        if (d < v.radius && d > 0.01) {
+          const inv = 1 / d
+          const falloff = 1 - d / v.radius
+          const env = Math.sin(Math.PI * (v.t / v.dur)) // 0 → 1 → 0
+          const k = falloff * env * (0.5 + s.z) * dt
+          // Tangential swirl (perpendicular to the radius).
+          s.vx += -dy * inv * v.swirl * v.spin * k
+          s.vy += dx * inv * v.swirl * v.spin * k
+          // Gentle inward gather so spores don't pile at the edges.
+          s.vx += -dx * inv * v.pull * k
+          s.vy += -dy * inv * v.pull * k
+          // Turbulence: shove along the flow-field angle for chaotic churn.
+          const ca = flowAngle(s.x * 2.3, s.y * 2.3 + s.wander, t * 1.5)
+          s.vx += Math.cos(ca) * v.chaos * k
+          s.vy += Math.sin(ca) * v.chaos * k
+        }
+      }
+
       s.x += s.vx * dt
       s.y += s.vy * dt
       s.twinkle += dt * (0.35 + 0.35 * s.z)
@@ -207,13 +292,14 @@ export function createSporeField(
   function draw() {
     ctx.clearRect(0, 0, width, height)
     ctx.globalCompositeOperation = 'lighter'
-    const glowBoost = 1 + intensity * 0.6
+    const glowBoost = 1 + intensity * 1.3
 
     for (const s of spores) {
       const twinkle = 0.8 + 0.2 * Math.sin(s.twinkle)
       const r = s.radius * (1 + s.flare * 0.55) * glowBoost
       const alpha =
-        (0.12 + 0.5 * s.z) * twinkle * (0.9 + 0.45 * s.flare) * 0.6 * CONFIG.alphaScale
+        (0.12 + 0.5 * s.z) * twinkle * (0.9 + 0.45 * s.flare) * 0.6 * CONFIG.alphaScale *
+        (1 + intensity * 0.8)
       const [cr, cg, cb] = s.color
       const halo = r * 4.5
       const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, halo)
@@ -268,9 +354,20 @@ export function createSporeField(
   function destroy() {
     stop()
     spores = []
+    vortices = []
   }
 
-  // --- Reactive API (no-ops beyond simple physics until later passes) ---
+  // --- Reactive API ---
+  function setPointer(x: number, y: number) {
+    pointerX = x
+    pointerY = y
+    pointerActive = true
+  }
+
+  function clearPointer() {
+    pointerActive = false
+  }
+
   function disturb(x: number, y: number, strength = 1) {
     const radius = 140
     const r2 = radius * radius
@@ -285,6 +382,21 @@ export function createSporeField(
         s.vy += dy * inv * f
       }
     }
+  }
+
+  function vortex(x: number, y: number, strength = 1) {
+    spinFlip = -spinFlip
+    vortices.push({
+      x,
+      y,
+      t: 0,
+      dur: 1.9,
+      radius: 300,
+      swirl: 520 * strength,
+      pull: 150 * strength,
+      chaos: 230 * strength,
+      spin: spinFlip,
+    })
   }
 
   function burst(x: number, y: number, count = 16, color?: Rgb) {
@@ -316,7 +428,10 @@ export function createSporeField(
     stop,
     destroy,
     renderStatic,
+    setPointer,
+    clearPointer,
     disturb,
+    vortex,
     burst,
     setIntensity,
   }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getDeezerAlbumPlayInfo, getDeezerPlayInfo } from '../api/deezer'
 import { getVolume, useVolume } from '../audio/volume'
+import { startAudioReactive, stopAudioReactive } from '../effects/audioReactive'
 
 // Only one preview should play at a time across the whole page; track the active element so
 // starting a new one pauses the previous (e.g. expanding a second row in the list view).
@@ -47,6 +48,10 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
     el.volume = getVolume()
     el.src = track.previewUrl
     setSelected(index)
+    // Set up / resume the Web Audio tap here, inside the click gesture, so the
+    // AudioContext is allowed to start (doing it from the onPlay media event can
+    // leave the context suspended → silent playback).
+    startAudioReactive(el)
     el.play().catch(() => {
       /* autoplay can be blocked until a gesture — the play button still works */
     })
@@ -107,8 +112,14 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
         ref={audioRef}
         preload="none"
         onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onPause={() => {
+          setPlaying(false)
+          stopAudioReactive()
+        }}
+        onEnded={() => {
+          setPlaying(false)
+          stopAudioReactive()
+        }}
       />
     </div>
   )
