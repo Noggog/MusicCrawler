@@ -6,14 +6,14 @@ namespace MusicCrawler.Backend.Services.Singletons;
 
 /// <summary>
 /// <see cref="IArtistTagger"/> over Plex. Stamps a user's like/dislike onto the artist in Plex as a
-/// Label (e.g. "noggog_liked"), so a taste verdict made in the app is visible and queryable in Plex
-/// itself.
+/// Collection membership (e.g. "noggog_liked"), so a taste verdict made in the app is visible in Plex
+/// and — unlike a Label — filterable by a music smart playlist via the "Artist Collection" field.
 ///
-/// <para><b>Additive.</b> Plex's metadata edit replaces the whole Label field, so we read the artist's
-/// current labels and PUT them back plus the new one — preserving genres (a separate field) and any
-/// other user's tags. A name can map to more than one Plex item (Plex joins collaborators into a single
-/// ';'-delimited title), so every item the name appears in is tagged, matching how the rest of the app
-/// reads names.</para>
+/// <para><b>Additive.</b> Plex's metadata edit replaces the whole Collection field, so we read the
+/// artist's current collections and PUT them back plus the new one — preserving genres (a separate
+/// field) and any other user's tags. A name can map to more than one Plex item (Plex joins
+/// collaborators into a single ';'-delimited title), so every item the name appears in is tagged,
+/// matching how the rest of the app reads names.</para>
 ///
 /// <para><b>Best-effort.</b> Failures are logged, never thrown — tagging is a side effect of rating and
 /// must not fail the rating itself. (Removing the opposite verdict's tag on a flip is a deliberate
@@ -53,13 +53,13 @@ public class PlexArtistTagger : IArtistTagger
 
             foreach (var artist in matches)
             {
-                var existing = artist.Labels();
+                var existing = artist.Collections();
                 if (existing.Contains(tag, StringComparer.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                await _plexApi.SetArtistLabels(library.Key, artist.RatingKey, existing.Append(tag).ToArray());
+                await _plexApi.SetArtistCollections(library.Key, artist.RatingKey, existing.Append(tag).ToArray());
                 _logger.LogInformation(
                     "Tagged Plex artist {Artist} ({Key}) with {Tag}", artist.Title, artist.RatingKey, tag);
             }

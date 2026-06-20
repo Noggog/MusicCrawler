@@ -4,8 +4,9 @@ namespace MusicCrawler.Interfaces;
 
 /// <summary>
 /// The seam for stamping a user's taste verdict onto an artist in the library backend (Plex) as a
-/// tag/label — e.g. a thumbs-up writes "&lt;user&gt;_liked". Best-effort and additive: it merges with
-/// any existing tags and never throws, so a tagging failure can't break the rating it accompanies.
+/// collection membership — e.g. a thumbs-up writes "&lt;user&gt;_liked". Best-effort and additive: it
+/// merges with any existing tags and never throws, so a tagging failure can't break the rating it
+/// accompanies.
 /// </summary>
 public interface IArtistTagger
 {
@@ -14,9 +15,10 @@ public interface IArtistTagger
 }
 
 /// <summary>
-/// Builds the per-user label for a taste verdict — "&lt;username&gt;_liked" / "&lt;username&gt;_disliked".
-/// The username is trimmed of any email domain and reduced to [a-z0-9_] so the tag is clean and
-/// collision-resistant; returns null when there's no usable username (so the caller skips tagging).
+/// Builds the per-user collection tag for a taste verdict — "&lt;username&gt;_liked" /
+/// "&lt;username&gt;_disliked". The username is trimmed of any email domain and reduced to [a-z0-9_] so
+/// the tag is clean and collision-resistant; returns null when there's no usable username (so the caller
+/// skips tagging).
 /// </summary>
 public static class ArtistTag
 {
@@ -33,9 +35,9 @@ public static class ArtistTag
     }
 
     /// <summary>
-    /// Whether a label is one this app manages — the "_liked"/"_disliked" suffix namespace. Used by the
-    /// dev wipe to strip only our tags and leave genres and hand-applied labels alone. Coarse on
-    /// purpose: any label with that suffix is treated as ours (we can't enumerate every username that
+    /// Whether a collection name is one this app manages — the "_liked"/"_disliked" suffix namespace.
+    /// Used by the dev wipe to strip only our tags and leave hand-made collections alone. Coarse on
+    /// purpose: any name with that suffix is treated as ours (we can't enumerate every username that
     /// ever rated), which is the right call for a "clean slate" reset.
     /// </summary>
     public static bool IsManaged(string? label) =>

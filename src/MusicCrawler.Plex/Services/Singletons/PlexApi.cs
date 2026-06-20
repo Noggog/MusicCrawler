@@ -32,7 +32,9 @@ public class PlexApi
 
     public async Task<PlexMusicArtist[]> GetMusicArtists(int library)
     {
-        string url = $"{_endpointInfo.BaseUri}/library/sections/{library}/all";
+        // includeCollections=1 so each artist's Collection tags come back inline (Plex omits them from
+        // the bare listing); the per-user like/dislike tagging reads these to merge writes additively.
+        string url = $"{_endpointInfo.BaseUri}/library/sections/{library}/all?includeCollections=1";
         _logger.LogDebug("Plex GetMusicArtists from library {Library}: {Url}", library, url);
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
@@ -71,22 +73,23 @@ public class PlexApi
     }
 
     /// <summary>
-    /// Replaces an artist's full Label set in section <paramref name="library"/>. Plex's metadata edit
-    /// is a whole-field replace, so callers must merge in the existing labels first (see
-    /// <see cref="GetLabels"/>). <c>type=8</c> is the artist metadata type; <c>label.locked=1</c> pins
-    /// the field so a later metadata refresh won't drop the tags.
+    /// Replaces an artist's full Collection set in section <paramref name="library"/>. Plex's metadata
+    /// edit is a whole-field replace, so callers must merge in the existing collections first (see
+    /// <see cref="PlexMusicArtist.Collections"/>). <c>type=8</c> is the artist metadata type;
+    /// <c>collection.locked=1</c> pins the field so a later metadata refresh won't drop the tags.
     /// </summary>
-    public async Task SetArtistLabels(int library, int ratingKey, IReadOnlyList<string> labels)
+    public async Task SetArtistCollections(int library, int ratingKey, IReadOnlyList<string> collections)
     {
         var url = new StringBuilder(
             $"{_endpointInfo.BaseUri}/library/sections/{library}/all?type=8&id={ratingKey}");
-        for (var i = 0; i < labels.Count; i++)
+        for (var i = 0; i < collections.Count; i++)
         {
-            url.Append($"&label[{i}].tag.tag={Uri.EscapeDataString(labels[i])}");
+            url.Append($"&collection[{i}].tag.tag={Uri.EscapeDataString(collections[i])}");
         }
-        url.Append("&label.locked=1");
+        url.Append("&collection.locked=1");
 
-        _logger.LogDebug("Plex SetArtistLabels for {RatingKey}: {Count} label(s)", ratingKey, labels.Count);
+        _logger.LogDebug(
+            "Plex SetArtistCollections for {RatingKey}: {Count} collection(s)", ratingKey, collections.Count);
         var response = await httpClient.PutAsync(url.ToString(), content: null);
         response.EnsureSuccessStatusCode();
     }
@@ -149,13 +152,15 @@ public record PlexMusicArtist
     // Plex returns genre tags inline on the section listing, e.g. "Genre":[{"tag":"Pop/Rock"}].
     public PlexTag[]? Genre { get; set; }
 
-    // User-set tags. Plex returns these inline on the section listing too, e.g. "Label":[{"tag":"x"}],
-    // in a field separate from Genre/Mood/Style — so editing labels never disturbs those.
-    public PlexTag[]? Label { get; set; }
+    // Collection memberships. Returned inline on the section listing when includeCollections=1 is set
+    // (see GetMusicArtists), in a field separate from Genre/Mood/Style — so editing collections never
+    // disturbs those. The per-user like/dislike tags live here because, unlike Label, "Artist Collection"
+    // is a field Plex music smart playlists can actually filter on.
+    public PlexTag[]? Collection { get; set; }
 
-    /// <summary>The artist's current label strings (the user-set tag field); empty when it has none.</summary>
-    public string[] Labels() =>
-        Label?.Select(t => t.Tag).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray() ?? Array.Empty<string>();
+    /// <summary>The artist's current collection names; empty when it belongs to none.</summary>
+    public string[] Collections() =>
+        Collection?.Select(t => t.Tag).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray() ?? Array.Empty<string>();
 }
 
 /// <summary>A Plex tag entry — genres, moods, styles all serialize as <c>{ "tag": "..." }</c>.</summary>

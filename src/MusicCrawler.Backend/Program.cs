@@ -333,8 +333,9 @@ api.MapPost("/discovery/rate", async (
         if (string.IsNullOrEmpty(album))
         {
             await engine.RateArtist(userId, artist, status);
-            // Mirror the verdict into Plex as a per-user label ("<username>_liked"/"_disliked"). The
-            // tagger is best-effort (never throws), so a Plex hiccup can't fail the rating.
+            // Mirror the verdict into Plex as a per-user collection ("<username>_liked"/"_disliked"),
+            // which a music smart playlist can filter on via "Artist Collection". The tagger is
+            // best-effort (never throws), so a Plex hiccup can't fail the rating.
             var tag = ArtistTag.For(http.User.FindFirst("preferred_username")?.Value, status);
             if (tag != null)
             {
