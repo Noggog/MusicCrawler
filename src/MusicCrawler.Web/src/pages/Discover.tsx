@@ -1,5 +1,18 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
+  autoUpdate,
+  flip,
+  offset,
+  safePolygon,
+  shift,
+  useDismiss,
+  useFloating,
+  useFocus,
+  useHover,
+  useInteractions,
+  useRole,
+} from '@floating-ui/react'
+import {
   keepPreviousData,
   useMutation,
   useQuery,
@@ -153,12 +166,16 @@ function useStickySnooze(): [SnoozeDuration, (duration: SnoozeDuration) => void]
 }
 
 // The 💤 snooze action. Collapsed to just the icon; hovering (or focusing) grows it rightward into a
-// matching dark-glass square holding the three durations (Week / Month / Year), absolutely positioned
-// so it overflows the row without resizing it or nudging the thumbs up/down beside it. The spans run
-// a "frozen" scale — purple Week → icy Year (see data-duration styling in index.css).
+// matching dark-glass square holding the three durations (Week / Month / Year). The panel floats over
+// the row without resizing it or nudging the thumbs up/down beside it; the spans run a "frozen" scale —
+// purple Week → icy Year (see data-duration styling in index.css).
 //
 // Clicking the moon itself re-applies the last-used duration ("sticky snooze") — the panel is only
 // needed when you want a *different* span. Picking from the panel updates that remembered default.
+//
+// Floating UI drives the open/close: `safePolygon` keeps the panel open while the cursor travels the
+// diagonal from the moon toward an option (the old rectangular keepalive collapsed on any corner-cut),
+// and `flip`/`shift` re-anchor it so it never overflows the viewport (e.g. inside the mobile drawer).
 function SnoozeControl({
   onPick,
   disabled,
@@ -167,24 +184,63 @@ function SnoozeControl({
   disabled: boolean
 }) {
   const [lastDuration, rememberDuration] = useStickySnooze()
+  const [open, setOpen] = useState(false)
+
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    // `right-start` aligns the panel's TOP edge to the moon's top (not centered) so the two halves of the
+    // pill share top and bottom edges exactly, rather than relying on equal heights + rounding agreeing.
+    placement: 'right-start',
+    // Default (transform-based) positioning is kept ON PURPOSE: Floating UI rounds the translate to whole
+    // device pixels, so the panel's 1px borders stay crisp. (Switching to top/left via `transform: false`
+    // let the panel land on a fractional pixel, which anti-aliased the bottom border into looking absent.)
+    // The grow-in uses `clip-path`, not `transform`, so there's no conflict with the positioning transform.
+    // offset -1 laps the panel 1px ONTO the moon's right edge. The panel is opaque and stacks above the
+    // moon, so that column is painted by the panel's own left-edge colour (identical to the moon's fill) —
+    // covering the seam on ANY background. (offset 0 left a 1px see-through gap that showed through on the
+    // lighter detail-pane panel, reading as two separate boxes.)
+    middleware: [offset(-1), flip({ fallbackAxisSideDirection: 'start' }), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  })
+
+  const hover = useHover(context, {
+    enabled: !disabled,
+    handleClose: safePolygon({ buffer: 1 }),
+    delay: { open: 0, close: 90 },
+  })
+  const focus = useFocus(context, { enabled: !disabled })
+  const dismiss = useDismiss(context)
+  const role = useRole(context, { role: 'menu' })
+  const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus, dismiss, role])
+
   const pick = (duration: SnoozeDuration) => {
     rememberDuration(duration)
     onPick(duration)
+    setOpen(false)
   }
+
   return (
-    <span className="disc-snooze" title="Snooze — hide for a while, then resurface">
+    <span className="disc-snooze">
       <button
+        ref={refs.setReference}
         type="button"
-        className="disc-btn snooze snooze-trigger"
+        className={`disc-btn snooze snooze-trigger${open ? ' is-open' : ''}`}
+        data-placement={context.placement}
         disabled={disabled}
-        aria-haspopup="menu"
         aria-label={`Snooze for ${SNOOZE_LABEL[lastDuration]}`}
-        title={`Snooze for ${SNOOZE_LABEL[lastDuration]} — hover for other spans`}
         onClick={() => pick(lastDuration)}
+        {...getReferenceProps()}
       >
         <IconMoon size={18} />
       </button>
-      <span className="disc-snooze-flyout" role="menu">
+      <span
+        ref={refs.setFloating}
+        className={`disc-snooze-flyout${open ? ' is-open' : ''}`}
+        style={floatingStyles}
+        data-placement={context.placement}
+        {...getFloatingProps()}
+      >
         {SNOOZE_OPTIONS.map((o) => (
           <button
             key={o.duration}
@@ -193,7 +249,8 @@ function SnoozeControl({
             data-duration={o.duration}
             role="menuitemradio"
             aria-checked={o.duration === lastDuration}
-            disabled={disabled}
+            disabled={disabled || !open}
+            tabIndex={open ? 0 : -1}
             onClick={() => pick(o.duration)}
           >
             {o.label}

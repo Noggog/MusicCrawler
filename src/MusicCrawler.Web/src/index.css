@@ -1045,8 +1045,9 @@ input[type='checkbox'] {
   box-shadow: var(--glow-salmon);
 }
 
-/* Collapsed snooze: just the 💤 trigger. On hover it grows rightward into a matching dark-glass
-   square holding the three spans — absolutely positioned so the row/actions never reflow. */
+/* Collapsed snooze: just the 💤 trigger. On hover/focus Floating UI opens a matching dark-glass square
+   holding the three spans, floated flush to the moon's right edge so the row/actions never reflow.
+   `safePolygon` (in Discover.tsx) keeps it open across the diagonal travel toward an option. */
 .disc-snooze {
   /* Shared height keeps the trigger and the opening panel edge-aligned so they read as one box. */
   --snooze-h: 2.15rem;
@@ -1059,22 +1060,6 @@ input[type='checkbox'] {
   padding: 0.32rem 0.6rem;
 }
 
-/* Invisible hover-keepalive margin around the trigger (mainly vertical slack — the control is a thin
-   strip, so a pixel of overshoot above/below is what collapses it). Sits at z-index 0, BELOW the moon
-   (z-index 1) and panel (z-index 30) so it never blocks their clicks; it only wins hit-testing out in
-   the empty margin. Active only while open, so it can't widen the closed target or steal stray hovers. */
-.disc-snooze::after {
-  content: '';
-  position: absolute;
-  inset: -10px -2px -10px -2px;
-  z-index: 0;
-  pointer-events: none;
-}
-.disc-snooze:hover::after,
-.disc-snooze:focus-within::after {
-  pointer-events: auto;
-}
-
 /* The lone moon icon matches the approve/reject footprint, tinted purple at rest — and stays purple
    no matter which span is remembered (the frozen scale only reveals itself once the panel opens). */
 .disc-btn.snooze-trigger {
@@ -1084,12 +1069,10 @@ input[type='checkbox'] {
   font-size: 1.05rem;
   padding: 0.4rem 0.55rem;
   color: var(--purple-fg);
-  /* Above the invisible hover-buffer (below) so the moon stays clickable through it. */
   position: relative;
   z-index: 1;
 }
-.disc-snooze:hover .disc-btn.snooze-trigger,
-.disc-snooze:focus-within .disc-btn.snooze-trigger {
+.disc-btn.snooze-trigger.is-open {
   border-color: var(--purple-light);
   color: var(--purple-fg);
   /* Fuse with the opening panel: no glow (its halo at the seam reads as a hard line), kill the hover
@@ -1107,79 +1090,97 @@ input[type='checkbox'] {
      width — so the trigger holds the start value and the frozen ramp begins at the seam.) */
   background: linear-gradient(rgba(116, 88, 219, 0.28), rgba(116, 88, 219, 0.28)), rgb(12, 10, 20);
 }
+/* Flipped to the left edge (viewport-crowded): mirror which corners square off so the seam still fuses. */
+.disc-btn.snooze-trigger.is-open[data-placement^='left'] {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+  border-right-color: var(--purple-light);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: transparent;
+}
 
-/* The opening panel: the same dark-glass square as the trigger, butted flush to its right (no left
-   border/radius) so the two read as one box that grew. A purple→ice wash previews the frozen scale. */
+/* The unfurling half of the pill: butted flush to the moon's right edge (Floating UI sets
+   position/top/left inline; offset 0 → flush) so moon + spans read as ONE rounded pill. A clip-path
+   wipe reveals it left→right — the element's box stays full-size the whole time, so the flush seam
+   never shifts mid-animation (a width/transform grow made Floating UI re-place it and jitter). */
 .disc-snooze-flyout {
-  position: absolute;
-  /* Flush to the trigger's right edge — NOT overlapping. Both fills resolve to the same opaque colour
-     at the seam (see trigger background), so they meet edge-to-edge with no line; an overlap would
-     instead double-composite into a darker hairline. */
-  left: 100%;
-  top: 0;
   display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  /* Fixed height (not min-height) so the option buttons can't push the panel taller than the moon. */
+  align-items: stretch;
   height: var(--snooze-h);
-  padding: 0 0.4rem;
   white-space: nowrap;
   /* Frozen ramp purple→ice over the SAME opaque base as the trigger; left edge = trigger's flat fill. */
   background:
-    linear-gradient(90deg, rgba(116, 88, 219, 0.28), rgba(87, 241, 252, 0.2)),
+    linear-gradient(90deg, rgba(116, 88, 219, 0.28), rgba(87, 241, 252, 0.16)),
     rgb(12, 10, 20);
-  /* Solid purple border matching the trigger's hover border (not the see-through --border-bright). */
+  /* Solid purple border matching the trigger's open border; no left edge so the seam fuses. */
   border: 1px solid var(--purple-light);
   border-left: none;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  /* Plain drop shadow for depth — no coloured glow, which haloed the seam into a hard line. */
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-8px) scale(0.96);
-  transform-origin: left center;
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  /* Clipped to zero width at the seam, then wiped open rightward; `round` preserves the right corners. */
+  clip-path: inset(0 100% 0 0 round 0 var(--radius-sm) var(--radius-sm) 0);
+  transition: clip-path 0.2s ease, opacity 0.1s ease;
   z-index: 30;
 }
-.disc-snooze:hover .disc-snooze-flyout,
-.disc-snooze:focus-within .disc-snooze-flyout {
+.disc-snooze-flyout.is-open {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0) scale(1);
+  clip-path: inset(0 0 0 0 round 0 var(--radius-sm) var(--radius-sm) 0);
 }
-/* Matching keepalive margin around the opened panel (top / right / bottom). z-index -1 keeps it within
-   the flyout's stacking context but BELOW the option buttons, so they stay clickable while the empty
-   margin holds the hover. pointer-events is inherited from the flyout — off when collapsed, on when open. */
-.disc-snooze-flyout::after {
-  content: '';
-  position: absolute;
-  inset: -10px -12px -10px 0;
-  z-index: -1;
+/* Flipped to the moon's left edge (viewport-crowded): mirror the seam and wipe right→left instead. */
+.disc-snooze-flyout[data-placement^='left'] {
+  border-left: 1px solid var(--purple-light);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  clip-path: inset(0 0 0 100% round var(--radius-sm) 0 0 var(--radius-sm));
+}
+.disc-snooze-flyout[data-placement^='left'].is-open {
+  clip-path: inset(0 0 0 0 round var(--radius-sm) 0 0 var(--radius-sm));
 }
 
-/* Frozen scale: week stays purple, month chills to sky blue, year freezes to ice. Each span hints at
-   its hue at rest and flares fully on hover; the remembered span (is-last) is pre-lit. */
+/* Each span is a borderless SEGMENT of the pill — no chip border/fill of its own — split by a hairline
+   divider. Hue per span (frozen scale); hover or the remembered span (is-last) floods with a soft wash. */
+.disc-snooze-flyout .disc-btn.snooze {
+  height: auto;
+  align-self: stretch;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.disc-snooze-flyout .disc-btn.snooze:hover:not(:disabled) {
+  transform: none;
+}
+.disc-snooze-flyout .disc-btn.snooze + .disc-btn.snooze {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+.disc-snooze-flyout .disc-btn.snooze:last-child {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Frozen scale: week stays purple, month chills to sky blue, year freezes to ice. */
 .disc-btn.snooze[data-duration='week'] { color: var(--purple-fg); }
 .disc-btn.snooze[data-duration='month'] { color: var(--blue); }
 .disc-btn.snooze[data-duration='year'] { color: var(--cyan); }
 
-.disc-btn.snooze[data-duration='week']:hover:not(:disabled),
-.disc-btn.snooze[data-duration='week'].is-last {
-  border-color: var(--purple-light);
-  color: var(--purple-fg);
-  box-shadow: 0 0 9px rgba(116, 88, 219, 0.3);
+.disc-snooze-flyout .disc-btn.snooze[data-duration='week']:hover:not(:disabled),
+.disc-snooze-flyout .disc-btn.snooze[data-duration='week'].is-last {
+  background: rgba(116, 88, 219, 0.32);
 }
-.disc-btn.snooze[data-duration='month']:hover:not(:disabled),
-.disc-btn.snooze[data-duration='month'].is-last {
-  border-color: var(--blue);
-  color: var(--blue);
-  box-shadow: 0 0 9px rgba(81, 188, 250, 0.3);
+.disc-snooze-flyout .disc-btn.snooze[data-duration='month']:hover:not(:disabled),
+.disc-snooze-flyout .disc-btn.snooze[data-duration='month'].is-last {
+  background: rgba(81, 188, 250, 0.28);
 }
-.disc-btn.snooze[data-duration='year']:hover:not(:disabled),
-.disc-btn.snooze[data-duration='year'].is-last {
-  border-color: var(--cyan);
-  color: var(--cyan);
-  box-shadow: 0 0 9px rgba(87, 241, 252, 0.28);
+.disc-snooze-flyout .disc-btn.snooze[data-duration='year']:hover:not(:disabled),
+.disc-snooze-flyout .disc-btn.snooze[data-duration='year'].is-last {
+  background: rgba(87, 241, 252, 0.26);
 }
 
 .disc-undo {
