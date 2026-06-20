@@ -88,12 +88,14 @@ body::before {
   position: fixed;
   inset: -20%;
   z-index: -3;
+  /* Dampened + feathered further out so the corners read as a faint wash rather
+     than four obvious coloured blobs competing with the mycelium. */
   background:
-    radial-gradient(38% 42% at 18% 22%, rgba(225, 96, 99, 0.28), transparent 60%),
-    radial-gradient(34% 40% at 82% 18%, rgba(87, 241, 252, 0.18), transparent 60%),
-    radial-gradient(46% 50% at 70% 82%, rgba(72, 23, 255, 0.3), transparent 62%),
-    radial-gradient(40% 44% at 30% 88%, rgba(116, 88, 219, 0.24), transparent 60%);
-  filter: saturate(1.2);
+    radial-gradient(46% 50% at 18% 22%, rgba(225, 96, 99, 0.14), transparent 74%),
+    radial-gradient(42% 48% at 82% 18%, rgba(87, 241, 252, 0.09), transparent 74%),
+    radial-gradient(52% 56% at 70% 82%, rgba(72, 23, 255, 0.16), transparent 76%),
+    radial-gradient(48% 52% at 30% 88%, rgba(116, 88, 219, 0.12), transparent 74%);
+  filter: saturate(1.05);
   animation: nebula 26s ease-in-out infinite alternate;
 }
 
@@ -785,8 +787,11 @@ input[type='checkbox'] {
   opacity: 0.55;
 }
 
+/* Rated rows stay fully opaque — fading them let the busy backdrop bleed
+   through the translucent panel. De-emphasise with a slight desaturation/dim
+   instead, so the "settled" cue stays but the row never blurs into the nebula. */
 .disc-row-wrap.rated .disc-row {
-  opacity: 0.5;
+  filter: saturate(0.7) brightness(0.82);
 }
 
 .disc-rated {

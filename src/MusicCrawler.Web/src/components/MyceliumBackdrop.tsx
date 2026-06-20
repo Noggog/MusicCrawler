@@ -3,6 +3,7 @@ import { createSporeField, type SporeFieldOptions } from '../effects/sporeField'
 import { createMyceliumField, type MyceliumFieldOptions } from '../effects/myceliumField'
 import {
   registerSporeField,
+  registerMyceliumField,
   setSporePointer,
   clearSporePointer,
 } from '../effects/effectsBus'
@@ -61,7 +62,7 @@ export default function MyceliumBackdrop() {
     // All layers share resize / reduced-motion / visibility plumbing; only the
     // spore fields register on the effects bus (the bus drives spore reactions).
     const fields = [...spores, growth]
-    const unregister = spores.map(registerSporeField)
+    const unregister = [...spores.map(registerSporeField), registerMyceliumField(growth)]
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 

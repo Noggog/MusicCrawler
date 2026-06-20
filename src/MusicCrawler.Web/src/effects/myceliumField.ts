@@ -34,6 +34,9 @@ const PALETTE: readonly Rgb[] = [
   [247, 185, 146], // yellow (peachy accent)
 ]
 
+/** Fallback flare colour (only used when no pulse is actually contributing). */
+const WHITE: Rgb = [255, 255, 255]
+
 /** One node in a colony's branching tree. */
 interface Node {
   x: number
@@ -68,6 +71,25 @@ interface Colony {
   baseAlpha: number
 }
 
+/**
+ * A transient colour flare that washes outward from a point (e.g. the cursor on
+ * approve/reject), lighting strands as its wavefront passes over them so the
+ * pulse appears to race down the colony lines. Expands and decays over its life.
+ */
+interface Pulse {
+  x: number
+  y: number
+  /** Elapsed seconds and total lifetime. */
+  t: number
+  dur: number
+  /** Wavefront expansion speed (px/sec) and its gaussian thickness (px). */
+  speed: number
+  band: number
+  /** Peak added brightness and the flare colour. */
+  strength: number
+  color: Rgb
+}
+
 const DEFAULTS = {
   /** Length of each grown segment, CSS px. */
   segment: 7,
@@ -92,6 +114,13 @@ const DEFAULTS = {
       visible near the pointer, a touch brighter than the strand glow so forks
       pick up the light without becoming bright dots. */
   branchGlow: 0.8,
+  /** Approve/reject flare: wavefront speed (px/sec), lifetime (s), band width
+      (px) and peak brightness. Wide band + modest strength keep it a soft wash
+      rather than a crisp expanding ring. Reaches ~speed×dur px from its origin. */
+  pulseSpeed: 480,
+  pulseDur: 2.1,
+  pulseBand: 170,
+  pulseStrength: 0.26,
   /** Max device-pixel-ratio honoured (perf guard on hi-dpi screens). */
   maxDpr: 2,
 }
@@ -109,6 +138,8 @@ export interface MyceliumFieldHandle {
   setPointer: (x: number, y: number) => void
   /** Cursor left the window — fade the glow out. */
   clearPointer: () => void
+  /** Fire a colour flare that races outward from a point along the strands. */
+  pulse: (x: number, y: number, color?: Rgb) => void
 }
 
 /**
@@ -126,6 +157,7 @@ export function createMyceliumField(
   let height = 0
   let dpr = 1
   let colonies: Colony[] = []
+  let pulses: Pulse[] = []
   let raf = 0
   let last = 0
   let running = false
@@ -309,11 +341,48 @@ export function createMyceliumField(
     return added
   }
 
-  /** Ease the cursor-glow envelope toward present/absent. */
+  /** Ease the cursor-glow envelope and age any active flare pulses. */
   function step(dt: number) {
     const target = pointerActive ? 1 : 0
     glow += (target - glow) * Math.min(1, dt * 6)
     if (glow < 0.0005) glow = 0
+    if (pulses.length) {
+      for (const p of pulses) p.t += dt
+      pulses = pulses.filter((p) => p.t < p.dur)
+    }
+  }
+
+  /**
+   * Total flare brightness at a point from all active pulses, and the colour of
+   * the strongest contributor. Each pulse is a gaussian ring expanding from its
+   * origin, fading over its lifetime.
+   */
+  function pulseAt(x: number, y: number): { a: number; color: Rgb } {
+    let a = 0
+    let color = WHITE
+    let best = 0
+    for (const p of pulses) {
+      const dx = x - p.x
+      const dy = y - p.y
+      const d = Math.sqrt(dx * dx + dy * dy)
+      const front = p.speed * p.t
+      const dd = d - front
+      // Asymmetric, soft profile rather than a crisp ring: a gentle leading edge
+      // ahead of the front, and a long trailing wash filling everything behind it
+      // — so the expanding shape never reads as a visible donut.
+      let c: number
+      if (dd >= 0) c = Math.exp(-(dd * dd) / (p.band * p.band))
+      else c = Math.exp(dd / (p.band * 3.5))
+      const env = 1 - p.t / p.dur // overall fade-out
+      c *= p.strength * env
+      if (c <= 0.0008) continue
+      a += c
+      if (c > best) {
+        best = c
+        color = p.color
+      }
+    }
+    return { a, color }
   }
 
   /** Pointer proximity 0..1 at a point, already scaled by the eased `glow`. */
@@ -342,20 +411,41 @@ export function createMyceliumField(
 
       // Strands: flat warm fibre whose brightness drifts randomly along each
       // strand (see node.shade), so the variation reads as organic rather than
-      // radiating from the root. A faint cursor glow lifts segments near it.
-      ctx.strokeStyle = `rgba(${cr},${cg},${cb},1)`
+      // radiating from the root. A faint cursor glow lifts segments near it, and
+      // an approve/reject flare washes a coloured wavefront over them.
+      const colStr = `rgba(${cr},${cg},${cb},1)`
+      const havePulse = pulses.length > 0
       for (let i = 1; i < nodes.length; i++) {
         const n = nodes[i]
         const p = nodes[n.parent]
-        const lit = pointerAt((n.x + p.x) * 0.5, (n.y + p.y) * 0.5) * pointerGlow
+        const mx = (n.x + p.x) * 0.5
+        const my = (n.y + p.y) * 0.5
+        const lit = pointerAt(mx, my) * pointerGlow
         const a = base * n.shade + lit
-        if (a <= 0.003) continue
-        ctx.globalAlpha = Math.min(1, a)
-        ctx.lineWidth = n.width
-        ctx.beginPath()
-        ctx.moveTo(p.x, p.y)
-        ctx.lineTo(n.x, n.y)
-        ctx.stroke()
+
+        if (a > 0.003) {
+          ctx.strokeStyle = colStr
+          ctx.globalAlpha = Math.min(1, a)
+          ctx.lineWidth = n.width
+          ctx.beginPath()
+          ctx.moveTo(p.x, p.y)
+          ctx.lineTo(n.x, n.y)
+          ctx.stroke()
+        }
+
+        // Flare overlay: an additive coloured stroke where a pulse front sits.
+        if (havePulse) {
+          const f = pulseAt(mx, my)
+          if (f.a > 0.02) {
+            ctx.strokeStyle = `rgba(${f.color[0]},${f.color[1]},${f.color[2]},${Math.min(1, f.a)})`
+            ctx.globalAlpha = 1
+            ctx.lineWidth = n.width + 0.2
+            ctx.beginPath()
+            ctx.moveTo(p.x, p.y)
+            ctx.lineTo(n.x, n.y)
+            ctx.stroke()
+          }
+        }
       }
       ctx.globalAlpha = 1
 
@@ -387,9 +477,10 @@ export function createMyceliumField(
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016
     last = now
     step(dt)
-    // The geometry never changes, so only repaint while the glow is alive; once
-    // it settles, draw one last frame and idle until the cursor returns.
-    if (pointerActive || glow > 0) {
+    // The geometry never changes, so only repaint while the cursor glow or a
+    // flare pulse is alive; once everything settles, draw one last frame and
+    // idle until the next interaction.
+    if (pointerActive || glow > 0 || pulses.length) {
       draw()
       idle = false
     } else if (!idle) {
@@ -490,10 +581,37 @@ export function createMyceliumField(
     pointerActive = false
   }
 
+  /** Fire a colour flare that races outward from (x, y) along the strands. */
+  function pulse(x: number, y: number, color?: Rgb) {
+    if (!running) return // no-op under reduced-motion / while stopped
+    pulses.push({
+      x,
+      y,
+      t: 0,
+      dur: CONFIG.pulseDur,
+      speed: CONFIG.pulseSpeed,
+      band: CONFIG.pulseBand,
+      strength: CONFIG.pulseStrength,
+      color: color ?? WHITE,
+    })
+    if (pulses.length > 6) pulses.shift() // bound if spammed
+    idle = false
+  }
+
   function destroy() {
     stop()
     colonies = []
+    pulses = []
   }
 
-  return { resize, start, stop, destroy, renderStatic, setPointer, clearPointer }
+  return {
+    resize,
+    start,
+    stop,
+    destroy,
+    renderStatic,
+    setPointer,
+    clearPointer,
+    pulse,
+  }
 }

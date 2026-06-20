@@ -9,8 +9,10 @@
    ============================================================================ */
 
 import type { SporeFieldHandle } from './sporeField'
+import type { MyceliumFieldHandle } from './myceliumField'
 
 const fields = new Set<SporeFieldHandle>()
+const myceliumFields = new Set<MyceliumFieldHandle>()
 
 // Last known cursor position, kept so effects fired from a click (e.g. approve)
 // can originate at the pointer without each caller threading coordinates.
@@ -65,4 +67,22 @@ export function burstSpores(
 /** Set global glow/drift intensity 0..1 — e.g. audio level. */
 export function setSporeIntensity(level: number) {
   for (const f of fields) f.setIntensity(level)
+}
+
+/** Called by MyceliumBackdrop for the growth layer on mount/unmount. */
+export function registerMyceliumField(handle: MyceliumFieldHandle): () => void {
+  myceliumFields.add(handle)
+  return () => {
+    myceliumFields.delete(handle)
+  }
+}
+
+/** Fire a colour flare that races outward along the mycelium strands from a
+ *  point — e.g. on approve/reject, at the cursor. No-op until a field registers. */
+export function pulseMycelium(
+  x: number,
+  y: number,
+  color?: readonly [number, number, number],
+) {
+  for (const f of myceliumFields) f.pulse(x, y, color)
 }
