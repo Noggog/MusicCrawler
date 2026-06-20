@@ -117,3 +117,18 @@ public record RatedItem(
 /// <paramref name="SnoozeUntil"/> is set only for <see cref="DiscoveryStatus.Snoozed"/> rows.
 /// </summary>
 public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus Status, DateTimeOffset? SnoozeUntil = null);
+
+/// <summary>
+/// One album in an artist's full discography, for the Artists-page drill-down. <paramref name="Owned"/>
+/// marks albums already in the library; missing ones carry <paramref name="DeezerAlbumId"/> so they can
+/// be queued to buy. <paramref name="Verdict"/> reflects any rating the user has placed on a missing
+/// album (null = not yet decided, or owned). Owned albums the library has that Deezer doesn't list as an
+/// LP carry no Deezer id/art.
+/// </summary>
+public record ArtistAlbumItem(
+    ArtistKey Artist,
+    string Album,
+    string? ImageUrl,
+    long? DeezerAlbumId,
+    bool Owned,
+    DiscoveryStatus? Verdict);

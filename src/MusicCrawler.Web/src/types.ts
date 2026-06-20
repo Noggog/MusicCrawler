@@ -111,6 +111,18 @@ export interface RatedItem {
   snoozeUntil: string | null
 }
 
+// Mirror ArtistAlbumItem (Discovery.cs) — one album in an artist's full discography for the
+// Artists-page drill-down. `owned` marks albums in the library; `verdict` is the user's rating on a
+// missing album (null = undecided or owned). Owned-only albums carry no deezerAlbumId/imageUrl.
+export interface ArtistAlbumItem {
+  artist: ArtistKey
+  album: string
+  imageUrl: string | null
+  deezerAlbumId: number | null
+  owned: boolean
+  verdict: DiscoveryStatus | null
+}
+
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a
 // persisted acquisition lifecycle. `kind` is 'RecommendedArtist' (no album) or 'MissingAlbum'.
 export type PurchaseStatus = 'Pending' | 'Downloading' | 'Sent' | 'InLibrary' | 'Failed'

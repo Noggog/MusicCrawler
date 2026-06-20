@@ -236,6 +236,42 @@ public class DiscoveryEngine : IQueueReplenisher
             .ToList();
     }
 
+    /// <summary>
+    /// An owned artist's full Deezer discography for the Artists-page drill-down: every LP flagged with
+    /// whether the library owns it, missing ones overlaid with the user's verdict (queued/dismissed/
+    /// snoozed) so the listing matches the to-buy list. One Deezer call per expand; owned albums sort
+    /// first. Pulling the discography also refreshes the persisted missing-album rows for the artist.
+    /// </summary>
+    public async Task<IReadOnlyList<ArtistAlbumItem>> ArtistDiscography(string userId, string artistName)
+    {
+        var ownedAlbums = await _catalog.GetOwnedAlbums();
+        var owned = ownedAlbums.TryGetValue(artistName, out var set)
+            ? (IReadOnlyCollection<string>)set
+            : Array.Empty<string>();
+
+        var albums = await _albumRefresher.Discography(new ArtistKey(artistName), owned);
+
+        // The user's verdicts on this artist's albums, keyed like the album-rating store, so a missing
+        // album already queued/dismissed/snoozed shows that state instead of fresh action buttons.
+        var verdicts = (await _albumRatings.GetRated(userId))
+            .Where(r => string.Equals(r.Artist.ArtistName, artistName, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(r => AlbumRatingKey.For(r.Artist.ArtistName, r.Album.AlbumName), r => r.Status);
+
+        var artist = new ArtistKey(artistName);
+        return albums
+            .OrderByDescending(a => a.Owned)
+            .ThenBy(a => a.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(a =>
+            {
+                DiscoveryStatus? verdict = !a.Owned
+                    && verdicts.TryGetValue(AlbumRatingKey.For(artistName, a.Title), out var v)
+                    ? v
+                    : null;
+                return new ArtistAlbumItem(artist, a.Title, a.CoverUrl, a.DeezerAlbumId, a.Owned, verdict);
+            })
+            .ToList();
+    }
+
     /// <summary>In-place Fisher–Yates shuffle with a fixed seed (so the order is stable across pages).</summary>
     private static void Shuffle(List<FeedItem> items, int seed)
     {

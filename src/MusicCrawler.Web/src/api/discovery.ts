@@ -1,6 +1,7 @@
 // Per-user discovery feed + ratings. All calls require an authenticated session (cookie sent
 // automatically, same-origin). artist/album go in the query string so names with '/' work.
 import type {
+  ArtistAlbumItem,
   DiscoveryFeedPage,
   DownloadSnapshot,
   FeedItem,
@@ -54,6 +55,17 @@ export async function getArtistAlbums(artist: string): Promise<FeedItem[]> {
     throw new Error(`Failed to load albums for ${artist}: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as FeedItem[]
+}
+
+// An owned artist's full discography (owned + missing albums, each flagged) for the Artists-page
+// drill-down. One Deezer call server-side; missing albums carry the user's verdict if already rated.
+export async function getArtistDiscography(artist: string): Promise<ArtistAlbumItem[]> {
+  const params = new URLSearchParams({ artist })
+  const res = await fetch(`/api/discovery/artist-discography?${params}`)
+  if (!res.ok) {
+    throw new Error(`Failed to load discography for ${artist}: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as ArtistAlbumItem[]
 }
 
 // Rebuild the pending recommendations from the current liked artists (keeps ratings).

@@ -61,6 +61,25 @@ export function IconClear(props: IconProps) {
   )
 }
 
+// Chevron — the expand/collapse toggle for an artist's album drill-down. Points right when
+// collapsed; rotate it via CSS when open.
+export function IconChevron(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 6l6 6-6 6" />
+    </Svg>
+  )
+}
+
+// Check — marks an album the library already owns.
+export function IconCheck(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 13l4 4L19 7" />
+    </Svg>
+  )
+}
+
 // Wrench — the "correct/fix the Deezer association" action.
 export function IconWrench(props: IconProps) {
   return (

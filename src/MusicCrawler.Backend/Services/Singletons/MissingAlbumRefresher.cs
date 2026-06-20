@@ -7,6 +7,9 @@ namespace MusicCrawler.Backend.Services.Singletons;
 /// <summary>The outcome of one missing-album sync pass.</summary>
 public record MissingAlbumSyncResult(int ArtistsScanned, int MissingTotal);
 
+/// <summary>One album from an artist's Deezer discography, flagged with whether the library owns it.</summary>
+public record DiscographyAlbum(string Title, string? CoverUrl, long? DeezerAlbumId, bool Owned);
+
 /// <summary>
 /// The missing-album sync job: for each owned artist, pulls its Deezer discography and diffs it
 /// against the albums already in the library, persisting the gap into <see cref="IMissingAlbumRepo"/>.
@@ -72,23 +75,62 @@ public class MissingAlbumRefresher
     /// </summary>
     public async Task<IReadOnlyList<MissingAlbum>> RefreshOne(ArtistKey artist, IEnumerable<string> ownedAlbumTitles)
     {
-        var name = artist.ArtistName;
-        var deezerId = await _resolver.ResolveArtistId(name);
+        var diff = await FetchAndDiff(artist, ownedAlbumTitles);
+        var missing = diff?.Missing ?? new List<MissingAlbum>();
+        // Persist the gap (or clear stale rows when the artist has no Deezer match) so the per-user
+        // feed and a later like — which carries the row's DeezerAlbumId to the downloader — stay current.
+        await _missing.ReplaceForArtist(artist.ArtistName, missing);
+        return missing;
+    }
+
+    /// <summary>
+    /// One artist's full Deezer discography (every LP), each flagged with whether the library already
+    /// owns it — for the Artists-page drill-down. Persists the missing subset as a side effect (same as
+    /// <see cref="RefreshOne"/>) so a later like carries the Deezer id to the downloader. Owned albums the
+    /// library has that Deezer doesn't list as an LP are appended (without art/id) so the picture is
+    /// complete.
+    /// </summary>
+    public async Task<IReadOnlyList<DiscographyAlbum>> Discography(ArtistKey artist, IReadOnlyCollection<string> ownedAlbumTitles)
+    {
+        var diff = await FetchAndDiff(artist, ownedAlbumTitles);
+        await _missing.ReplaceForArtist(artist.ArtistName, diff?.Missing ?? new List<MissingAlbum>());
+
+        var all = diff?.All.ToList() ?? new List<DiscographyAlbum>();
+        // Fold in owned albums Deezer didn't surface as LPs (singles/comps it filtered, or no match)
+        // so the library's view is the source of truth for what we have.
+        var seen = all.Select(a => NormalizeTitle(a.Title)).ToHashSet(StringComparer.Ordinal);
+        foreach (var title in ownedAlbumTitles)
+        {
+            if (seen.Add(NormalizeTitle(title)))
+            {
+                all.Add(new DiscographyAlbum(title, null, null, Owned: true));
+            }
+        }
+        return all;
+    }
+
+    /// <summary>
+    /// Resolves the artist on Deezer and walks its discography once, splitting it into the full
+    /// annotated list (every LP, flagged owned/missing) and the missing subset. Returns null when the
+    /// artist has no Deezer match. Compares on a normalized title so punctuation/casing differences
+    /// between Plex and Deezer (e.g. a typographic vs. straight apostrophe) don't make an owned album
+    /// look missing; the original Deezer title is still what we surface.
+    /// </summary>
+    private async Task<(List<DiscographyAlbum> All, List<MissingAlbum> Missing)?> FetchAndDiff(
+        ArtistKey artist, IEnumerable<string> ownedAlbumTitles)
+    {
+        var deezerId = await _resolver.ResolveArtistId(artist.ArtistName);
         if (deezerId is null)
         {
-            // No Deezer match — clear any stale rows so we don't keep suggesting against nothing.
-            await _missing.ReplaceForArtist(name, Array.Empty<MissingAlbum>());
-            return Array.Empty<MissingAlbum>();
+            return null;
         }
 
-        // Compare on a normalized form so punctuation/casing differences between Plex and Deezer
-        // (e.g. a typographic vs. straight apostrophe in "so the flies don't come") don't make an
-        // owned album look missing. The original Deezer title is still what we persist/display.
         var owned = ownedAlbumTitles
             .Select(NormalizeTitle)
             .ToHashSet(StringComparer.Ordinal);
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var all = new List<DiscographyAlbum>();
         var missing = new List<MissingAlbum>();
         foreach (var album in await _deezer.GetAlbums(deezerId.Value))
         {
@@ -96,17 +138,20 @@ public class MissingAlbumRefresher
             var key = NormalizeTitle(title);
             if (string.IsNullOrEmpty(key)
                 || !string.Equals(album.record_type, AlbumRecordType, StringComparison.OrdinalIgnoreCase)
-                || owned.Contains(key)
                 || !seen.Add(key))
             {
                 continue;
             }
 
-            missing.Add(new MissingAlbum(artist, new AlbumKey(title), album.BestCoverUrl, album.id));
+            var isOwned = owned.Contains(key);
+            all.Add(new DiscographyAlbum(title, album.BestCoverUrl, album.id, isOwned));
+            if (!isOwned)
+            {
+                missing.Add(new MissingAlbum(artist, new AlbumKey(title), album.BestCoverUrl, album.id));
+            }
         }
 
-        await _missing.ReplaceForArtist(name, missing);
-        return missing;
+        return (all, missing);
     }
 
     /// <summary>

@@ -334,6 +334,13 @@ api.MapGet("/discovery/artist-albums", async (string artist, HttpContext http, D
     .RequireAuthorization()
     .WithName("GetArtistAlbums");
 
+// An owned artist's full Deezer discography for the Artists-page drill-down: every LP flagged owned
+// vs. missing, missing ones overlaid with the user's verdict. One Deezer call per expand.
+api.MapGet("/discovery/artist-discography", async (string artist, HttpContext http, DiscoveryEngine engine) =>
+        Results.Ok(await engine.ArtistDiscography(http.User.GetSubject()!, artist)))
+    .RequireAuthorization()
+    .WithName("GetArtistDiscography");
+
 // Snooze a recommendation: hide it for the chosen duration; it resurfaces when the window lapses.
 // Snoozes an artist, or — when album is supplied — a missing album. duration = week | month | year
 // (mapped server-side to 7 / 30 / 365 days).

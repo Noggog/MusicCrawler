@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clearDeezerId, getArtists, refreshCatalog, resolveAllDeezer, setDeezerId } from '../api/artists'
 import { searchDeezerArtists } from '../api/deezer'
-import { clearRating, getRatings, rate, type Verdict } from '../api/discovery'
-import type { ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
+import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
+import type { ArtistAlbumItem, ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
-import { IconApprove, IconReject, IconWrench } from '../components/icons'
+import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
 
 const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
@@ -133,11 +133,140 @@ function CorrectPicker({
   )
 }
 
+// Album art (or a coloured initial) for an album in the discography drill-down.
+function AlbumThumb({ item }: { item: ArtistAlbumItem }) {
+  if (item.imageUrl) {
+    return <img className="disc-avatar" src={item.imageUrl} alt="" width={36} height={36} loading="lazy" />
+  }
+  return (
+    <div className="disc-avatar disc-avatar-fallback" style={{ width: 36, height: 36, fontSize: 15 }}>
+      {item.album.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
+// A decided missing album (queued / dismissed / snoozed) with a one-click clear back to actionable.
+function AlbumState({ label, onClear, busy }: { label: string; onClear: () => void; busy: boolean }) {
+  return (
+    <span className="album-state">
+      {label}
+      <button className="disc-btn" title="Clear — return to choices" disabled={busy} onClick={onClear}>
+        <IconClear size={15} />
+      </button>
+    </span>
+  )
+}
+
+// Verdict → the label shown on a decided missing album.
+const ALBUM_VERDICT_LABEL: Partial<Record<DiscoveryStatus, string>> = {
+  Liked: 'Queued',
+  Disliked: 'Dismissed',
+  Snoozed: 'Snoozed',
+}
+
+// The drill-down under an expanded artist: their full Deezer discography, owned albums flagged and
+// missing ones thumbable so they can be queued to buy (or dismissed) right here — no trip through
+// Discover. Fetched on demand (one Deezer call) only when the row is expanded.
+function ArtistAlbums({ artist }: { artist: string }) {
+  const queryClient = useQueryClient()
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['artist-discography', artist],
+    queryFn: () => getArtistDiscography(artist),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['artist-discography', artist] })
+    queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    queryClient.invalidateQueries({ queryKey: ['ratings'] })
+  }
+
+  // rate/clearRating only read artist/album/imageUrl/deezerAlbumId — build the minimal feed item.
+  const toFeedItem = (a: ArtistAlbumItem): FeedItem => ({
+    kind: 'MissingAlbum',
+    artist: a.artist,
+    album: a.album,
+    imageUrl: a.imageUrl,
+    score: 0,
+    sources: [],
+    deezerAlbumId: a.deezerAlbumId,
+  })
+
+  const rateAlbum = useMutation({
+    mutationFn: ({ a, verdict }: { a: ArtistAlbumItem; verdict: Verdict }) => rate(toFeedItem(a), verdict),
+    onSuccess: invalidate,
+  })
+  const clearAlbum = useMutation({
+    mutationFn: (a: ArtistAlbumItem) => clearRating(toFeedItem(a)),
+    onSuccess: invalidate,
+  })
+  const busy = rateAlbum.isPending || clearAlbum.isPending
+
+  if (isPending) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">Loading albums…</em></div>
+  }
+  if (isError || !data) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">Couldn’t load albums.</em></div>
+  }
+  if (data.length === 0) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">No albums found on Deezer.</em></div>
+  }
+
+  return (
+    <div className="disc-sub-albums">
+      {data.map((a) => {
+        const label = a.verdict ? ALBUM_VERDICT_LABEL[a.verdict] : null
+        return (
+          <div className="disc-sub-album-wrap" key={a.album}>
+            <div className={`disc-sub-album no-play${a.owned ? ' owned' : ''}`}>
+              <AlbumThumb item={a} />
+              <div className="disc-sub-album-name">{a.album}</div>
+              <div className="disc-actions">
+                {a.owned ? (
+                  <span className="album-owned" title="Already in your library">
+                    <IconCheck size={15} /> In library
+                  </span>
+                ) : label ? (
+                  <AlbumState label={label} busy={busy} onClear={() => clearAlbum.mutate(a)} />
+                ) : (
+                  <>
+                    <button
+                      className="disc-btn up"
+                      title="Queue album to buy"
+                      disabled={busy}
+                      onClick={() => rateAlbum.mutate({ a, verdict: 'up' })}
+                    >
+                      <IconApprove />
+                    </button>
+                    <button
+                      className="disc-btn down"
+                      title="Not interested"
+                      disabled={busy}
+                      onClick={() => rateAlbum.mutate({ a, verdict: 'down' })}
+                    >
+                      <IconReject />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Artists() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [correcting, setCorrecting] = useState<ArtistListItem | null>(null)
+  // The one artist whose album drill-down is expanded (by name) — one open at a time.
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const toggleExpanded = (name: string) =>
+    setExpanded((prev) => (prev === name ? null : name))
 
   const { data: artists, isPending, isError, error } = useQuery({
     queryKey: ['artists'],
@@ -277,10 +406,15 @@ export default function Artists() {
                 const name = artist.artistKey.artistName
                 const verdict = verdictByArtist.get(name)
                 const suspect = isSuspect(artist)
+                const isOpen = expanded === name
                 return (
-                  <tr className="artist-row" key={name}>
+                  <Fragment key={name}>
+                  <tr
+                    className={user ? (isOpen ? 'artist-row clickable open' : 'artist-row clickable') : 'artist-row'}
+                    onClick={user ? () => toggleExpanded(name) : undefined}
+                  >
                     {user && (
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div className="rate-cell">
                           <button
                             className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
@@ -319,6 +453,7 @@ export default function Artists() {
                                 href={artist.deezerLink ?? `https://www.deezer.com/artist/${artist.deezerId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 title={
                                   suspect && artist.deezerName
                                     ? `Deezer: ${artist.deezerName} — likely the wrong artist`
@@ -345,7 +480,10 @@ export default function Artists() {
                             className="wrench-btn"
                             title="Correct the Deezer association"
                             aria-label={`Correct the Deezer association for ${name}`}
-                            onClick={() => setCorrecting(artist)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCorrecting(artist)
+                            }}
                           >
                             <IconWrench size={22} />
                           </button>
@@ -353,6 +491,14 @@ export default function Artists() {
                       </div>
                     </td>
                   </tr>
+                  {user && isOpen && (
+                    <tr className="album-drill-row">
+                      <td colSpan={2}>
+                        <ArtistAlbums artist={name} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

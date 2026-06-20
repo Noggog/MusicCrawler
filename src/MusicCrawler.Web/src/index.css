@@ -598,6 +598,46 @@ input[type='checkbox'] {
   gap: 0.35rem;
 }
 
+/* The whole artist row is the expand toggle — pointer + a salmon accent on the open one. */
+.artist-row.clickable {
+  cursor: pointer;
+}
+.artist-row.clickable.open {
+  background: rgba(225, 96, 99, 0.1);
+  box-shadow: inset 2px 0 0 var(--salmon);
+}
+
+/* The row holding the expanded discography — a flush nested panel, no table hover. Indent lightly so
+   the albums sit under the artist name, clear of the rate-cell gutter. */
+.album-drill-row:hover {
+  background: transparent;
+}
+.album-drill-row > td {
+  padding: 0.6rem 1rem 0.85rem 1rem;
+}
+
+/* "In library" marker on an owned album, and the cleared-state pill on a decided missing one. */
+.album-owned {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--good);
+  white-space: nowrap;
+}
+.album-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+/* Owned albums are non-actionable — dim them slightly so the actionable (missing) ones stand out. */
+.disc-sub-album.owned {
+  opacity: 0.72;
+}
+
 /* ========================================================================== */
 /* Discovery                                                                   */
 /* ========================================================================== */
