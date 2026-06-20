@@ -106,10 +106,16 @@ const DEFAULTS = {
   strandAlpha: 0.5,
   /** Overall opacity multiplier for the layer. */
   alphaScale: 1,
-  /** Cursor glow: strands/branches within this radius of the pointer brighten. */
-  pointerRadius: 150,
+  /** Cursor wake: strands/branches within this radius of a trail point brighten. */
+  pointerRadius: 140,
   /** Cursor glow strength — kept low so it's a faint breath, not a spotlight. */
   pointerGlow: 0.5,
+  /** Min cursor travel (px) between wake stamps — throttles how many we record. */
+  trailMinDist: 13,
+  /** Seconds each wake stamp takes to grow in and fade back out. */
+  trailLife: 1.4,
+  /** Max live wake stamps (perf cap) — oldest drop off; bounds the trail length. */
+  trailMax: 72,
   /** Glow at branch intersections under the cursor (where strands split); only
       visible near the pointer, a touch brighter than the strand glow so forks
       pick up the light without becoming bright dots. */
@@ -162,14 +168,14 @@ export function createMyceliumField(
   let last = 0
   let running = false
 
-  // Cursor "nutrient light": strands near the pointer glow a little. `glow`
-  // eases the effect in/out so entering/leaving the window isn't abrupt.
-  let pointerX = 0
-  let pointerY = 0
-  let pointerActive = false
-  let glow = 0
-  // The field is static, so we only repaint while the cursor glow is animating.
-  // `idle` marks that the last settled frame is already on the canvas.
+  // Cursor wake: the pointer stamps a trail of fading points as it moves, and
+  // strands near any live point glow. Each stamp grows in then fades out, so you
+  // see the path the cursor took ripple out and settle like a boat wake.
+  let trail: { x: number; y: number; age: number }[] = []
+  let lastStampX = -1e9
+  let lastStampY = -1e9
+  // The field is static, so we only repaint while the wake (or a pulse) is
+  // animating. `idle` marks that the last settled frame is already on the canvas.
   let idle = false
 
   const rand = (min: number, max: number) => min + Math.random() * (max - min)
@@ -341,15 +347,43 @@ export function createMyceliumField(
     return added
   }
 
-  /** Ease the cursor-glow envelope and age any active flare pulses. */
+  /** Age the cursor-wake stamps and any active flare pulses. */
   function step(dt: number) {
-    const target = pointerActive ? 1 : 0
-    glow += (target - glow) * Math.min(1, dt * 6)
-    if (glow < 0.0005) glow = 0
+    if (trail.length) {
+      for (const tp of trail) tp.age += dt
+      if (trail[0].age >= CONFIG.trailLife) {
+        trail = trail.filter((tp) => tp.age < CONFIG.trailLife)
+      }
+    }
     if (pulses.length) {
       for (const p of pulses) p.t += dt
       pulses = pulses.filter((p) => p.t < p.dur)
     }
+  }
+
+  /**
+   * Summed wake brightness at a point: each trail stamp contributes a quadratic
+   * falloff within `pointerRadius`, modulated by a grow-then-fade envelope over
+   * its life. The squared-distance check culls far stamps before any sqrt, so
+   * this stays cheap even with a full trail. Can exceed 1 where the cursor
+   * lingered or crossed its own path; callers clamp.
+   */
+  function trailAt(x: number, y: number): number {
+    if (!trail.length) return 0
+    const r = CONFIG.pointerRadius
+    const r2 = r * r
+    const life = CONFIG.trailLife
+    let a = 0
+    for (const tp of trail) {
+      const dx = x - tp.x
+      const dy = y - tp.y
+      const d2 = dx * dx + dy * dy
+      if (d2 >= r2) continue
+      const f = 1 - Math.sqrt(d2) / r
+      const env = Math.sin(Math.PI * (tp.age / life)) // 0 → 1 → 0
+      a += f * f * env
+    }
+    return a
   }
 
   /**
@@ -385,18 +419,6 @@ export function createMyceliumField(
     return { a, color }
   }
 
-  /** Pointer proximity 0..1 at a point, already scaled by the eased `glow`. */
-  function pointerAt(x: number, y: number): number {
-    if (glow <= 0) return 0
-    const dx = x - pointerX
-    const dy = y - pointerY
-    const d2 = dx * dx + dy * dy
-    const r = CONFIG.pointerRadius
-    if (d2 >= r * r) return 0
-    const f = 1 - Math.sqrt(d2) / r
-    return f * f * glow // quadratic falloff — tight, soft-edged pool of light
-  }
-
   function draw() {
     ctx.clearRect(0, 0, width, height)
     ctx.globalCompositeOperation = 'lighter'
@@ -420,7 +442,7 @@ export function createMyceliumField(
         const p = nodes[n.parent]
         const mx = (n.x + p.x) * 0.5
         const my = (n.y + p.y) * 0.5
-        const lit = pointerAt(mx, my) * pointerGlow
+        const lit = trailAt(mx, my) * pointerGlow
         const a = base * n.shade + lit
 
         if (a > 0.003) {
@@ -450,13 +472,13 @@ export function createMyceliumField(
       ctx.globalAlpha = 1
 
       // Branch intersections: a small soft bloom where strands split — shown
-      // ONLY near the cursor (nothing when the pointer is away), brighter than
-      // the strand glow so the forks pick up the light.
-      if (glow <= 0) continue
+      // ONLY along the cursor wake (nothing when the trail has faded), brighter
+      // than the strand glow so the forks pick up the light.
+      if (!trail.length) continue
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i]
         if (n.children < 2) continue
-        const a = pointerAt(n.x, n.y) * branchGlow * alphaScale
+        const a = trailAt(n.x, n.y) * branchGlow * alphaScale
         if (a <= 0.01) continue
         const halo = 2 + n.width * 1.3
         const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, halo)
@@ -477,10 +499,10 @@ export function createMyceliumField(
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016
     last = now
     step(dt)
-    // The geometry never changes, so only repaint while the cursor glow or a
+    // The geometry never changes, so only repaint while the cursor wake or a
     // flare pulse is alive; once everything settles, draw one last frame and
     // idle until the next interaction.
-    if (pointerActive || glow > 0 || pulses.length) {
+    if (trail.length || pulses.length) {
       draw()
       idle = false
     } else if (!idle) {
@@ -572,13 +594,24 @@ export function createMyceliumField(
   }
 
   function setPointer(x: number, y: number) {
-    pointerX = x
-    pointerY = y
-    pointerActive = true
+    if (!running) return
+    // Stamp a new wake point only once the cursor has travelled far enough,
+    // so the trail is evenly spaced regardless of pointer event frequency.
+    const dx = x - lastStampX
+    const dy = y - lastStampY
+    const min = CONFIG.trailMinDist
+    if (dx * dx + dy * dy < min * min) return
+    lastStampX = x
+    lastStampY = y
+    trail.push({ x, y, age: 0 })
+    if (trail.length > CONFIG.trailMax) trail.shift()
+    idle = false
   }
 
+  /** Cursor left the window — stop stamping; the existing wake fades on its own. */
   function clearPointer() {
-    pointerActive = false
+    lastStampX = -1e9
+    lastStampY = -1e9
   }
 
   /** Fire a colour flare that races outward from (x, y) along the strands. */
@@ -602,6 +635,7 @@ export function createMyceliumField(
     stop()
     colonies = []
     pulses = []
+    trail = []
   }
 
   return {
