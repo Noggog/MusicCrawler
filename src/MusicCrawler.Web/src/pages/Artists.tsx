@@ -11,6 +11,11 @@ import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../co
 
 const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
+// The full library loads in one fetch, but rendering every row at once is the costly part — each
+// row extracts an accent colour from its photo — so we page the rendered rows. Search still spans
+// the whole library (it filters before paging).
+const PAGE_SIZE = 50
+
 const normalize = (s: string) => s.trim().toLowerCase()
 
 // A library row is "suspect" when it resolved to a Deezer artist whose name doesn't match — the
@@ -409,9 +414,16 @@ export default function Artists() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
   const [correcting, setCorrecting] = useState<ArtistListItem | null>(null)
   // The one artist whose album drill-down is expanded (by name) — one open at a time.
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  // Editing the search resets to the first page so matches are never hidden on a later page.
+  const onSearch = (next: string) => {
+    setQuery(next)
+    setPage(0)
+  }
 
   const toggleExpanded = (name: string) =>
     setExpanded((prev) => (prev === name ? null : name))
@@ -482,6 +494,11 @@ export default function Artists() {
     normalize(a.artistKey.artistName).includes(normalize(query)),
   )
 
+  // Clamp to a valid page after the filter shrinks (e.g. a search that lands past the current page).
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const paged = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+
   return (
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem' }}>
@@ -540,7 +557,7 @@ export default function Artists() {
               type="text"
               value={query}
               placeholder={`Search ${artists.length} artists…`}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => onSearch(e.target.value)}
             />
             {query && <span className="artist-search-count">{filtered.length} match</span>}
           </div>
@@ -553,7 +570,7 @@ export default function Artists() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((artist) => {
+              {paged.map((artist) => {
                 const name = artist.artistKey.artistName
                 return (
                   <ArtistRow
@@ -573,6 +590,18 @@ export default function Artists() {
               })}
             </tbody>
           </table>
+
+          {pageCount > 1 && (
+            <div className="disc-pager">
+              <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+                ‹ prev
+              </button>
+              <span>page {safePage + 1} / {pageCount}</span>
+              <button disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
+                next ›
+              </button>
+            </div>
+          )}
         </>
       )}
 
