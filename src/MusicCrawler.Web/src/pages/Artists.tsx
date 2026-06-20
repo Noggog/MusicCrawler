@@ -4,6 +4,7 @@ import { clearDeezerId, getArtists, refreshCatalog, resolveAllDeezer, setDeezerI
 import { searchDeezerArtists } from '../api/deezer'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
 import { useArtAccent } from '../art/artColors'
+import { rateFeedback } from '../effects/effectsBus'
 import type { ArtistAlbumItem, ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
@@ -249,6 +250,7 @@ function ArtistAlbums({ artist }: { artist: string }) {
 
   const rateAlbum = useMutation({
     mutationFn: ({ a, verdict }: { a: ArtistAlbumItem; verdict: Verdict }) => rate(toFeedItem(a), verdict),
+    onMutate: ({ verdict }) => rateFeedback(verdict),
     onSuccess: invalidate,
   })
   const clearAlbum = useMutation({
@@ -452,6 +454,9 @@ export default function Artists() {
       }
       return current === verdictStatus(verdict) ? clearRating(item) : rate(item, verdict)
     },
+    // Same flare as Discover — but not when the click clears an existing verdict.
+    onMutate: ({ verdict, current }) =>
+      rateFeedback(current === verdictStatus(verdict) ? null : verdict),
     onSuccess: invalidate,
   })
 

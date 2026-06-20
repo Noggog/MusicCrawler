@@ -126,7 +126,7 @@ const DEFAULTS = {
   pulseSpeed: 480,
   pulseDur: 2.1,
   pulseBand: 170,
-  pulseStrength: 0.26,
+  pulseStrength: 0.32,
   /** Max device-pixel-ratio honoured (perf guard on hi-dpi screens). */
   maxDpr: 2,
 }

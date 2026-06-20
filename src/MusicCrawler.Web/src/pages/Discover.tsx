@@ -22,7 +22,7 @@ import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
 import { IconApprove, IconMoon, IconReject } from '../components/icons'
-import { vortex, disturbSpores, pulseMycelium, lastPointer } from '../effects/effectsBus'
+import { rateFeedback } from '../effects/effectsBus'
 
 const PAGE_SIZE = 20
 
@@ -679,18 +679,8 @@ export default function Discover() {
     // what made the list re-interleave and jump. The mark drops away on the next natural refresh.
     onMutate: ({ item, verdict }) => {
       setRated((prev) => new Map(prev).set(rowKeyFor(item), verdict))
-      // Feedback at the cursor, on the existing spores + mycelium: approve
-      // swirls the spores into a brief whirlpool and sends a warm gold flare
-      // racing down the strands; reject scatters the nearby spores and sends a
-      // red flare.
-      const { x, y } = lastPointer()
-      if (verdict === 'up') {
-        vortex(x, y, 1)
-        pulseMycelium(x, y, [255, 209, 148])
-      } else {
-        disturbSpores(x, y, 1.4)
-        pulseMycelium(x, y, [255, 105, 102])
-      }
+      // Spore + mycelium feedback at the cursor (shared with the artist page).
+      rateFeedback(verdict)
     },
     onError: (_err, { item }) => {
       setRated((prev) => {

@@ -86,3 +86,25 @@ export function pulseMycelium(
 ) {
   for (const f of myceliumFields) f.pulse(x, y, color)
 }
+
+const APPROVE_FLARE = [255, 209, 148] as const // warm gold
+const REJECT_FLARE = [255, 105, 102] as const // red-salmon
+
+/**
+ * The standard approve/reject feedback, fired at the last known cursor position:
+ * approve swirls the nearby spores and sends a warm gold flare down the mycelium;
+ * reject scatters the spores and sends a red flare. Shared by every decision
+ * surface (Discover, the artist page, …) so the reaction is consistent. Pass a
+ * cleared/neutral toggle through as `null` to skip the feedback.
+ */
+export function rateFeedback(verdict: 'up' | 'down' | null) {
+  if (!verdict) return
+  const { x, y } = lastPointer()
+  if (verdict === 'up') {
+    vortex(x, y, 1)
+    pulseMycelium(x, y, APPROVE_FLARE)
+  } else {
+    disturbSpores(x, y, 1.4)
+    pulseMycelium(x, y, REJECT_FLARE)
+  }
+}
