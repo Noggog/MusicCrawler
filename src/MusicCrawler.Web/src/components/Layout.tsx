@@ -60,8 +60,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           )}
         </nav>
-        <VolumeControl />
-        <AuthBox />
+        <div className="topbar-end">
+          <VolumeControl />
+          <AuthBox />
+        </div>
       </header>
       <main className="content">{children}</main>
     </div>

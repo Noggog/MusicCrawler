@@ -262,6 +262,10 @@ code {
 }
 
 .brand {
+  /* Equal flex weight with .topbar-end so the nav centers against the viewport,
+     not the leftover space (the brand is narrower than the volume + auth group). */
+  flex: 1 1 0;
+  min-width: 0;
   font-family: 'Orbitron', sans-serif;
   font-size: 1.3rem;
   font-weight: 900;
@@ -287,8 +291,18 @@ code {
   flex-direction: row;
   flex-wrap: wrap;
   gap: 0.3rem;
-  /* Centered between the brand (left) and the auth box (right). */
-  margin: 0 auto;
+  justify-content: center;
+}
+
+/* Right-side controls (volume + auth). Mirrors .brand's flex weight so the nav
+   sits dead center regardless of whether the Dev link or auth name is showing. */
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .nav-link {
@@ -1872,9 +1886,11 @@ input[type='checkbox'] {
     flex-basis: 100%;
     justify-content: center;
   }
+  .topbar-end {
+    gap: 1rem;
+  }
   .auth-box {
-    margin-left: auto;
-    max-width: 50%;
+    max-width: 100%;
   }
 }
 
