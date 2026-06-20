@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import VolumeControl from './VolumeControl'
+import MyceliumBackdrop from './MyceliumBackdrop'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'nav-link active' : 'nav-link'
@@ -34,6 +35,7 @@ function AuthBox() {
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app">
+      <MyceliumBackdrop />
       <header className="topbar">
         <div className="brand">Mycelium</div>
         <nav className="nav">
