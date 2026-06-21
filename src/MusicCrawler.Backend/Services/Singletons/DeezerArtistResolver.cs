@@ -92,7 +92,14 @@ public class DeezerArtistResolver
     /// </summary>
     public async Task<DeezerIdentity?> ResolveIdentity(string artistName)
     {
-        // A user pin wins outright — the whole point is to stop guessing by name.
+        // A sticky "unlinked" decision wins outright: the artist has no Deezer match, so never
+        // re-guess by name (that's exactly what produced the wrong link the user detached).
+        if (await _catalog.IsDeezerUnlinked(new ArtistKey(artistName)))
+        {
+            return null;
+        }
+
+        // A user pin wins next — the whole point is to stop guessing by name.
         var stored = await _catalog.GetDeezer(new ArtistKey(artistName));
         if (stored is { IsOverride: true })
         {
@@ -163,10 +170,21 @@ public class DeezerArtistResolver
         return identity;
     }
 
-    /// <summary>Clears a user pin so the artist re-resolves from a name search next time.</summary>
+    /// <summary>Clears a user pin (or unlinked flag) so the artist re-resolves from a name search next time.</summary>
     public async Task ClearOverride(string artistName)
     {
         await _catalog.ClearDeezerOverride(new ArtistKey(artistName));
+        await _cache.RemoveAsync(NameCacheKey(artistName));
+    }
+
+    /// <summary>
+    /// Stickily detaches an artist from Deezer (the artist has no Deezer match). Resolution returns
+    /// null thereafter — no name search — until <see cref="ClearOverride"/> re-enables automatic
+    /// resolution. Evicts any cached name-resolution so a stale hit can't resurrect the wrong id.
+    /// </summary>
+    public async Task SetUnlinked(string artistName)
+    {
+        await _catalog.SetDeezerUnlinked(new ArtistKey(artistName));
         await _cache.RemoveAsync(NameCacheKey(artistName));
     }
 

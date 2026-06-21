@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists } from '../api/artists'
-import { clearSource, getArtistSources, pinSource, searchSource } from '../api/sources'
+import { clearSource, getArtistSources, pinSource, searchSource, unlinkSource } from '../api/sources'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
 import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
@@ -9,7 +9,7 @@ import { rateFeedback } from '../effects/effectsBus'
 import type { ArtistAlbumItem, ArtistListItem, DiscoveryStatus, FeedItem, SourceCandidate, SourceIdentity } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
-import { IconApprove, IconCheck, IconClear, IconReject } from '../components/icons'
+import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
 
 // The detail pane is driven by a lightweight selection: just enough to render the readout and to key
 // the Albums / Related tab queries. A library row supplies the full ArtistListItem (looked up by name
@@ -88,6 +88,8 @@ function SourcesTab({ artist }: { artist: string }) {
                   {s.isOverride ? ' · pinned' : ''}
                 </span>
               </>
+            ) : s.unlinked ? (
+              <span className="source-sub"><em>Detached — won’t auto-resolve</em></span>
             ) : (
               <span className="source-sub"><em>Not resolved yet</em></span>
             )}
@@ -98,8 +100,12 @@ function SourcesTab({ artist }: { artist: string }) {
             </a>
           )}
           {s.correctable && (
-            <button className="auth-btn" onClick={() => setCorrecting(s)}>
-              Correct
+            <button
+              className="disc-btn"
+              title={`Correct ${sourceLabel(s.source)} association`}
+              onClick={() => setCorrecting(s)}
+            >
+              <IconWrench size={16} />
             </button>
           )}
         </div>
@@ -151,6 +157,13 @@ function SourcePicker({
     onSuccess: onApplied,
   })
 
+  const unlink = useMutation({
+    mutationFn: () => unlinkSource(key, artist),
+    onSuccess: onApplied,
+  })
+
+  const busy = apply.isPending || reset.isPending || unlink.isPending
+
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
@@ -171,11 +184,29 @@ function SourcePicker({
           onChange={(e) => setQuery(e.target.value)}
         />
 
-        {source.isOverride && (
+        {source.unlinked ? (
           <p className="picker-pinned">
-            Currently pinned to {label} {source.id}.{' '}
-            <button className="link-btn" onClick={() => reset.mutate()} disabled={reset.isPending}>
-              Reset to automatic
+            Detached — {label} has no match for this artist.{' '}
+            <button className="link-btn" onClick={() => reset.mutate()} disabled={busy}>
+              Re-enable automatic resolution
+            </button>
+          </p>
+        ) : (
+          <p className="picker-pinned">
+            {source.isOverride
+              ? `Pinned to ${label} ${source.id}. `
+              : source.id
+                ? `Auto-linked to ${label} ${source.id}. `
+                : `Not linked to ${label} yet. `}
+            {source.isOverride && (
+              <>
+                <button className="link-btn" onClick={() => reset.mutate()} disabled={busy}>
+                  Reset to automatic
+                </button>{' '}
+              </>
+            )}
+            <button className="link-btn" onClick={() => unlink.mutate()} disabled={busy}>
+              Unlink — no match on {label}
             </button>
           </p>
         )}
@@ -208,7 +239,7 @@ function SourcePicker({
                 )}
                 <button
                   className="auth-btn"
-                  disabled={apply.isPending || current}
+                  disabled={busy || current}
                   onClick={() => apply.mutate(c.id)}
                 >
                   {current ? 'In use' : 'Use this'}
@@ -222,6 +253,8 @@ function SourcePicker({
         </ul>
 
         {apply.isError && <p className="error">Failed to apply: {(apply.error as Error).message}</p>}
+        {unlink.isError && <p className="error">Failed to unlink: {(unlink.error as Error).message}</p>}
+        {reset.isError && <p className="error">Failed to reset: {(reset.error as Error).message}</p>}
       </div>
     </div>
   )

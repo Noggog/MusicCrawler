@@ -239,17 +239,44 @@ api.MapPost("/artists/sources/{source}",
     .RequireAuthorization()
     .WithName("PinArtistSource");
 
-// Clear a source's pin so the artist re-resolves from a name search next time.
+// Clear a source's pin (or unlinked flag) so the artist re-resolves from a name search next time,
+// then re-derive its similarity edges and rebuild the queue — the same refresh a pin does, so a
+// reset doesn't leave stale edges from the old (pinned/detached) identity behind.
 api.MapDelete("/artists/sources/{source}",
-        async (string source, string artist, IEnumerable<ISourceIdentityCorrector> correctors) =>
+        async (HttpContext http, string source, string artist,
+            IEnumerable<ISourceIdentityCorrector> correctors,
+            RelatedArtistInteractor interactor, DiscoveryEngine engine) =>
         {
             var corrector = correctors.FirstOrDefault(c => c.Source == source);
             if (corrector is null) return Results.NotFound();
+
             await corrector.Clear(new ArtistKey(artist));
+            await interactor.GetRelated(new ArtistKey(artist), forceRefresh: true);
+            await engine.Rebuild(http.User.GetSubject()!);
             return Results.NoContent();
         })
     .RequireAuthorization()
     .WithName("ClearArtistSource");
+
+// Stickily detach an artist from a source (it has no match there). Wipes the artist's stored
+// similarity edges first — a detached source resolves to null and so won't overwrite the old (wrong)
+// edges on its own — then re-derives from whatever sources remain linked and rebuilds the queue.
+api.MapPost("/artists/sources/{source}/unlink",
+        async (HttpContext http, string source, string artist,
+            IEnumerable<ISourceIdentityCorrector> correctors,
+            IRelatedArtistRepo relatedRepo, RelatedArtistInteractor interactor, DiscoveryEngine engine) =>
+        {
+            var corrector = correctors.FirstOrDefault(c => c.Source == source);
+            if (corrector is null) return Results.NotFound();
+
+            await corrector.Unlink(new ArtistKey(artist));
+            await relatedRepo.DeleteAllSources(new ArtistKey(artist));
+            await interactor.GetRelated(new ArtistKey(artist), forceRefresh: true);
+            await engine.Rebuild(http.User.GetSubject()!);
+            return Results.NoContent();
+        })
+    .RequireAuthorization()
+    .WithName("UnlinkArtistSource");
 
 // Backfill the Deezer identity for every present artist (id/name/fans/link/photo) into the catalog
 // so the Artists page can flag misassociations. Heavy (one lookup per artist), so it's a one-shot

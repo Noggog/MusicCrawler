@@ -19,10 +19,12 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
     private const string FieldDeezerFans = "deezerFans";
     private const string FieldDeezerLink = "deezerLink";
     private const string FieldDeezerOverride = "deezerOverride";
+    private const string FieldDeezerUnlinked = "deezerUnlinked";
     private const string FieldMusicBrainzMbid = "musicBrainzMbid";
     private const string FieldMusicBrainzName = "musicBrainzName";
     private const string FieldMusicBrainzDisambiguation = "musicBrainzDisambiguation";
     private const string FieldMusicBrainzOverride = "musicBrainzOverride";
+    private const string FieldMusicBrainzUnlinked = "musicBrainzUnlinked";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -258,7 +260,9 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             .Set(FieldDeezerName, name)
             .Set(FieldDeezerFans, fans)
             .Set(FieldDeezerLink, link)
-            .Set(FieldDeezerOverride, isOverride);
+            .Set(FieldDeezerOverride, isOverride)
+            // Storing a resolved id means the artist is linked — drop any sticky "detached" flag.
+            .Unset(FieldDeezerUnlinked);
 
         // The photo doubles as the displayed artist image; only set it when Deezer supplied one
         // so a missing image never blanks an existing photo.
@@ -287,10 +291,36 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             .Unset(FieldDeezerName)
             .Unset(FieldDeezerFans)
             .Unset(FieldDeezerLink)
-            .Unset(FieldDeezerOverride);
+            .Unset(FieldDeezerOverride)
+            .Unset(FieldDeezerUnlinked);
 
         await Collection.UpdateOneAsync(
             Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update);
+    }
+
+    public async Task<bool> IsDeezerUnlinked(ArtistKey artist)
+    {
+        var doc = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName))).FirstOrDefaultAsync();
+        return doc != null && doc.TryGetValue(FieldDeezerUnlinked, out var u) && u.IsBoolean && u.AsBoolean;
+    }
+
+    public async Task SetDeezerUnlinked(ArtistKey artist)
+    {
+        // Clear any resolved id and pin the sticky "unlinked" flag — the artist has no Deezer match,
+        // so resolution must return null instead of re-guessing by name. Leave the artist photo intact.
+        var update = Builders<BsonDocument>.Update
+            .Unset(FieldDeezerId)
+            .Unset(FieldDeezerName)
+            .Unset(FieldDeezerFans)
+            .Unset(FieldDeezerLink)
+            .Unset(FieldDeezerOverride)
+            .Set(FieldDeezerUnlinked, true);
+
+        // Never create entries for artists outside the catalog.
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update,
+            new UpdateOptions { IsUpsert = false });
     }
 
     private static DeezerIdentity? ToDeezerIdentity(BsonDocument doc)
@@ -329,7 +359,9 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             .Set(FieldMusicBrainzMbid, new BsonString(identity.Mbid))
             .Set(FieldMusicBrainzName, name)
             .Set(FieldMusicBrainzDisambiguation, disambiguation)
-            .Set(FieldMusicBrainzOverride, isOverride);
+            .Set(FieldMusicBrainzOverride, isOverride)
+            // Storing a resolved MBID means the artist is linked — drop any sticky "detached" flag.
+            .Unset(FieldMusicBrainzUnlinked);
 
         var filter = Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName);
         if (!isOverride)
@@ -350,10 +382,35 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
             .Unset(FieldMusicBrainzMbid)
             .Unset(FieldMusicBrainzName)
             .Unset(FieldMusicBrainzDisambiguation)
-            .Unset(FieldMusicBrainzOverride);
+            .Unset(FieldMusicBrainzOverride)
+            .Unset(FieldMusicBrainzUnlinked);
 
         await Collection.UpdateOneAsync(
             Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update);
+    }
+
+    public async Task<bool> IsMusicBrainzUnlinked(ArtistKey artist)
+    {
+        var doc = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName))).FirstOrDefaultAsync();
+        return doc != null && doc.TryGetValue(FieldMusicBrainzUnlinked, out var u) && u.IsBoolean && u.AsBoolean;
+    }
+
+    public async Task SetMusicBrainzUnlinked(ArtistKey artist)
+    {
+        // Clear any resolved MBID and pin the sticky "unlinked" flag — the artist has no MusicBrainz
+        // match, so resolution must return null instead of re-guessing by name.
+        var update = Builders<BsonDocument>.Update
+            .Unset(FieldMusicBrainzMbid)
+            .Unset(FieldMusicBrainzName)
+            .Unset(FieldMusicBrainzDisambiguation)
+            .Unset(FieldMusicBrainzOverride)
+            .Set(FieldMusicBrainzUnlinked, true);
+
+        // Never create entries for artists outside the catalog.
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update,
+            new UpdateOptions { IsUpsert = false });
     }
 
     private static MusicBrainzIdentity? ToMusicBrainzIdentity(BsonDocument doc)

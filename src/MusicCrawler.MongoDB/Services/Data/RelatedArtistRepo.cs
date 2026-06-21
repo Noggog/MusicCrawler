@@ -69,6 +69,10 @@ public class RelatedArtistRepo : IRelatedArtistRepo
         return (await cursor.ToListAsync()).Select(ToArtistRelations).ToArray();
     }
 
+    public async Task DeleteAllSources(ArtistKey artist) =>
+        await Collection.DeleteManyAsync(
+            Builders<BsonDocument>.Filter.Eq(FieldArtist, artist.ArtistName));
+
     private static ArtistRelations ToArtistRelations(BsonDocument doc)
     {
         var artist = doc.TryGetValue(FieldArtist, out var a) && !a.IsBsonNull ? a.AsString : "";

@@ -45,6 +45,8 @@ export interface SourceIdentity {
   imageUrl: string | null
   isOverride: boolean
   correctable: boolean
+  // Sticky "detached" decision: the artist has no match on this source, so it won't auto-resolve.
+  unlinked: boolean
 }
 
 export interface SourceCandidate {

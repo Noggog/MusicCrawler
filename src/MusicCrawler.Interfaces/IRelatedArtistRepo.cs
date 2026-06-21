@@ -18,4 +18,10 @@ public interface IRelatedArtistRepo
 
     /// <summary>Every source's edge set for an artist, for unifying across sources at read time.</summary>
     Task<IReadOnlyList<ArtistRelations>> GetAllSources(ArtistKey artist);
+
+    /// <summary>
+    /// Drops every source's stored edges for an artist. Used when a source link is detached, so the
+    /// stale edges derived from the wrong identity don't linger (a null re-resolve won't overwrite them).
+    /// </summary>
+    Task DeleteAllSources(ArtistKey artist);
 }

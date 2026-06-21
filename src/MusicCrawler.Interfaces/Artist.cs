@@ -43,6 +43,8 @@ public record ArtistPackage(ArtistMetadata Metadata, Album[] Albums);
 /// the id, a link out to that source's artist page, and whether it's a sticky user override. A
 /// source with no resolved id yet still appears (Id null) so it can be corrected. Non-correctable
 /// sources (e.g. ListenBrainz, whose identity is just the MusicBrainz MBID) have no pin/clear.
+/// <paramref name="Unlinked"/> marks a sticky "detached" decision (Id null, but deliberately so):
+/// the artist has no match on this source, so it must never auto-resolve by name again.
 /// </summary>
 public record SourceIdentity(
     string Source,
@@ -52,7 +54,8 @@ public record SourceIdentity(
     string? Link,
     string? ImageUrl,
     bool IsOverride,
-    bool Correctable);
+    bool Correctable,
+    bool Unlinked = false);
 
 /// <summary>One candidate in a source's "Correct association" search picker.</summary>
 public record SourceCandidate(string Id, string? Name, string? Detail, string? Link, string? ImageUrl);

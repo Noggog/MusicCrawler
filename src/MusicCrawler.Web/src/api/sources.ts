@@ -35,11 +35,22 @@ export async function pinSource(source: string, artist: string, id: string): Pro
   return (await res.json()) as SourceIdentity
 }
 
-// Clear a source's pin so the artist re-resolves from a name search next time.
+// Clear a source's pin (or unlinked flag) so the artist re-resolves from a name search next time.
+// The backend re-derives similarity edges and rebuilds the queue, like a pin.
 export async function clearSource(source: string, artist: string): Promise<void> {
   const params = new URLSearchParams({ artist })
   const res = await fetch(`/api/artists/sources/${source}?${params}`, { method: 'DELETE' })
   if (!res.ok) {
     throw new Error(`Failed to clear ${source} for ${artist}: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Stickily detach an artist from a source (it has no match there). The backend wipes the artist's
+// stale similarity edges, re-derives from the remaining sources, and rebuilds the queue.
+export async function unlinkSource(source: string, artist: string): Promise<void> {
+  const params = new URLSearchParams({ artist })
+  const res = await fetch(`/api/artists/sources/${source}/unlink?${params}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to unlink ${source} for ${artist}: ${res.status} ${res.statusText}`)
   }
 }

@@ -41,7 +41,14 @@ public class MusicBrainzArtistResolver
     /// </summary>
     public async Task<MusicBrainzIdentity?> ResolveIdentity(string artistName)
     {
-        // A user pin wins outright — the whole point is to stop guessing by name.
+        // A sticky "unlinked" decision wins outright: the artist has no MusicBrainz match, so never
+        // re-guess by name (that's exactly what produced the wrong link the user detached).
+        if (await _catalog.IsMusicBrainzUnlinked(new ArtistKey(artistName)))
+        {
+            return null;
+        }
+
+        // A user pin wins next — the whole point is to stop guessing by name.
         var stored = await _catalog.GetMusicBrainz(new ArtistKey(artistName));
         if (stored is { IsOverride: true })
         {
@@ -93,10 +100,21 @@ public class MusicBrainzArtistResolver
         return identity;
     }
 
-    /// <summary>Clears a user pin so the artist re-resolves from a name search next time.</summary>
+    /// <summary>Clears a user pin (or unlinked flag) so the artist re-resolves from a name search next time.</summary>
     public async Task ClearOverride(string artistName)
     {
         await _catalog.ClearMusicBrainzOverride(new ArtistKey(artistName));
+        await _cache.RemoveAsync(NameCacheKey(artistName));
+    }
+
+    /// <summary>
+    /// Stickily detaches an artist from MusicBrainz (the artist has no MusicBrainz match). Resolution
+    /// returns null thereafter — no name search — until <see cref="ClearOverride"/> re-enables
+    /// automatic resolution. Evicts any cached name-resolution so a stale hit can't resurrect it.
+    /// </summary>
+    public async Task SetUnlinked(string artistName)
+    {
+        await _catalog.SetMusicBrainzUnlinked(new ArtistKey(artistName));
         await _cache.RemoveAsync(NameCacheKey(artistName));
     }
 

@@ -73,10 +73,19 @@ public interface IArtistCatalogRepo
     Task SetDeezerIdentity(ArtistKey artist, DeezerIdentity identity, bool isOverride);
 
     /// <summary>
-    /// Drops the override flag and clears the stored Deezer fields for an artist, so the next
-    /// resolution re-derives the identity from a name search.
+    /// Drops the override (and any "unlinked" flag) and clears the stored Deezer fields for an artist,
+    /// so the next resolution re-derives the identity from a name search.
     /// </summary>
     Task ClearDeezerOverride(ArtistKey artist);
+
+    /// <summary>Whether the artist is stickily detached from Deezer (no match — never auto-resolve).</summary>
+    Task<bool> IsDeezerUnlinked(ArtistKey artist);
+
+    /// <summary>
+    /// Stickily detaches an artist from Deezer: clears the stored id and marks it "unlinked" so
+    /// resolution returns null (no name search) until the user re-enables automatic resolution.
+    /// </summary>
+    Task SetDeezerUnlinked(ArtistKey artist);
 
     /// <summary>
     /// The stored MusicBrainz identity for an artist plus whether it's a sticky user override, or
@@ -92,10 +101,19 @@ public interface IArtistCatalogRepo
     Task SetMusicBrainzIdentity(ArtistKey artist, MusicBrainzIdentity identity, bool isOverride);
 
     /// <summary>
-    /// Drops the override flag and clears the stored MusicBrainz fields for an artist, so the next
-    /// resolution re-derives the MBID from a name search.
+    /// Drops the override (and any "unlinked" flag) and clears the stored MusicBrainz fields for an
+    /// artist, so the next resolution re-derives the MBID from a name search.
     /// </summary>
     Task ClearMusicBrainzOverride(ArtistKey artist);
+
+    /// <summary>Whether the artist is stickily detached from MusicBrainz (no match — never auto-resolve).</summary>
+    Task<bool> IsMusicBrainzUnlinked(ArtistKey artist);
+
+    /// <summary>
+    /// Stickily detaches an artist from MusicBrainz: clears the stored MBID and marks it "unlinked"
+    /// so resolution returns null (no name search) until the user re-enables automatic resolution.
+    /// </summary>
+    Task SetMusicBrainzUnlinked(ArtistKey artist);
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);
