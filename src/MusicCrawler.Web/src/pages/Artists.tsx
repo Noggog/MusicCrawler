@@ -1,13 +1,22 @@
-import { Fragment, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clearDeezerId, getArtists, refreshCatalog, resolveAllDeezer, setDeezerId } from '../api/artists'
 import { searchDeezerArtists } from '../api/deezer'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
+import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
 import { rateFeedback } from '../effects/effectsBus'
 import type { ArtistAlbumItem, ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
+import { DeezerSample } from '../components/DeezerSample'
 import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
+
+// The detail pane is driven by a lightweight selection: just enough to render the readout and to key
+// the Albums / Related tab queries. A library row supplies the full ArtistListItem (looked up by name
+// for the Deezer link, genres, fans, correction); a related-artist card the user drills into may not
+// be in the library, so all we can carry is its name + photo — the tabs still work off the name.
+type SelectedArtist = { name: string; imageUrl: string | null }
+type DetailTab = 'albums' | 'related'
 
 const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
@@ -172,27 +181,38 @@ const ALBUM_VERDICT_LABEL: Partial<Record<DiscoveryStatus, string>> = {
 }
 
 // A single album in the discography drill-down, themed from its cover art via `--art-accent` (the
-// shared `.disc-sub-album` styling turns that into the tinted card + the cover's glow).
+// shared `.disc-sub-album` styling turns that into the tinted card + the cover's glow). When the album
+// has a Deezer id, the whole row toggles a 30-second track-preview player below it (like Discover); the
+// action cluster stops the click so a thumb doesn't also open/close the preview.
 function AlbumSubRow({
   a,
   busy,
+  isOpen,
+  onToggle,
   onRate,
   onClear,
 }: {
   a: ArtistAlbumItem
   busy: boolean
+  isOpen: boolean
+  onToggle: () => void
   onRate: (a: ArtistAlbumItem, verdict: Verdict) => void
   onClear: (a: ArtistAlbumItem) => void
 }) {
   const accent = useArtAccent(a.imageUrl)
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
   const label = a.verdict ? ALBUM_VERDICT_LABEL[a.verdict] : null
+  const canPlay = a.deezerAlbumId != null
   return (
     <div className="disc-sub-album-wrap">
-      <div className={`disc-sub-album no-play${a.owned ? ' owned' : ''}`} style={accentStyle}>
+      <div
+        className={`disc-sub-album${isOpen ? ' selected' : ''}${canPlay ? '' : ' no-play'}${a.owned ? ' owned' : ''}`}
+        style={accentStyle}
+        onClick={canPlay ? onToggle : undefined}
+      >
         <AlbumThumb item={a} />
         <div className="disc-sub-album-name">{a.album}</div>
-        <div className="disc-actions">
+        <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
           {a.owned ? (
             <span className="album-owned" title="Already in your library">
               <IconCheck size={15} /> In library
@@ -221,15 +241,18 @@ function AlbumSubRow({
           )}
         </div>
       </div>
+      {isOpen && a.deezerAlbumId != null && <DeezerSample albumId={a.deezerAlbumId} />}
     </div>
   )
 }
 
-// The drill-down under an expanded artist: their full Deezer discography, owned albums flagged and
+// The readout's Albums tab: the selected artist's full Deezer discography, owned albums flagged and
 // missing ones thumbable so they can be queued to buy (or dismissed) right here — no trip through
-// Discover. Fetched on demand (one Deezer call) only when the row is expanded.
+// Discover. Fetched on demand (one Deezer call) only when the Albums tab is shown for an artist.
 function ArtistAlbums({ artist }: { artist: string }) {
   const queryClient = useQueryClient()
+  // Which album's Deezer preview is expanded — one at a time, like selecting a row in Discover.
+  const [openAlbum, setOpenAlbum] = useState<string | null>(null)
   const { data, isPending, isError } = useQuery({
     queryKey: ['artist-discography', artist],
     queryFn: () => getArtistDiscography(artist),
@@ -281,6 +304,8 @@ function ArtistAlbums({ artist }: { artist: string }) {
           key={a.album}
           a={a}
           busy={busy}
+          isOpen={openAlbum === a.album}
+          onToggle={() => setOpenAlbum((cur) => (cur === a.album ? null : a.album))}
           onRate={(album, verdict) => rateAlbum.mutate({ a: album, verdict })}
           onClear={(album) => clearAlbum.mutate(album)}
         />
@@ -289,41 +314,230 @@ function ArtistAlbums({ artist }: { artist: string }) {
   )
 }
 
-// One artist in the table, themed from its photo via `--art-accent` (see index.css `.artist-row`) so
-// the row + thumbnail glow in the artist's own colour, matching the Discover feed / Download queue.
-function ArtistRow({
+// Artist photo (or a coloured initial), shared by the list rows and the detail hero. `hero` drops the
+// inline size so CSS (.detail-hero) drives the large readout image.
+function ArtistAvatar({ name, image, size, hero }: { name: string; image: string | null; size?: number; hero?: boolean }) {
+  if (image) {
+    return <img className="disc-avatar" src={image} alt={name} width={hero ? undefined : size} height={hero ? undefined : size} loading="lazy" />
+  }
+  return (
+    <div className="disc-avatar disc-avatar-fallback" style={hero ? undefined : { width: size, height: size, fontSize: (size ?? 40) / 2.5 }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
+// One artist in the left-hand list, themed from its photo via `--art-accent` (matching the Discover
+// feed). Clicking the row opens it in the readout; the rate cluster (signed-in only) stops the click
+// so a thumb doesn't also re-select the row.
+function ArtistListRow({
   artist,
   verdict,
-  isOpen,
+  selected,
   user,
   ratePending,
+  onSelect,
   onRate,
-  onToggle,
-  onCorrect,
 }: {
   artist: ArtistListItem
   verdict: DiscoveryStatus | undefined
-  isOpen: boolean
+  selected: boolean
   user: boolean
   ratePending: boolean
+  onSelect: (artist: ArtistListItem) => void
   onRate: (name: string, verdict: Verdict, current?: DiscoveryStatus) => void
-  onToggle: (name: string) => void
-  onCorrect: (artist: ArtistListItem) => void
 }) {
   const name = artist.artistKey.artistName
   const suspect = isSuspect(artist)
   const accent = useArtAccent(artist.artistImageUrl)
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
   return (
-    <Fragment>
-      <tr
-        className={user ? (isOpen ? 'artist-row clickable open' : 'artist-row clickable') : 'artist-row'}
-        style={accentStyle}
-        onClick={user ? () => onToggle(name) : undefined}
-      >
-        {user && (
-          <td onClick={(e) => e.stopPropagation()}>
-            <div className="rate-cell">
+    <div className={selected ? 'disc-row selected' : 'disc-row'} style={accentStyle} onClick={() => onSelect(artist)}>
+      <ArtistAvatar name={name} image={artist.artistImageUrl} size={52} />
+      <div className="disc-row-main">
+        <div className="disc-name">
+          {name}
+          {suspect && (
+            <span className="warn-badge" title="Deezer name doesn't match — likely the wrong artist"> ⚠</span>
+          )}
+        </div>
+        {artist.genres.length > 0 && (
+          <div className="genre-tags">
+            {artist.genres.slice(0, 3).map((g) => (
+              <span className="genre-tag" key={g}>{g}</span>
+            ))}
+          </div>
+        )}
+      </div>
+      {user && (
+        <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
+          <button
+            className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
+            title={verdict === 'Liked' ? 'Clear rating' : 'Approve'}
+            disabled={ratePending}
+            onClick={() => onRate(name, 'up', verdict)}
+          >
+            <IconApprove />
+          </button>
+          <button
+            className={verdict === 'Disliked' ? 'disc-btn down active' : 'disc-btn down'}
+            title={verdict === 'Disliked' ? 'Clear rating' : 'Reject'}
+            disabled={ratePending}
+            onClick={() => onRate(name, 'down', verdict)}
+          >
+            <IconReject />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The "Related" tab: the artists that stem from the selected one, unified across similarity sources
+// (the same /related graph the Discover feed is built from). Each card drills the readout into that
+// artist so you can walk the graph; a library artist lands on its full readout, a stranger on a
+// lighter one. Fetched on demand only when the tab is open.
+function RelatedTab({ artist, onExplore }: { artist: string; onExplore: (sel: SelectedArtist) => void }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['related', artist],
+    queryFn: () => getRelated(artist),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  if (isPending) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">Finding related artists…</em></div>
+  }
+  if (isError || !data) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">Couldn’t load related artists.</em></div>
+  }
+  if (data.related.length === 0) {
+    return <div className="disc-sub-albums"><em className="disc-sub-note">No related artists found on Deezer.</em></div>
+  }
+
+  return (
+    <div className="related-grid artist-related-grid">
+      {data.related.map((r) => {
+        const rname = r.artistKey.artistName
+        return (
+          <div
+            className="related-card"
+            key={rname}
+            onClick={() => onExplore({ name: rname, imageUrl: r.imageUrl })}
+            title={`Explore ${rname}`}
+          >
+            {r.imageUrl ? (
+              <img src={r.imageUrl} alt={rname} loading="lazy" />
+            ) : (
+              <div className="related-card-noimg">no image</div>
+            )}
+            <div className="related-card-name">{rname}</div>
+            {r.sources.length > 0 && (
+              <div className="related-card-sources">
+                {r.sources.map((s) => (
+                  <span className="source-badge" key={s}>{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// The right-hand readout for the artist selected in the list (desktop) / a bottom drawer (mobile): a
+// big hero, the Deezer link-out / fans / genres, the rate + correct actions, and a tab strip whose
+// panels are the artist's albums (discography drill-down) and the artists related to them.
+function DetailPane({
+  selected,
+  libItem,
+  verdict,
+  user,
+  tab,
+  ratePending,
+  onTab,
+  onRate,
+  onCorrect,
+  onExplore,
+  onClose,
+}: {
+  selected: SelectedArtist | null
+  libItem: ArtistListItem | undefined
+  verdict: DiscoveryStatus | undefined
+  user: boolean
+  tab: DetailTab
+  ratePending: boolean
+  onTab: (tab: DetailTab) => void
+  onRate: (name: string, verdict: Verdict, current?: DiscoveryStatus) => void
+  onCorrect: (artist: ArtistListItem) => void
+  onExplore: (sel: SelectedArtist) => void
+  onClose: () => void
+}) {
+  // Resolve art + accent unconditionally (hooks run before the empty-state early return). Prefer the
+  // library photo when the selection is an owned artist, falling back to whatever the card carried.
+  const image = libItem?.artistImageUrl ?? selected?.imageUrl ?? null
+  const accent = useArtAccent(image)
+  if (!selected) {
+    return (
+      <aside className="disc-detail is-empty">
+        <div className="disc-detail-empty">
+          <span className="detail-empty-icon">🎧</span>
+        </div>
+      </aside>
+    )
+  }
+
+  const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
+  const name = selected.name
+  const suspect = !!libItem && isSuspect(libItem)
+  const deezerHref =
+    libItem?.deezerLink ?? (libItem?.deezerId != null ? `https://www.deezer.com/artist/${libItem.deezerId}` : null)
+
+  return (
+    <aside className="disc-detail" style={accentStyle}>
+      <button className="detail-close" title="Close" onClick={onClose}>✕</button>
+
+      <div className="detail-header">
+        <div className="detail-hero">
+          <ArtistAvatar name={name} image={image} hero />
+        </div>
+
+        <div className="detail-headinfo">
+          {!libItem && <span className="detail-chip">Not in your library</span>}
+          <h2 className="detail-name">
+            {deezerHref ? (
+              <a
+                className="artist-name-link"
+                href={deezerHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={suspect && libItem?.deezerName ? `Deezer: ${libItem.deezerName} — likely the wrong artist` : libItem?.deezerName ?? undefined}
+              >
+                {name}
+              </a>
+            ) : (
+              name
+            )}
+            {suspect && <span className="warn-badge" title="Deezer name doesn't match — likely the wrong artist"> ⚠</span>}
+          </h2>
+
+          {libItem?.deezerFans != null && (
+            <div className="detail-meta">{formatFans(libItem.deezerFans)} fans on Deezer</div>
+          )}
+
+          {libItem && libItem.genres.length > 0 && (
+            <div className="detail-chips">
+              {libItem.genres.slice(0, 6).map((g) => (
+                <span className="detail-chip" key={g}>{g}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Thumbs work for any selected artist: an owned one records a library rating, a related
+              stranger drilled into from the Related tab gets liked straight into the buy list. The
+              Correct (Deezer re-pin) action only makes sense for a library artist. */}
+          {user && (
+            <div className="detail-actions">
               <button
                 className={verdict === 'Liked' ? 'disc-btn up active' : 'disc-btn up'}
                 title={verdict === 'Liked' ? 'Clear rating' : 'Approve'}
@@ -340,73 +554,57 @@ function ArtistRow({
               >
                 <IconReject />
               </button>
-            </div>
-          </td>
-        )}
-        <td>
-          <div className="artist-name-cell">
-            {artist.artistImageUrl ? (
-              <img className="artist-thumb" src={artist.artistImageUrl} alt="" loading="lazy" />
-            ) : (
-              <div className="artist-thumb placeholder">{name.charAt(0).toUpperCase()}</div>
-            )}
-            <div className="artist-name-main">
-              <div className="artist-name-row">
-                {/* The name itself links out to Deezer once resolved; plain text until then. */}
-                {artist.deezerId == null ? (
-                  <span>{name}</span>
-                ) : (
-                  <a
-                    className="artist-name-link"
-                    href={artist.deezerLink ?? `https://www.deezer.com/artist/${artist.deezerId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    title={
-                      suspect && artist.deezerName
-                        ? `Deezer: ${artist.deezerName} — likely the wrong artist`
-                        : artist.deezerName ?? undefined
-                    }
-                  >
-                    {name}
-                  </a>
-                )}
-                {suspect && (
-                  <span className="warn-badge" title="Deezer name doesn't match — likely the wrong artist">⚠</span>
-                )}
-              </div>
-              {artist.genres.length > 0 && (
-                <div className="genre-tags">
-                  {artist.genres.slice(0, 3).map((g) => (
-                    <span className="genre-tag" key={g}>{g}</span>
-                  ))}
-                </div>
+              {libItem && (
+                <button
+                  className="auth-btn detail-correct"
+                  title="Correct the Deezer association"
+                  onClick={() => onCorrect(libItem)}
+                >
+                  <IconWrench size={18} /> Correct
+                </button>
               )}
             </div>
-            {user && (
-              <button
-                className="wrench-btn"
-                title="Correct the Deezer association"
-                aria-label={`Correct the Deezer association for ${name}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onCorrect(artist)
-                }}
-              >
-                <IconWrench size={22} />
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-      {user && isOpen && (
-        <tr className="album-drill-row">
-          <td colSpan={2}>
-            <ArtistAlbums artist={name} />
-          </td>
-        </tr>
+          )}
+        </div>
+      </div>
+
+      {/* Sample the artist's top tracks (30s Deezer previews) right in the readout, like Discover.
+          The whole pane is keyed by selected artist (see the DetailPane render), so it remounts on
+          selection change — no inner key needed (and an inner key={name} here collides with the
+          albums/related panel's, which is the same name, since they're siblings under <aside>). */}
+      <DeezerSample artist={name} />
+
+      <div className="artist-detail-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'albums'}
+          className={tab === 'albums' ? 'artist-tab active' : 'artist-tab'}
+          onClick={() => onTab('albums')}
+        >
+          Albums
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'related'}
+          className={tab === 'related' ? 'artist-tab active' : 'artist-tab'}
+          onClick={() => onTab('related')}
+        >
+          Related artists
+        </button>
+      </div>
+
+      {tab === 'albums' ? (
+        user ? (
+          // The whole pane is keyed by selected artist, so the discography refetches/remounts cleanly
+          // on selection change — no inner key needed.
+          <ArtistAlbums artist={name} />
+        ) : (
+          <div className="disc-sub-albums"><em className="disc-sub-note">Log in to view this artist’s albums.</em></div>
+        )
+      ) : (
+        <RelatedTab artist={name} onExplore={onExplore} />
       )}
-    </Fragment>
+    </aside>
   )
 }
 
@@ -416,17 +614,17 @@ export default function Artists() {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [correcting, setCorrecting] = useState<ArtistListItem | null>(null)
-  // The one artist whose album drill-down is expanded (by name) — one open at a time.
-  const [expanded, setExpanded] = useState<string | null>(null)
+  // The artist open in the right-hand readout (desktop) / drawer (mobile), and which of its tabs is
+  // showing. Carried as a lightweight selection so a related-artist card the user drills into — which
+  // may not be in the library — can still drive the readout.
+  const [selected, setSelected] = useState<SelectedArtist | null>(null)
+  const [tab, setTab] = useState<DetailTab>('albums')
 
   // Editing the search resets to the first page so matches are never hidden on a later page.
   const onSearch = (next: string) => {
     setQuery(next)
     setPage(0)
   }
-
-  const toggleExpanded = (name: string) =>
-    setExpanded((prev) => (prev === name ? null : name))
 
   const { data: artists, isPending, isError, error } = useQuery({
     queryKey: ['artists'],
@@ -452,11 +650,15 @@ export default function Artists() {
     queryClient.invalidateQueries({ queryKey: ['purchases'] })
   }
 
-  // Thumbing an artist. Clicking the verdict that's already set clears it back to neutral.
+  // Thumbing an artist — works for any selected artist, owned or not (a related artist drilled into
+  // from the Related tab can be liked straight into the buy list, an alternative to the Discover
+  // pipeline). The kind is cosmetic to rate()/clearRating() (they send only the name), but we set it
+  // honestly from library membership. Clicking the verdict that's already set clears it back to neutral.
   const rateArtist = useMutation({
     mutationFn: ({ artist, verdict, current }: { artist: string; verdict: Verdict; current?: DiscoveryStatus }) => {
+      const inLibrary = (artists ?? []).some((a) => a.artistKey.artistName === artist)
       const item: FeedItem = {
-        kind: 'LibraryArtist',
+        kind: inLibrary ? 'LibraryArtist' : 'RecommendedArtist',
         artist: { artistName: artist },
         album: null,
         imageUrl: null,
@@ -498,6 +700,22 @@ export default function Artists() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   const paged = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+
+  // The full library item behind the current selection, when it's an owned artist (undefined for a
+  // related-artist stranger drilled into from the Related tab). Drives the readout's Deezer link,
+  // genres, fans and the rate/correct actions.
+  const libItem = selected ? (artists ?? []).find((a) => a.artistKey.artistName === selected.name) : undefined
+
+  // Open the first artist by default once the list is populated, so the readout shows something
+  // instead of the empty placeholder. Desktop only: on mobile the readout is a drawer over the list,
+  // so leave it closed until a row is tapped. Only fires when nothing is selected, so it never
+  // clobbers a live selection (including a related artist drilled into from the Related tab).
+  const firstItem = paged[0]
+  useEffect(() => {
+    if (!firstItem || selected) return
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 961px)').matches) return
+    setSelected({ name: firstItem.artistKey.artistName, imageUrl: firstItem.artistImageUrl })
+  }, [firstItem, selected])
 
   return (
     <section>
@@ -562,46 +780,66 @@ export default function Artists() {
             {query && <span className="artist-search-count">{filtered.length} match</span>}
           </div>
 
-          <table className="table">
-            <thead>
-              <tr>
-                {user && <th style={{ width: '5rem' }}></th>}
-                <th>Name</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.map((artist) => {
-                const name = artist.artistKey.artistName
-                return (
-                  <ArtistRow
-                    key={name}
-                    artist={artist}
-                    verdict={verdictByArtist.get(name)}
-                    isOpen={expanded === name}
-                    user={!!user}
-                    ratePending={rateArtist.isPending}
-                    onRate={(artistName, verdict, current) =>
-                      rateArtist.mutate({ artist: artistName, verdict, current })
-                    }
-                    onToggle={toggleExpanded}
-                    onCorrect={setCorrecting}
-                  />
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="disc-layout">
+            <div className="disc-main">
+              <div className="disc-list">
+                {paged.map((artist) => {
+                  const name = artist.artistKey.artistName
+                  return (
+                    <ArtistListRow
+                      key={name}
+                      artist={artist}
+                      verdict={verdictByArtist.get(name)}
+                      selected={selected?.name === name}
+                      user={!!user}
+                      ratePending={rateArtist.isPending}
+                      onSelect={(a) => setSelected({ name: a.artistKey.artistName, imageUrl: a.artistImageUrl })}
+                      onRate={(artistName, verdict, current) =>
+                        rateArtist.mutate({ artist: artistName, verdict, current })
+                      }
+                    />
+                  )
+                })}
 
-          {pageCount > 1 && (
-            <div className="disc-pager">
-              <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
-                ‹ prev
-              </button>
-              <span>page {safePage + 1} / {pageCount}</span>
-              <button disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
-                next ›
-              </button>
+                {filtered.length === 0 && (
+                  <p className="disc-sub-note"><em>No artists match “{query}”.</em></p>
+                )}
+              </div>
+
+              {pageCount > 1 && (
+                <div className="disc-pager">
+                  <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+                    ‹ prev
+                  </button>
+                  <span>page {safePage + 1} / {pageCount}</span>
+                  <button disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
+                    next ›
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+
+            <DetailPane
+              // Key the whole pane by the selected artist so switching selection remounts it as one
+              // atomic unit. Relying on inner key={name} props (the player, albums, related tabs) left
+              // a window where a previous artist's Deezer player could linger as a stale sibling —
+              // showing two "Top tracks" lists. One key on the pane closes that.
+              key={selected?.name ?? '∅'}
+              selected={selected}
+              libItem={libItem}
+              verdict={selected ? verdictByArtist.get(selected.name) : undefined}
+              user={!!user}
+              tab={tab}
+              ratePending={rateArtist.isPending}
+              onTab={setTab}
+              onRate={(artistName, verdict, current) =>
+                rateArtist.mutate({ artist: artistName, verdict, current })
+              }
+              onCorrect={setCorrecting}
+              onExplore={setSelected}
+              onClose={() => setSelected(null)}
+            />
+          </div>
         </>
       )}
 

@@ -1933,6 +1933,55 @@ input[type='checkbox'] {
   color: var(--text-dim);
 }
 
+/* Detail-pane tab strip (Albums / Related artists) below the artist readout. */
+.artist-detail-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1.1rem 0 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.artist-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.45rem 0.7rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.artist-tab:hover {
+  color: var(--text);
+}
+.artist-tab.active {
+  color: var(--salmon-white);
+  border-bottom-color: rgba(var(--art-accent, 225, 96, 99), 0.95);
+}
+
+/* Related-artist cards inside the readout pane — a touch tighter than the full-page Dev grid. */
+.artist-related-grid {
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 0.7rem;
+  max-width: none;
+  margin: 0;
+}
+.artist-related-grid .related-card-name {
+  font-size: 0.82rem;
+}
+
+/* The wrench in the readout's action row sits beside the thumbs as a labelled button. */
+.detail-correct {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 /* Artist name cell — thumbnail · (name + genre tags) · wrench (revealed on row hover). */
 .artist-name-cell {
   display: flex;
