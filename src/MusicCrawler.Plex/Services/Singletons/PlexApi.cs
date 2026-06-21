@@ -49,6 +49,11 @@ public class PlexApi : IPlexApi
     /// <c>/library/metadata/{ratingKey}</c> response carries the same inline <c>Collection</c> array as
     /// the section listing (with includeCollections=1), so the tagger can merge the artist's current
     /// collections without a full scan.
+    ///
+    /// <para>Unlike the section listing — which serializes <c>Guid</c> as a single string — the detail
+    /// endpoint returns it as an <em>array</em> of external-id objects (mbid/etc.). That shape collides
+    /// with <see cref="PlexMusicArtist.Guid"/> (a string), so we drop the field before deserializing; the
+    /// tagger only needs RatingKey/Title/Collection and nothing reads Guid here.</para>
     /// </summary>
     public async Task<PlexMusicArtist?> GetMusicArtist(int ratingKey)
     {
@@ -62,7 +67,16 @@ public class PlexApi : IPlexApi
 
         response.EnsureSuccessStatusCode();
         var data = JObject.Parse(await response.Content.ReadAsStringAsync());
-        return (data["MediaContainer"]?["Metadata"] as JArray)?.FirstOrDefault()?.ToObject<PlexMusicArtist>();
+        if (data["MediaContainer"]?["Metadata"] is not JArray metadata
+            || metadata.FirstOrDefault() is not JObject item)
+        {
+            return null;
+        }
+
+        // The detail endpoint serializes Guid as an array; PlexMusicArtist.Guid is a string. It's unused
+        // on this path, so remove it rather than fight the type mismatch.
+        item.Remove("Guid");
+        return item.ToObject<PlexMusicArtist>();
     }
 
     public async Task<PlexMusicAlbum[]> GetMusicAlbums(int library)
