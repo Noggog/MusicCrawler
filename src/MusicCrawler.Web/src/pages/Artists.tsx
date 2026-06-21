@@ -61,10 +61,13 @@ function MetaTab({ artist }: { artist: string }) {
     queryFn: () => getArtistSources(artist),
   })
 
-  // A pin/clear changes the resolved ids and re-derives similarity edges — refresh this tab plus the
-  // artist list (Deezer columns / suspect badge) and the downstream feeds.
+  // A pin/clear changes the resolved Deezer id, which in turn changes the discography (album list +
+  // cover art) and re-derives similarity edges — refresh this tab, the discography, the artist list
+  // (Deezer columns / suspect badge) and the downstream feeds. Without the discography invalidation a
+  // relink left the old albums (and missing/stale covers) on screen until a hard refresh.
   const afterChange = () => {
     queryClient.invalidateQueries({ queryKey: ['artist-sources', artist] })
+    queryClient.invalidateQueries({ queryKey: ['artist-discography', artist] })
     queryClient.invalidateQueries({ queryKey: ['artists'] })
     queryClient.invalidateQueries({ queryKey: ['feed'] })
     queryClient.invalidateQueries({ queryKey: ['related'] })
