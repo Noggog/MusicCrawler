@@ -29,6 +29,7 @@ import {
   type Verdict,
 } from '../api/discovery'
 import { getDeezerPlayInfo } from '../api/deezer'
+import { getArtistLibraries } from '../api/library'
 import { useArtAccent } from '../art/artColors'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
@@ -422,6 +423,36 @@ function ArtistAlbumsPanel({
   )
 }
 
+// Discover kinds whose artist is already in the library (owned), so a "open where it lives" link makes
+// sense. RecommendedArtist (not yet owned) and MissingAlbum (an album, not the artist) are excluded.
+const IN_LIBRARY_KINDS = new Set<FeedKind>(['RecommendedLibraryArtist', 'SeedLibraryArtist', 'LibraryArtist'])
+
+// Deep links to open an owned artist where it lives (Plex now, Navidrome later) — the same per-library
+// links as the Artists-page "Library" tab, shown compactly in the readout for in-library Discover cards.
+function LibraryLinks({ artist }: { artist: string }) {
+  const { data } = useQuery({
+    queryKey: ['artist-libraries', artist],
+    queryFn: () => getArtistLibraries(artist),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const links = (data?.sources ?? []).filter((s) => s.present).flatMap((s) => s.links)
+  if (links.length === 0) return null
+
+  return (
+    <>
+      <div className="detail-section-label">In your library</div>
+      <div className="detail-library-links">
+        {links.map((l) => (
+          <a className="deezer-link" key={l.url} href={l.url} target="_blank" rel="noopener noreferrer">
+            {l.label} ↗
+          </a>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // The right-hand readout (desktop) / bottom drawer (mobile) for the row currently selected in the
 // list. A big hero image, recommendation chips, a Deezer preview player, and — for a brand-new
 // recommended artist — their grabbable albums. All the rate/snooze/undo plumbing is threaded in from
@@ -517,6 +548,9 @@ function DetailPanel({
               </>
             )}
           </div>
+
+          {/* Open the owned artist where it lives (Plex / Navidrome), just under the rate buttons. */}
+          {!isAlbum && IN_LIBRARY_KINDS.has(item.kind) && <LibraryLinks artist={name} />}
         </div>
       </div>
 

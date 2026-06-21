@@ -1481,6 +1481,12 @@ input[type='checkbox'] {
   margin: 1rem 0 0.4rem;
 }
 
+.detail-library-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
