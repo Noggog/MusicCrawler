@@ -334,12 +334,17 @@ api.MapPost("/discovery/rate", async (
         {
             await engine.RateArtist(userId, artist, status);
             // Mirror the verdict into Plex as a per-user collection ("<username>_liked"/"_disliked"),
-            // which a music smart playlist can filter on via "Artist Collection". The tagger is
-            // best-effort (never throws), so a Plex hiccup can't fail the rating.
-            var tag = ArtistTag.For(http.User.FindFirst("preferred_username")?.Value, status);
+            // which a music smart playlist can filter on via "Artist Collection". Stamp the new verdict
+            // and strip the opposite so the latest rating is the only tag left (a like→dislike flip drops
+            // "_liked"). Best-effort (never throws), so a Plex hiccup can't fail the rating.
+            var username = http.User.FindFirst("preferred_username")?.Value;
+            var tag = ArtistTag.For(username, status);
             if (tag != null)
             {
-                await tagger.AddTag(artist, tag);
+                var opposite = status == DiscoveryStatus.Liked ? DiscoveryStatus.Disliked : DiscoveryStatus.Liked;
+                var oppositeTag = ArtistTag.For(username, opposite);
+                var remove = oppositeTag != null ? new[] { oppositeTag } : Array.Empty<string>();
+                await tagger.SetTags(artist, tag, remove);
             }
         }
         else
@@ -398,12 +403,25 @@ api.MapPost("/discovery/snooze", async (
     .WithName("SnoozeCandidate");
 
 // Clear a rating, returning the artist/album to the feed.
-api.MapDelete("/discovery/rate", async (string artist, string? album, HttpContext http, DiscoveryEngine engine) =>
+api.MapDelete("/discovery/rate", async (
+        string artist, string? album, HttpContext http, DiscoveryEngine engine, IArtistTagger tagger) =>
     {
         var userId = http.User.GetSubject()!;
         if (string.IsNullOrEmpty(album))
         {
             await engine.ClearArtistRating(userId, artist);
+            // Undo the Plex collection too — a cleared verdict shouldn't leave its "<username>_liked"/
+            // "_disliked" tag behind. We don't know which verdict it was, so strip both (the user holds
+            // at most one); best-effort, so a Plex hiccup can't fail the clear.
+            var username = http.User.FindFirst("preferred_username")?.Value;
+            var tags = new[] { DiscoveryStatus.Liked, DiscoveryStatus.Disliked }
+                .Select(s => ArtistTag.For(username, s))
+                .OfType<string>()
+                .ToArray();
+            if (tags.Length > 0)
+            {
+                await tagger.SetTags(artist, add: null, remove: tags);
+            }
         }
         else
         {

@@ -1,10 +1,11 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace MusicCrawler.Plex.Services.Singletons;
 
-public class PlexApi
+public class PlexApi : IPlexApi
 {
     private readonly PlexEndpointInfo _endpointInfo;
     private readonly PlexClientInfo _clientInfo;
@@ -39,6 +40,29 @@ public class PlexApi
         var response = await httpClient.GetStringAsync(url);
         var data = JObject.Parse(response);
         return data["MediaContainer"]["Metadata"].ToObject<PlexMusicArtist[]>();
+    }
+
+    /// <summary>
+    /// Fetches a single artist by its rating key (the targeted GET mirror of the whole-section
+    /// listing). Returns <c>null</c> when the key no longer resolves (e.g. the item was removed or the
+    /// library was rebuilt and keys shifted), so callers can fall back to a name scan. The
+    /// <c>/library/metadata/{ratingKey}</c> response carries the same inline <c>Collection</c> array as
+    /// the section listing (with includeCollections=1), so the tagger can merge the artist's current
+    /// collections without a full scan.
+    /// </summary>
+    public async Task<PlexMusicArtist?> GetMusicArtist(int ratingKey)
+    {
+        var url = $"{_endpointInfo.BaseUri}/library/metadata/{ratingKey}?includeCollections=1";
+        _logger.LogDebug("Plex GetMusicArtist {RatingKey}: {Url}", ratingKey, url);
+        var response = await httpClient.GetAsync(url);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        var data = JObject.Parse(await response.Content.ReadAsStringAsync());
+        return (data["MediaContainer"]?["Metadata"] as JArray)?.FirstOrDefault()?.ToObject<PlexMusicArtist>();
     }
 
     public async Task<PlexMusicAlbum[]> GetMusicAlbums(int library)

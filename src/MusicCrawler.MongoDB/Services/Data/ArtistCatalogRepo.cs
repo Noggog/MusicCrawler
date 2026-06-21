@@ -13,6 +13,7 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
     private const string FieldPresent = "present";
     private const string FieldAlbums = "albums";
     private const string FieldGenres = "genres";
+    private const string FieldPlexRatingKeys = "plexRatingKeys";
     private const string FieldDeezerId = "deezerId";
     private const string FieldDeezerName = "deezerName";
     private const string FieldDeezerFans = "deezerFans";
@@ -44,7 +45,11 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
                 .Set(FieldPresent, true)
                 // Plex is the source of truth for genres, so write them every sync (an empty array
                 // clears stale tags). Absent on the Deezer backfill path, which never touches this.
-                .Set(FieldGenres, new BsonArray(artist.Genres ?? Array.Empty<string>()));
+                .Set(FieldGenres, new BsonArray(artist.Genres ?? Array.Empty<string>()))
+                // Same story for the Plex rating key(s): recaptured every sync so a library rebuild
+                // that shifts keys self-heals, and an empty array clears stale keys. Lets the tagger
+                // target the exact Plex item(s) instead of scanning the whole library.
+                .Set(FieldPlexRatingKeys, new BsonArray(artist.PlexRatingKeys ?? Array.Empty<int>()));
 
             // Only set the image when we actually have one, so a Plex sync (which
             // currently supplies no image) never clobbers one backfilled elsewhere
@@ -211,6 +216,18 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
         return (await cursor.ToListAsync())
             .Select(ToCatalogArtist)
             .ToArray();
+    }
+
+    public async Task<IReadOnlyList<int>> GetPlexRatingKeys(ArtistKey artist)
+    {
+        var doc = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName))).FirstOrDefaultAsync();
+        if (doc == null || !doc.TryGetValue(FieldPlexRatingKeys, out var v) || !v.IsBsonArray)
+        {
+            return Array.Empty<int>();
+        }
+
+        return v.AsBsonArray.Where(e => e.IsNumeric).Select(e => e.ToInt32()).ToArray();
     }
 
     public async Task<(DeezerIdentity Identity, bool IsOverride)?> GetDeezer(ArtistKey artist)

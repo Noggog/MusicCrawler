@@ -10,8 +10,20 @@ namespace MusicCrawler.Interfaces;
 /// </summary>
 public interface IArtistTagger
 {
-    /// <summary>Adds <paramref name="tag"/> to <paramref name="artistName"/> if not already present.</summary>
-    Task AddTag(string artistName, string tag);
+    /// <summary>
+    /// Reconciles the managed collections on <paramref name="artistName"/> in a single pass: ensures
+    /// <paramref name="add"/> is present (when non-null) and every tag in <paramref name="remove"/> is
+    /// absent, leaving all other collections (other users' tags, hand-made groupings) untouched.
+    ///
+    /// <para>A rating passes the new verdict tag as <paramref name="add"/> and the opposite verdict's tag
+    /// in <paramref name="remove"/>, so the latest verdict is the one left on the artist (a like→dislike
+    /// flip drops "_liked" and leaves "_disliked"). A cleared/undone rating passes add=null and both
+    /// verdict tags in <paramref name="remove"/>, stripping whichever was set.</para>
+    ///
+    /// <para>Best-effort: failures are logged, never thrown — tagging is a side effect of rating and must
+    /// not fail the rating itself.</para>
+    /// </summary>
+    Task SetTags(string artistName, string? add, IReadOnlyCollection<string> remove);
 }
 
 /// <summary>

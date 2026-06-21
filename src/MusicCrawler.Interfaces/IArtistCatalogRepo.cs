@@ -52,6 +52,13 @@ public interface IArtistCatalogRepo
     Task SplitCombinedArtist(string combinedName, IReadOnlyList<string> parts, DateTimeOffset syncedAt);
 
     /// <summary>
+    /// The Plex rating key(s) the artist resolves to (a name can map to several Plex items via
+    /// ';'-joined collaborator titles), or empty when the artist isn't cataloged / not yet captured.
+    /// Lets the tagger target the exact Plex item(s) instead of scanning the whole library.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetPlexRatingKeys(ArtistKey artist);
+
+    /// <summary>
     /// The stored Deezer identity for an artist plus whether it's a sticky user override, or null
     /// if the artist isn't cataloged or has never been resolved.
     /// </summary>

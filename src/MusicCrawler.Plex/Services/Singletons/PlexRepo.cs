@@ -32,12 +32,17 @@ public class PlexRepo : ILibraryQuery
         // becomes two artists, then group by name (the split halves can collide with standalone
         // entries) and union each artist's genre tags across every title they appear in.
         return (await _plexApi.GetMusicArtists(plexLibrary.Key))
-            .SelectMany(a => ArtistNames.Split(a.Title).Select(name => (Name: name, Genres: ExtractGenres(a))))
+            .SelectMany(a => ArtistNames.Split(a.Title)
+                .Select(name => (Name: name, a.RatingKey, Genres: ExtractGenres(a))))
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => new ArtistMetadata(
                 ArtistKey: new ArtistKey(g.Key),
                 ArtistImageUrl: null, // Plex supplies no public image URL; backfilled from Deezer later.
-                Genres: g.SelectMany(x => x.Genres).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+                Genres: g.SelectMany(x => x.Genres).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                // Keep the rating key of every Plex item this name appears in, so the tagger can target
+                // them directly instead of rescanning the whole library (a ';'-joined collaborator title
+                // makes one Plex item back several names; a name can also recur across items).
+                PlexRatingKeys: g.Select(x => x.RatingKey).Distinct().ToArray()))
             .ToArray();
     }
 

@@ -8,6 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Expose internal helpers (e.g. PlexArtistTagger.ReconcileCollections) to the test project. -->
+        <InternalsVisibleTo Include="MusicCrawler.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <FrameworkReference Include="Microsoft.AspnetCore.App" />
     </ItemGroup>
 

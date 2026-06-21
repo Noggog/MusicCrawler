@@ -4,7 +4,11 @@ public record Recommendation(ArtistKey ArtistKey, ArtistKey[] SourceArtists);
 
 public record ArtistKey(string ArtistName);
 
-public record ArtistMetadata(ArtistKey ArtistKey, string? ArtistImageUrl, IReadOnlyList<string>? Genres = null);
+public record ArtistMetadata(
+    ArtistKey ArtistKey,
+    string? ArtistImageUrl,
+    IReadOnlyList<string>? Genres = null,
+    IReadOnlyList<int>? PlexRatingKeys = null);
 
 /// <summary>
 /// The Deezer artist a library name resolves to: its id, Deezer's own spelling, popularity, page
