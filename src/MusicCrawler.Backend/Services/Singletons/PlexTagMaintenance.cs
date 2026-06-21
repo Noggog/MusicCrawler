@@ -52,13 +52,15 @@ public class PlexTagMaintenance
         foreach (var artist in await _plexApi.GetMusicArtists(library.Key))
         {
             var current = artist.Collections();
-            var survivors = current.Where(l => !ArtistTag.IsManaged(l)).ToArray();
-            if (survivors.Length == current.Length)
+            var managed = current.Where(ArtistTag.IsManaged).ToArray();
+            if (managed.Length == 0)
             {
                 continue; // nothing managed on this artist
             }
 
-            await _plexApi.SetArtistCollections(library.Key, artist.RatingKey, survivors);
+            // Plex only drops tags via an explicit removal, so strip the managed ones by name (their
+            // stored casing), leaving every other collection untouched.
+            await _plexApi.SetArtistCollections(library.Key, artist.RatingKey, Array.Empty<string>(), managed);
             changed++;
         }
 
@@ -113,10 +115,10 @@ public class PlexTagMaintenance
         foreach (var (ratingKey, tags) in wanted)
         {
             var current = byKey[ratingKey].Collections();
-            var merged = current.Union(tags, StringComparer.OrdinalIgnoreCase).ToArray();
-            if (merged.Length != current.Length)
+            var toAdd = tags.Where(t => !current.Contains(t, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (toAdd.Length > 0)
             {
-                await _plexApi.SetArtistCollections(library.Key, ratingKey, merged);
+                await _plexApi.SetArtistCollections(library.Key, ratingKey, toAdd, Array.Empty<string>());
             }
         }
 

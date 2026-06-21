@@ -17,6 +17,7 @@ public interface IPlexApi
     Task<PlexMusicAlbum[]> GetMusicAlbums(int library);
     Task<PlexRecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5);
     Task RefreshLibrary(int libraryKey);
-    Task SetArtistCollections(int library, int ratingKey, IReadOnlyList<string> collections);
+    Task SetArtistCollections(
+        int library, int ratingKey, IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove);
     Task<PlexLibrary> ResolveLibrary();
 }

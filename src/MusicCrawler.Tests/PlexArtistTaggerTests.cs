@@ -38,6 +38,12 @@ public class PlexArtistTaggerTests
     private void StoredKeys(params int[] keys) =>
         _catalog.GetPlexRatingKeys(new ArtistKey(Artist)).Returns(keys);
 
+    /// <summary>Asserts exactly one edit of item <paramref name="ratingKey"/> with the given add/remove delta.</summary>
+    private Task ReceivedEdit(int ratingKey, string[] add, string[] remove) =>
+        _plex.Received(1).SetArtistCollections(1, ratingKey,
+            Arg.Is<IReadOnlyCollection<string>>(a => a.SequenceEqual(add)),
+            Arg.Is<IReadOnlyCollection<string>>(r => r.SequenceEqual(remove)));
+
     // --- ReconcileCollections (pure) -----------------------------------------------------------
 
     [Fact]
@@ -82,8 +88,7 @@ public class PlexArtistTaggerTests
 
         await _sut.SetTags(Artist, Liked, Array.Empty<string>());
 
-        await _plex.Received(1).SetArtistCollections(1, 5, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "rock", Liked })));
+        await ReceivedEdit(5, add: new[] { Liked }, remove: Array.Empty<string>());
         await _plex.DidNotReceive().GetMusicArtists(Arg.Any<int>());
     }
 
@@ -95,8 +100,20 @@ public class PlexArtistTaggerTests
 
         await _sut.SetTags(Artist, Disliked, new[] { Liked });
 
-        await _plex.Received(1).SetArtistCollections(1, 5, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { Disliked })));
+        await ReceivedEdit(5, add: new[] { Disliked }, remove: new[] { Liked });
+    }
+
+    [Fact]
+    public async Task Flip_removes_stale_tag_with_its_stored_casing()
+    {
+        // A pre-existing tag whose case differs from the app's generated form must still be dropped,
+        // spelled exactly as Plex stores it ("Noggog_liked", not the lowercase "noggog_liked").
+        StoredKeys(5);
+        _plex.GetMusicArtist(5).Returns(ArtistItem(5, Artist, "Noggog_liked"));
+
+        await _sut.SetTags(Artist, Disliked, new[] { Liked });
+
+        await ReceivedEdit(5, add: new[] { Disliked }, remove: new[] { "Noggog_liked" });
     }
 
     [Fact]
@@ -107,8 +124,7 @@ public class PlexArtistTaggerTests
 
         await _sut.SetTags(Artist, add: null, remove: new[] { Liked, Disliked });
 
-        await _plex.Received(1).SetArtistCollections(1, 5, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "rock" })));
+        await ReceivedEdit(5, add: Array.Empty<string>(), remove: new[] { Liked });
     }
 
     [Fact]
@@ -119,7 +135,9 @@ public class PlexArtistTaggerTests
 
         await _sut.SetTags(Artist, Liked, new[] { Disliked });
 
-        await _plex.DidNotReceive().SetArtistCollections(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<IReadOnlyList<string>>());
+        await _plex.DidNotReceive().SetArtistCollections(
+            Arg.Any<int>(), Arg.Any<int>(),
+            Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<IReadOnlyCollection<string>>());
     }
 
     [Fact]
@@ -131,10 +149,8 @@ public class PlexArtistTaggerTests
 
         await _sut.SetTags(Artist, Liked, Array.Empty<string>());
 
-        await _plex.Received(1).SetArtistCollections(1, 5, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "rock", Liked })));
-        await _plex.Received(1).SetArtistCollections(1, 9, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "pop", Liked })));
+        await ReceivedEdit(5, add: new[] { Liked }, remove: Array.Empty<string>());
+        await ReceivedEdit(9, add: new[] { Liked }, remove: Array.Empty<string>());
     }
 
     [Fact]
@@ -146,8 +162,7 @@ public class PlexArtistTaggerTests
         await _sut.SetTags(Artist, Liked, Array.Empty<string>());
 
         await _plex.Received(1).GetMusicArtists(1);
-        await _plex.Received(1).SetArtistCollections(1, 7, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "rock", Liked })));
+        await ReceivedEdit(7, add: new[] { Liked }, remove: Array.Empty<string>());
         await _plex.DidNotReceive().GetMusicArtist(Arg.Any<int>());
     }
 
@@ -161,8 +176,7 @@ public class PlexArtistTaggerTests
         await _sut.SetTags(Artist, Liked, Array.Empty<string>());
 
         await _plex.Received(1).GetMusicArtists(1);
-        await _plex.Received(1).SetArtistCollections(1, 7, Arg.Is<IReadOnlyList<string>>(
-            l => l.SequenceEqual(new[] { "rock", Liked })));
+        await ReceivedEdit(7, add: new[] { Liked }, remove: Array.Empty<string>());
     }
 
     [Fact]

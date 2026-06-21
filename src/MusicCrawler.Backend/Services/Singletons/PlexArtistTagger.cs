@@ -132,15 +132,22 @@ public class PlexArtistTagger : IArtistTagger
     private async Task ApplyCollections(
         int libraryKey, PlexMusicArtist artist, string? addTag, IReadOnlyCollection<string> remove)
     {
-        var next = ReconcileCollections(artist.Collections(), addTag, remove);
+        var existing = artist.Collections();
+        var next = ReconcileCollections(existing, addTag, remove);
         if (next == null)
         {
             return; // already in the desired state on this item
         }
 
-        await _plexApi.SetArtistCollections(libraryKey, artist.RatingKey, next);
+        // Plex tag edits are add-only unless removals are spelled out explicitly, so send the delta. Drops
+        // carry the casing Plex actually stores, so a stale tag whose case differs from the app's generated
+        // form (e.g. "Noggog_liked" vs "noggog_liked") still matches and is removed.
+        var toAdd = next.Where(c => !existing.Contains(c, StringComparer.OrdinalIgnoreCase)).ToArray();
+        var toRemove = existing.Where(c => !next.Contains(c, StringComparer.OrdinalIgnoreCase)).ToArray();
+
+        await _plexApi.SetArtistCollections(libraryKey, artist.RatingKey, toAdd, toRemove);
         _logger.LogInformation(
-            "Updated Plex collections on {Artist} ({Key}): [{Collections}]",
-            artist.Title, artist.RatingKey, string.Join(", ", next));
+            "Updated Plex collections on {Artist} ({Key}): +[{Add}] -[{Remove}]",
+            artist.Title, artist.RatingKey, string.Join(", ", toAdd), string.Join(", ", toRemove));
     }
 }

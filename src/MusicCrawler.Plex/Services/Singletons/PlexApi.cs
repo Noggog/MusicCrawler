@@ -111,23 +111,40 @@ public class PlexApi : IPlexApi
     }
 
     /// <summary>
-    /// Replaces an artist's full Collection set in section <paramref name="library"/>. Plex's metadata
-    /// edit is a whole-field replace, so callers must merge in the existing collections first (see
-    /// <see cref="PlexMusicArtist.Collections"/>). <c>type=8</c> is the artist metadata type;
-    /// <c>collection.locked=1</c> pins the field so a later metadata refresh won't drop the tags.
+    /// Edits an artist's Collection set in section <paramref name="library"/>: adds every tag in
+    /// <paramref name="add"/> and removes every tag in <paramref name="remove"/> in a single edit.
+    /// Plex's tag edit is <b>not</b> a whole-field replace — listing <c>collection[i].tag.tag</c> only
+    /// adds, and a tag is dropped only via the explicit <c>collection[].tag.tag-</c> parameter — so
+    /// callers pass the delta, not the desired final set. Removed tags must be spelled exactly as Plex
+    /// stores them (case included), so read them off the current item. <c>type=8</c> is the artist
+    /// metadata type; <c>collection.locked=1</c> pins the field so a later refresh won't drop the tags.
     /// </summary>
-    public async Task SetArtistCollections(int library, int ratingKey, IReadOnlyList<string> collections)
+    public async Task SetArtistCollections(
+        int library, int ratingKey, IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove)
     {
+        if (add.Count == 0 && remove.Count == 0)
+        {
+            return;
+        }
+
         var url = new StringBuilder(
             $"{_endpointInfo.BaseUri}/library/sections/{library}/all?type=8&id={ratingKey}");
-        for (var i = 0; i < collections.Count; i++)
+        var i = 0;
+        foreach (var tag in add)
         {
-            url.Append($"&collection[{i}].tag.tag={Uri.EscapeDataString(collections[i])}");
+            url.Append($"&collection[{i}].tag.tag={Uri.EscapeDataString(tag)}");
+            i++;
+        }
+        if (remove.Count > 0)
+        {
+            // Plex drops tags only via the "-" suffix param: a comma-separated list, each value escaped.
+            var dropped = string.Join(",", remove.Select(Uri.EscapeDataString));
+            url.Append($"&collection[].tag.tag-={dropped}");
         }
         url.Append("&collection.locked=1");
 
         _logger.LogDebug(
-            "Plex SetArtistCollections for {RatingKey}: {Count} collection(s)", ratingKey, collections.Count);
+            "Plex SetArtistCollections for {RatingKey}: +{Add} -{Remove}", ratingKey, add.Count, remove.Count);
         var response = await httpClient.PutAsync(url.ToString(), content: null);
         response.EnsureSuccessStatusCode();
     }
