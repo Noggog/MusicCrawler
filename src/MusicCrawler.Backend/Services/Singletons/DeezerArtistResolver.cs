@@ -39,9 +39,13 @@ public class DeezerArtistResolver
         AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30),
     };
 
+    // Deezer's preview MP3s are signed urls with a short ~15-minute expiry (hdnea=exp=… token); a
+    // cached url older than that yields a dead link the browser rejects (MEDIA_ERR_SRC_NOT_SUPPORTED).
+    // Keep the cache well under the token life so served urls are almost always still valid, and let
+    // the client force a refresh (below) for the case where a payload goes stale while it's on screen.
     private static readonly DistributedCacheEntryOptions TopTracksCacheOptions = new()
     {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10),
     };
 
     private readonly IDeezerApi _deezer;
@@ -55,8 +59,11 @@ public class DeezerArtistResolver
         _catalog = catalog;
     }
 
-    /// <summary>Full sample/link/image info for an artist name, or null if Deezer has no match.</summary>
-    public async Task<DeezerPlayInfo?> ResolvePlayInfo(string artistName)
+    /// <summary>
+    /// Full sample/link/image info for an artist name, or null if Deezer has no match. Pass
+    /// forceRefresh to bypass the cached (and possibly expired) preview urls and re-mint them.
+    /// </summary>
+    public async Task<DeezerPlayInfo?> ResolvePlayInfo(string artistName, bool forceRefresh = false)
     {
         var identity = await ResolveIdentity(artistName);
         if (identity is null)
@@ -64,7 +71,7 @@ public class DeezerArtistResolver
             return null;
         }
 
-        var tracks = await ResolveTopTracks(identity.Id);
+        var tracks = await ResolveTopTracks(identity.Id, forceRefresh);
         return new DeezerPlayInfo(
             identity.Id,
             identity.Link ?? $"https://www.deezer.com/artist/{identity.Id}",
@@ -169,17 +176,17 @@ public class DeezerArtistResolver
     /// the missing-album record), so this never misses — the link is always valid; the track list may
     /// be empty if Deezer has no previews. Previews are cached briefly since they can rotate.
     /// </summary>
-    public async Task<DeezerAlbumPlayInfo> ResolveAlbumPlayInfo(long albumId)
+    public async Task<DeezerAlbumPlayInfo> ResolveAlbumPlayInfo(long albumId, bool forceRefresh = false)
     {
-        var tracks = await ResolveAlbumTracks(albumId);
+        var tracks = await ResolveAlbumTracks(albumId, forceRefresh);
         return new DeezerAlbumPlayInfo(albumId, $"https://www.deezer.com/album/{albumId}", tracks);
     }
 
-    private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveAlbumTracks(long albumId)
+    private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveAlbumTracks(long albumId, bool forceRefresh = false)
     {
         var key = $"deezer:albumtracks:{albumId}";
 
-        var cached = await _cache.GetStringAsync(key);
+        var cached = forceRefresh ? null : await _cache.GetStringAsync(key);
         if (cached != null)
         {
             return cached.Length == 0
@@ -199,11 +206,11 @@ public class DeezerArtistResolver
         return tracks;
     }
 
-    private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveTopTracks(long artistId)
+    private async Task<IReadOnlyList<DeezerPreviewTrack>> ResolveTopTracks(long artistId, bool forceRefresh = false)
     {
         var key = $"deezer:toptracks:{artistId}";
 
-        var cached = await _cache.GetStringAsync(key);
+        var cached = forceRefresh ? null : await _cache.GetStringAsync(key);
         if (cached != null)
         {
             return cached.Length == 0

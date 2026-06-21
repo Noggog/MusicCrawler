@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getDeezerAlbumPlayInfo, getDeezerPlayInfo } from '../api/deezer'
 import { getVolume, useVolume } from '../audio/volume'
 import { startAudioReactive, stopAudioReactive } from '../effects/audioReactive'
@@ -27,11 +27,16 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
     enabled: isAlbum,
     staleTime: 60 * 60 * 1000,
   })
+  const queryClient = useQueryClient()
+  const queryKey = isAlbum ? ['deezer-album', albumId] : ['deezer-play', artist]
   const { data, isPending, isError } = isAlbum ? albumQuery : artistQuery
   const link = data ? ('albumLink' in data ? data.albumLink : data.artistLink) : null
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
+  // The track index whose preview failed to load/play, so we can flag it instead of failing
+  // silently (a dead or geo-blocked Deezer CDN url otherwise just does nothing on click).
+  const [failed, setFailed] = useState<number | null>(null)
   const volume = useVolume()
 
   // Keep the live element in sync while the global slider moves mid-playback.
@@ -39,22 +44,52 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
     if (audioRef.current) audioRef.current.volume = volume
   }, [volume])
 
+  // Point the element at a preview url and start it. Returns the play() promise so callers can react
+  // to a load failure. The Web Audio tap is (re)started here, inside the click gesture, so the
+  // AudioContext is allowed to start (doing it from the onPlay media event can leave it suspended).
+  const start = (el: HTMLAudioElement, url: string, index: number) => {
+    if (currentAudio && currentAudio !== el) currentAudio.pause()
+    currentAudio = el
+    el.volume = getVolume()
+    el.src = url
+    setSelected(index)
+    setFailed(null)
+    startAudioReactive(el)
+    return el.play()
+  }
+
   const play = (index: number) => {
     const el = audioRef.current
     const track = data?.tracks[index]
     if (!el || !track) return
-    if (currentAudio && currentAudio !== el) currentAudio.pause()
-    currentAudio = el
-    el.volume = getVolume()
-    el.src = track.previewUrl
-    setSelected(index)
-    // Set up / resume the Web Audio tap here, inside the click gesture, so the
-    // AudioContext is allowed to start (doing it from the onPlay media event can
-    // leave the context suspended → silent playback).
-    startAudioReactive(el)
-    el.play().catch(() => {
-      /* autoplay can be blocked until a gesture — the play button still works */
-    })
+    start(el, track.previewUrl, index).catch((err) => onPlayError(index, track.title, err, true))
+  }
+
+  // A play() rejection: a blocked-autoplay one is benign (the click is the gesture, so it's rare).
+  // Anything else is a bad preview url — overwhelmingly a Deezer signed url that expired while the
+  // readout sat open (their tokens live ~15 min). Re-fetch fresh urls once and retry this track
+  // before giving up; only flag it unavailable if the fresh url fails too.
+  const onPlayError = async (index: number, title: string, err: unknown, allowRefresh: boolean) => {
+    if ((err as { name?: string })?.name === 'NotAllowedError') return
+    if (allowRefresh) {
+      try {
+        const fresh = isAlbum
+          ? await getDeezerAlbumPlayInfo(albumId!, true)
+          : await getDeezerPlayInfo(artist!, true)
+        const el = audioRef.current
+        const track = fresh?.tracks[index]
+        if (el && track) {
+          // Repaint the list with the fresh urls so other tracks benefit from the new tokens too.
+          queryClient.setQueryData(queryKey, fresh)
+          start(el, track.previewUrl, index).catch((e) => onPlayError(index, title, e, false))
+          return
+        }
+      } catch {
+        /* fall through to flagging it */
+      }
+    }
+    console.warn(`Deezer preview failed to play: ${title}`, err)
+    setFailed(index)
   }
 
   const toggle = (index: number) => {
@@ -103,6 +138,7 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
               <span className={selected === i ? 'sample-title active' : 'sample-title'} title={track.title}>
                 {track.title}
               </span>
+              {failed === i && <span className="sample-title muted" title="Preview unavailable"> — unavailable</span>}
             </li>
           ))}
         </ul>
@@ -117,6 +153,13 @@ export function DeezerSample({ artist, albumId }: { artist?: string; albumId?: n
           stopAudioReactive()
         }}
         onEnded={() => {
+          setPlaying(false)
+          stopAudioReactive()
+        }}
+        // A load/decode error settles the field; the failure itself is flagged (and a fresh-url retry
+        // attempted) from the play() rejection in onPlayError, which is the single source of truth —
+        // flagging here too would race that retry and flash "unavailable" just as it recovers.
+        onError={() => {
           setPlaying(false)
           stopAudioReactive()
         }}

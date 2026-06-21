@@ -16,8 +16,12 @@ export interface DeezerPlayInfo {
   tracks: DeezerPreviewTrack[]
 }
 
-export async function getDeezerPlayInfo(artist: string): Promise<DeezerPlayInfo | null> {
-  const res = await fetch(`/api/deezer/artist?${new URLSearchParams({ artist })}`)
+// `fresh` re-mints the (short-lived, signed) preview urls server-side — used to retry a preview
+// whose url expired while the readout was open.
+export async function getDeezerPlayInfo(artist: string, fresh = false): Promise<DeezerPlayInfo | null> {
+  const params = new URLSearchParams({ artist })
+  if (fresh) params.set('fresh', 'true')
+  const res = await fetch(`/api/deezer/artist?${params}`)
   if (res.status === 404) {
     return null
   }
@@ -34,8 +38,10 @@ export interface DeezerAlbumPlayInfo {
   tracks: DeezerPreviewTrack[]
 }
 
-export async function getDeezerAlbumPlayInfo(albumId: number): Promise<DeezerAlbumPlayInfo> {
-  const res = await fetch(`/api/deezer/album?${new URLSearchParams({ id: String(albumId) })}`)
+export async function getDeezerAlbumPlayInfo(albumId: number, fresh = false): Promise<DeezerAlbumPlayInfo> {
+  const params = new URLSearchParams({ id: String(albumId) })
+  if (fresh) params.set('fresh', 'true')
+  const res = await fetch(`/api/deezer/album?${params}`)
   if (!res.ok) {
     throw new Error(`Failed to resolve Deezer album: ${res.status} ${res.statusText}`)
   }

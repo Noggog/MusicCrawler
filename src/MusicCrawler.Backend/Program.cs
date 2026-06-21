@@ -247,17 +247,19 @@ api.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor in
 // Deezer play info for an artist: a 30-second preview MP3 to sample plus the deezer.com artist
 // link. The SPA plays the preview in a plain <audio> (no login/cookies, unlike the embed widget).
 // Public Deezer metadata, so no auth; cached server-side.
-api.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver) =>
+// `fresh=true` bypasses the server cache to re-mint preview urls — the client sends it to retry a
+// preview whose signed url expired while the readout sat open (Deezer's tokens live ~15 minutes).
+api.MapGet("/deezer/artist", async (string artist, DeezerArtistResolver resolver, bool? fresh) =>
     {
-        var info = await resolver.ResolvePlayInfo(artist);
+        var info = await resolver.ResolvePlayInfo(artist, fresh ?? false);
         return info is null ? Results.NotFound() : Results.Ok(info);
     })
     .WithName("ResolveDeezerArtist");
 
 // Deezer play info for a specific album id: its previewable tracks plus the deezer.com album link.
 // Used to sample "missing album" cards. Public Deezer metadata, so no auth; cached server-side.
-api.MapGet("/deezer/album", async (long id, DeezerArtistResolver resolver) =>
-        Results.Ok(await resolver.ResolveAlbumPlayInfo(id)))
+api.MapGet("/deezer/album", async (long id, DeezerArtistResolver resolver, bool? fresh) =>
+        Results.Ok(await resolver.ResolveAlbumPlayInfo(id, fresh ?? false)))
     .WithName("ResolveDeezerAlbum");
 
 // The missing-album sync job (Deezer discography diff per owned artist). Heavy, so it's a dev-only
