@@ -125,6 +125,27 @@ public class DeezerArtistResolver
     }
 
     /// <summary>
+    /// Just the Deezer photo for an artist name (or null on no match / unreachable), using the same
+    /// 30-day name cache as <see cref="ResolveIdentity"/> but skipping the catalog round-trips — for
+    /// metadata enrichment of recommended artists that aren't in the library (so never have a pin or
+    /// catalog row). A warmed identity cache makes this a pure cache read.
+    /// </summary>
+    public async Task<string?> ResolveImageUrl(string artistName)
+    {
+        var key = NameCacheKey(artistName);
+
+        var cached = await _cache.GetStringAsync(key);
+        if (cached != null)
+        {
+            return cached.Length == 0 ? null : JsonSerializer.Deserialize<DeezerIdentity>(cached)?.ImageUrl;
+        }
+
+        var identity = ToIdentity(await _deezer.SearchArtist(artistName));
+        await _cache.SetStringAsync(key, identity is null ? "" : JsonSerializer.Serialize(identity), IdCacheOptions);
+        return identity?.ImageUrl;
+    }
+
+    /// <summary>
     /// Pins an artist to a specific Deezer id (a user correction). Fetches that artist by id,
     /// persists it as a sticky override, and evicts any stale name-resolution. Returns the pinned
     /// identity, or null if Deezer has no artist with that id.

@@ -292,9 +292,13 @@ api.MapPost("/maintenance/combined-artists/resolve", async (LibraryCleanupServic
 // miss/stale entry (persisting into the graph); pass ?refresh=true to force a re-fetch.
 // The artist is a query param (not a path segment) so names with '/' (e.g. "AC/DC") work —
 // an encoded slash in a path segment is rejected by ASP.NET routing by default.
-api.MapGet("/related", (string artist, bool? refresh, RelatedArtistInteractor interactor) =>
+api.MapGet("/related", async (string artist, bool? refresh,
+        RelatedArtistInteractor interactor, ArtistMetaEnricher meta) =>
     {
-        return interactor.GetRelated(new ArtistKey(artist), forceRefresh: refresh ?? false);
+        var relations = await interactor.GetRelated(new ArtistKey(artist), forceRefresh: refresh ?? false);
+        // Resolve images (and future cross-source meta) for every recommended artist, not just those
+        // a source that carries images happened to recommend — so ListenBrainz-only picks aren't blank.
+        return Results.Ok(await meta.EnrichImages(relations));
     })
     .WithName("GetRelated");
 
@@ -344,7 +348,8 @@ api.MapGet("/discovery", async (HttpContext http, DiscoveryEngine engine, string
 // interleaved + shuffled by `seed` so the order is stable across pages. This is what the Discover
 // page uses; the per-kind endpoint above remains for any single-category view.
 api.MapGet("/discovery/mixed", async (
-        HttpContext http, DiscoveryEngine engine, string? kinds, int? page, int? pageSize, int? seed) =>
+        HttpContext http, DiscoveryEngine engine, ArtistMetaEnricher meta,
+        string? kinds, int? page, int? pageSize, int? seed) =>
     {
         var requested = (kinds ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -361,9 +366,12 @@ api.MapGet("/discovery/mixed", async (
                 FeedKind.RecommendedLibraryArtist, FeedKind.SeedLibraryArtist,
             };
         }
-        return Results.Ok(await engine.GetMixedFeed(
+        var feed = await engine.GetMixedFeed(
             http.User.GetSubject()!, requested,
-            Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100), seed ?? 0));
+            Math.Max(page ?? 0, 0), Math.Clamp(pageSize ?? 20, 1, 100), seed ?? 0);
+        // Same cross-source meta pipeline as /related: fill images for the page's artist cards
+        // (bounded to the page size) regardless of which source recommended them.
+        return Results.Ok(feed with { Items = await meta.EnrichImages(feed.Items) });
     })
     .RequireAuthorization()
     .WithName("GetMixedDiscoveryFeed");
