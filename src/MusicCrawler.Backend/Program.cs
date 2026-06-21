@@ -376,13 +376,14 @@ api.MapGet("/discovery/mixed", async (
     .RequireAuthorization()
     .WithName("GetMixedDiscoveryFeed");
 
-// Rebuild the pending recommendations from the current liked artists (keeps ratings).
-api.MapPost("/discovery/refresh", async (HttpContext http, DiscoveryEngine engine) =>
+// Dev-panel "secret" op: rebuild the pending recommendations for every user from their liked
+// artists (keeps ratings). Gated to dev accounts since it sweeps the whole user base.
+api.MapPost("/discovery/refresh", async (DiscoveryEngine engine) =>
     {
-        await engine.Rebuild(http.User.GetSubject()!);
-        return Results.NoContent();
+        var rebuilt = await engine.RebuildAll();
+        return Results.Ok(new { rebuilt });
     })
-    .RequireAuthorization()
+    .RequireAuthorization("DevUser")
     .WithName("RefreshDiscoveryQueue");
 
 // Rate an artist or (when album is supplied) a missing album. verdict = "up" (Liked) | "down" (Disliked).

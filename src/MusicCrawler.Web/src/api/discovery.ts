@@ -68,12 +68,14 @@ export async function getArtistDiscography(artist: string): Promise<ArtistAlbumI
   return (await res.json()) as ArtistAlbumItem[]
 }
 
-// Rebuild the pending recommendations from the current liked artists (keeps ratings).
-export async function refreshQueue(): Promise<void> {
+// Dev-only: rebuild the pending recommendations for every user from their liked artists (keeps
+// ratings). Returns the number of users rebuilt.
+export async function refreshQueue(): Promise<{ rebuilt: number }> {
   const res = await fetch('/api/discovery/refresh', { method: 'POST' })
   if (!res.ok) {
     throw new Error(`Failed to rebuild recommendations: ${res.status} ${res.statusText}`)
   }
+  return (await res.json()) as { rebuilt: number }
 }
 
 // Thumb an artist or — when album is supplied — a missing album.

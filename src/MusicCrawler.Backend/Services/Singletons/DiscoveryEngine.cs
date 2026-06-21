@@ -363,6 +363,29 @@ public class DiscoveryEngine : IQueueReplenisher
     }
 
     /// <summary>
+    /// Rebuilds every user's queue — the dev-panel "secret" operation. Per-user failures are logged and
+    /// skipped so one bad user doesn't abort the sweep. Returns the number of users rebuilt.
+    /// </summary>
+    public async Task<int> RebuildAll()
+    {
+        var userIds = await _queue.GetAllUserIds();
+        var rebuilt = 0;
+        foreach (var userId in userIds)
+        {
+            try
+            {
+                await Rebuild(userId);
+                rebuilt++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rebuild failed for {User}; skipping to the next user", userId);
+            }
+        }
+        return rebuilt;
+    }
+
+    /// <summary>
     /// A gentle, additive top-up of the queue for the periodic replenisher — re-expands from the
     /// liked artists <em>without</em> clearing pending (so it never reshuffles a user mid-swipe). The
     /// upsert is idempotent, and the expansion naturally refetches similarity edges that have gone

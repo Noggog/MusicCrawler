@@ -57,7 +57,7 @@ export default function Dev() {
   )
 }
 
-// ---- Emergency rebuild of the signed-in user's recommendation queue ----
+// ---- Emergency rebuild of every user's recommendation queue ----
 
 function QueueRebuild() {
   const queryClient = useQueryClient()
@@ -75,9 +75,9 @@ function QueueRebuild() {
     <div className="dev-tool">
       <h2>Rebuild recommendations</h2>
       <p>
-        Discards <strong>your</strong> pending recommendation queue and recomputes it from scratch by
-        re-expanding one hop out from your currently-liked artists. This is per-user — it only touches
-        the signed-in account's queue — and it <strong>keeps your ratings</strong> (likes/dislikes/
+        Discards the pending recommendation queue for <strong>every user</strong> and recomputes each
+        from scratch by re-expanding one hop out from that user's currently-liked artists. This is a
+        site-wide sweep — it touches all accounts — and it <strong>keeps ratings</strong> (likes/dislikes/
         snoozes are untouched); it just rebuilds the <em>undecided</em> candidates the swipe feed draws
         from. It reads the already-persisted similarity graph (lazily fetching a source on a cache miss),
         so a cold graph makes it slower — warm it first with <em>Rebuild entire graph</em> for speed.
@@ -86,19 +86,21 @@ function QueueRebuild() {
         <em>
           You normally shouldn't need this. Liking an artist already expands its recommendations
           immediately, and disliking / un-liking now prunes the candidates that artist had seeded — so
-          the queue tracks your taste on its own. This is the emergency "nuke and recompute" button for
-          when it drifts anyway.
+          each queue tracks taste on its own. This is the emergency "nuke and recompute" button for
+          when they drift anyway.
         </em>
       </p>
 
       <div className="controls">
         <button onClick={() => rebuild.mutate()} disabled={rebuild.isPending}>
-          {rebuild.isPending ? 'Rebuilding…' : 'Rebuild my recommendations'}
+          {rebuild.isPending ? 'Rebuilding…' : 'Rebuild all recommendations'}
         </button>
       </div>
 
       {rebuild.isError && <p className="error">Rebuild failed: {(rebuild.error as Error).message}</p>}
-      {rebuild.isSuccess && <p className="dev-status">✓ Rebuilt your recommendation queue.</p>}
+      {rebuild.isSuccess && (
+        <p className="dev-status">✓ Rebuilt {rebuild.data?.rebuilt ?? 'all'} recommendation queues.</p>
+      )}
     </div>
   )
 }
