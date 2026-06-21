@@ -786,16 +786,36 @@ export default function Artists() {
   // genres, fans and the rate/correct actions.
   const libItem = selected ? (artists ?? []).find((a) => a.artistKey.artistName === selected.name) : undefined
 
-  // Open the first artist by default once the list is populated, so the readout shows something
-  // instead of the empty placeholder. Desktop only: on mobile the readout is a drawer over the list,
-  // so leave it closed until a row is tapped. Only fires when nothing is selected, so it never
-  // clobbers a live selection (including a related artist drilled into from the Related tab).
+  // On first visit, drop the user onto a random page and open a random artist from it, so the page
+  // is a fresh jumping-off point each time rather than always the alphabetical top. Runs once (gated
+  // by `randomized` so it never re-randomizes when the user closes the readout or pages around). Using
+  // state, not a ref, is deliberate: it defers the reopen-on-empty effect below to the *next* commit,
+  // so it can't clobber the random selection in the same render. The random selection is desktop-only
+  // — on mobile the readout is a drawer, so we leave it closed (just the random page) until a row is tapped.
+  const [randomized, setRandomized] = useState(false)
+  useEffect(() => {
+    if (randomized) return
+    const list = artists ?? []
+    if (list.length === 0) return
+    setRandomized(true)
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+    const randPage = Math.floor(Math.random() * totalPages)
+    setPage(randPage)
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 961px)').matches) {
+      const pageItems = list.slice(randPage * PAGE_SIZE, randPage * PAGE_SIZE + PAGE_SIZE)
+      const pick = pageItems[Math.floor(Math.random() * pageItems.length)]
+      if (pick) setSelected({ name: pick.artistKey.artistName, imageUrl: pick.artistImageUrl })
+    }
+  }, [artists, randomized])
+
+  // Once randomized, keep the readout populated: if it ends up empty (e.g. the user closes it), reopen
+  // the current page's first artist so the pane never falls back to the bare placeholder. Desktop only.
   const firstItem = paged[0]
   useEffect(() => {
-    if (!firstItem || selected) return
+    if (!firstItem || selected || !randomized) return
     if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 961px)').matches) return
     setSelected({ name: firstItem.artistKey.artistName, imageUrl: firstItem.artistImageUrl })
-  }, [firstItem, selected])
+  }, [firstItem, selected, randomized])
 
   return (
     <section>
