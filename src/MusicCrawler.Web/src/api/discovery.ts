@@ -91,6 +91,17 @@ export async function rate(item: FeedItem | RatedItem, verdict: Verdict): Promis
   }
 }
 
+// Ad-hoc seed: add an artist that's not in the library and that nothing recommends yet, by pinning a
+// chosen source candidate (by id) and liking it — it then grows the frontier and joins the buy list.
+// Used by the Artists "Search all of Deezer" results, where each hit carries its source id.
+export async function seedArtist(source: string, id: string, artist: string): Promise<void> {
+  const params = new URLSearchParams({ source, id, artist })
+  const res = await fetch(`/api/discovery/seed?${params}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to add ${artist}: ${res.status} ${res.statusText}`)
+  }
+}
+
 // Snooze an artist or — when album is supplied — a missing album (hidden for the chosen duration;
 // resurfaces when the window lapses).
 export async function snooze(item: FeedItem | RatedItem, duration: SnoozeDuration): Promise<void> {

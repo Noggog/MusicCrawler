@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists } from '../api/artists'
 import { clearSource, getArtistSources, pinSource, searchSource, unlinkSource } from '../api/sources'
 import { getArtistLibraries } from '../api/library'
-import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
+import { clearRating, getArtistDiscography, getRatings, rate, seedArtist, type Verdict } from '../api/discovery'
 import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
 import { rateFeedback } from '../effects/effectsBus'
@@ -788,6 +788,110 @@ function DetailPane({
   )
 }
 
+// Ad-hoc discovery of artists that aren't in the library and that nothing recommends yet (so they
+// never reach the feed). Always shown below the library matches. Searches Deezer live, drops hits in the
+// library (those show in the list above), and lets each be added with one thumb — pinning that exact
+// Deezer artist and liking it, which seeds it into discovery + the buy list. Clicking a row opens it
+// in the readout first, to sample before adding.
+function UncatalogedResults({
+  query,
+  libraryNames,
+  verdictByArtist,
+  selectedName,
+  onSelect,
+}: {
+  query: string
+  libraryNames: Set<string>
+  verdictByArtist: Map<string, DiscoveryStatus>
+  selectedName: string | null
+  onSelect: (sel: SelectedArtist) => void
+}) {
+  const queryClient = useQueryClient()
+  const trimmed = query.trim()
+
+  const search = useQuery({
+    queryKey: ['deezer-search', trimmed],
+    queryFn: () => searchSource('deezer', trimmed),
+    enabled: trimmed.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const seed = useMutation({
+    mutationFn: (c: SourceCandidate) => seedArtist('deezer', c.id, c.name ?? ''),
+    onMutate: () => rateFeedback('up'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    },
+  })
+
+  // Only artists not already in the library — same-name hits are already listed above.
+  const results = (search.data ?? []).filter(
+    (c) => c.name && !libraryNames.has(normalize(c.name)),
+  )
+
+  if (trimmed.length === 0) return null
+
+  return (
+    <div className="uncataloged-results">
+      <div className="uncataloged-head">
+        Not in your library
+        {search.isFetching && <span className="artist-search-count">searching Deezer…</span>}
+      </div>
+
+      {search.isError && <p className="disc-sub-note"><em>Deezer search failed.</em></p>}
+
+      {!search.isFetching && results.length === 0 && (
+        <p className="disc-sub-note"><em>No new artists on Deezer for “{trimmed}”.</em></p>
+      )}
+
+      <div className="disc-list">
+        {results.map((c) => {
+          const name = c.name as string
+          const added = verdictByArtist.get(name) === 'Liked'
+          return (
+            <div
+              className={selectedName === name ? 'disc-row selected' : 'disc-row'}
+              key={c.id}
+              onClick={() => onSelect({ name, imageUrl: c.imageUrl })}
+            >
+              <ArtistAvatar name={name} image={c.imageUrl} size={52} />
+              <div className="disc-row-main">
+                <div className="disc-name">{name}</div>
+                {c.detail && <div className="genre-tags"><span className="genre-tag">{c.detail}</span></div>}
+              </div>
+              <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
+                {c.link && (
+                  <a className="deezer-link" href={c.link} target="_blank" rel="noopener noreferrer">
+                    Deezer ↗
+                  </a>
+                )}
+                {added ? (
+                  <span className="album-owned" title="Added to your discovery">
+                    <IconCheck size={15} /> Added
+                  </span>
+                ) : (
+                  <button
+                    className="disc-btn up"
+                    title="Add — like this artist and seed it into discovery"
+                    disabled={seed.isPending}
+                    onClick={() => seed.mutate(c)}
+                  >
+                    <IconApprove />
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {seed.isError && <p className="error">{(seed.error as Error).message}</p>}
+    </div>
+  )
+}
+
 export default function Artists() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
@@ -917,7 +1021,6 @@ export default function Artists() {
               placeholder={`Search ${artists.length} artists…`}
               onChange={(e) => onSearch(e.target.value)}
             />
-            {query && <span className="artist-search-count">{filtered.length} match</span>}
           </div>
         )}
       </div>
@@ -955,8 +1058,11 @@ export default function Artists() {
                   )
                 })}
 
-                {filtered.length === 0 && (
+                {filtered.length === 0 && !user && (
                   <p className="disc-sub-note"><em>No artists match “{query}”.</em></p>
+                )}
+                {filtered.length === 0 && user && query && (
+                  <p className="disc-sub-note"><em>No library artists match — see other results below.</em></p>
                 )}
               </div>
 
@@ -970,6 +1076,16 @@ export default function Artists() {
                     next ›
                   </button>
                 </div>
+              )}
+
+              {user && (
+                <UncatalogedResults
+                  query={query}
+                  libraryNames={new Set((artists ?? []).map((a) => normalize(a.artistKey.artistName)))}
+                  verdictByArtist={verdictByArtist}
+                  selectedName={selected?.name ?? null}
+                  onSelect={setSelected}
+                />
               )}
             </div>
 

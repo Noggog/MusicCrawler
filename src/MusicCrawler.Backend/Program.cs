@@ -454,6 +454,40 @@ api.MapPost("/discovery/rate", async (
     .RequireAuthorization()
     .WithName("RateCandidate");
 
+// Ad-hoc seed: add an artist that no one in the library recommends yet (so it never surfaces in the
+// feed) straight from a source search. Pins the user's *chosen* candidate by id (honouring their
+// disambiguation rather than re-guessing the name), which captures the identity into the catalog, then
+// likes it — growing the frontier from it and queuing it to buy, exactly as thumbing a recommendation
+// does. The like is what seeds it into discovery; the pin just makes the right Deezer artist drive that
+// expansion. Mirrors the Plex tagging of /discovery/rate (best-effort; the artist may not be in Plex).
+api.MapPost("/discovery/seed", async (
+        string source, string artist, string id,
+        HttpContext http, IEnumerable<ISourceIdentityCorrector> correctors,
+        DiscoveryEngine engine, IArtistTagger tagger) =>
+    {
+        var corrector = correctors.FirstOrDefault(c => c.Source == source);
+        if (corrector is null) return Results.NotFound();
+
+        var identity = await corrector.Pin(new ArtistKey(artist), id);
+        if (identity is null) return Results.NotFound();
+
+        var userId = http.User.GetSubject()!;
+        await engine.RateArtist(userId, artist, DiscoveryStatus.Liked);
+
+        var username = http.User.FindFirst("preferred_username")?.Value;
+        var tag = ArtistTag.For(username, DiscoveryStatus.Liked);
+        if (tag != null)
+        {
+            var dislikeTag = ArtistTag.For(username, DiscoveryStatus.Disliked);
+            var remove = dislikeTag != null ? new[] { dislikeTag } : Array.Empty<string>();
+            await tagger.SetTags(artist, tag, remove);
+        }
+
+        return Results.Ok(new { artist });
+    })
+    .RequireAuthorization()
+    .WithName("SeedArtist");
+
 // A liked non-owned artist's acquirable albums (their Deezer discography minus anything already
 // owned), surfaced inline under the just-rated card so a fresh discovery can be acted on. Fetched
 // on demand (one Deezer call) only when an artist is liked — not precomputed per feed card.

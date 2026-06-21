@@ -1950,7 +1950,7 @@ input[type='checkbox'] {
   align-items: center;
   gap: 0.6rem;
 }
-.artist-search input {
+.artist-search input[type='text'] {
   width: min(380px, 80vw);
   padding: 0.5rem 0.8rem;
   background: var(--panel-solid);
@@ -1959,7 +1959,7 @@ input[type='checkbox'] {
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
 }
-.artist-search input:focus {
+.artist-search input[type='text']:focus {
   outline: none;
   border-color: var(--salmon);
   box-shadow: var(--glow-salmon);
@@ -1967,6 +1967,23 @@ input[type='checkbox'] {
 .artist-search-count {
   font-size: 0.8rem;
   color: var(--text-dim);
+}
+/* Live Deezer results below the library: artists not in the library, addable from here. */
+.uncataloged-results {
+  margin-top: 1.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--border);
+}
+.uncataloged-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Detail-pane tab strip (Albums / Related artists) below the artist readout. */
