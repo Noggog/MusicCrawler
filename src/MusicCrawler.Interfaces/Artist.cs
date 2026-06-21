@@ -17,12 +17,45 @@ public record ArtistMetadata(
 /// </summary>
 public record DeezerIdentity(long Id, string? Name, int? Fans, string? Link, string? ImageUrl);
 
+/// <summary>
+/// The MusicBrainz artist a library name resolves to: its MBID (the stable id the ListenBrainz
+/// similarity endpoint is keyed by), MusicBrainz's own spelling, and the disambiguation comment
+/// that tells two same-named acts apart. The counterpart to <see cref="DeezerIdentity"/>.
+/// </summary>
+public record MusicBrainzIdentity(string Mbid, string? Name, string? Disambiguation = null);
+
 public record CatalogArtist(
     ArtistKey ArtistKey,
     string? ArtistImageUrl,
     DateTimeOffset LastSeenAt,
     DeezerIdentity? Deezer = null,
     bool DeezerOverride = false,
-    IReadOnlyList<string>? Genres = null);
+    IReadOnlyList<string>? Genres = null,
+    MusicBrainzIdentity? MusicBrainz = null,
+    bool MusicBrainzOverride = false);
 
 public record ArtistPackage(ArtistMetadata Metadata, Album[] Albums);
+
+// ---- Cross-source identity ("Sources" tab on the Artists page) ----
+
+/// <summary>
+/// One artist's resolved identity on a single external source, for the Artists-page "Sources" tab:
+/// the id, a link out to that source's artist page, and whether it's a sticky user override. A
+/// source with no resolved id yet still appears (Id null) so it can be corrected. Non-correctable
+/// sources (e.g. ListenBrainz, whose identity is just the MusicBrainz MBID) have no pin/clear.
+/// </summary>
+public record SourceIdentity(
+    string Source,
+    string? Id,
+    string? Name,
+    string? Detail,
+    string? Link,
+    string? ImageUrl,
+    bool IsOverride,
+    bool Correctable);
+
+/// <summary>One candidate in a source's "Correct association" search picker.</summary>
+public record SourceCandidate(string Id, string? Name, string? Detail, string? Link, string? ImageUrl);
+
+/// <summary>The cross-source identity view of one artist, one entry per surfaced source.</summary>
+public record ArtistSources(ArtistKey Artist, IReadOnlyList<SourceIdentity> Sources);

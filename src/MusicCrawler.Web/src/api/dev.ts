@@ -40,3 +40,34 @@ export async function rebuildPlexTags(): Promise<RebuildResult> {
   }
   return (await res.json()) as RebuildResult
 }
+
+// Progress of a whole-library similarity warm (mirrors SimilarityWarmStatus on the backend).
+export interface SimilarityWarmStatus {
+  running: boolean
+  processed: number
+  total: number
+  errors: number
+  currentArtist: string | null
+  forceRefresh: boolean
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+// Kick off (or, if already running, just re-read) a whole-catalog warm of every similarity source.
+// force=true re-fetches edges even when they're still fresh; default gap-fills only what's missing.
+export async function startSimilarityWarm(force: boolean): Promise<SimilarityWarmStatus> {
+  const res = await fetch(`/api/dev/similarity/warm?force=${force}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to start similarity warm: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as SimilarityWarmStatus
+}
+
+// Poll the in-flight (or last) warm's progress.
+export async function getSimilarityWarmStatus(): Promise<SimilarityWarmStatus> {
+  const res = await fetch('/api/dev/similarity/warm')
+  if (!res.ok) {
+    throw new Error(`Failed to get similarity warm status: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as SimilarityWarmStatus
+}

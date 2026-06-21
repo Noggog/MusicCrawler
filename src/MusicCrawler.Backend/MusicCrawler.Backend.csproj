@@ -29,6 +29,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\MusicCrawler.Deezer\MusicCrawler.Deezer.csproj" />
+        <ProjectReference Include="..\MusicCrawler.ListenBrainz\MusicCrawler.ListenBrainz.csproj" />
         <ProjectReference Include="..\MusicCrawler.MongoDB\MusicCrawler.MongoDB.csproj" />
         <ProjectReference Include="..\MusicCrawler.Plex\MusicCrawler.Plex.csproj" />
         <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />

@@ -9,10 +9,14 @@ namespace MusicCrawler.Backend.Services.Singletons;
 /// Folds in the image-backfill bonus: Deezer returns artist images, so the same pass fills the
 /// ArtistImageUrl the Plex sync leaves null (for any artist already in the catalog).
 /// </summary>
-public class SimilarityIngestionService
+public class SimilarityIngestionService : ISimilaritySource
 {
     /// <summary>Source tag stored on every edge this service writes.</summary>
     public const string SourceName = "deezer";
+
+    // Surface the const through the ISimilaritySource contract so the reader can iterate this source
+    // alongside the others without caring which concrete type it is.
+    string ISimilaritySource.SourceName => SourceName;
 
     private readonly IDeezerApi _deezerApi;
     private readonly DeezerArtistResolver _resolver;

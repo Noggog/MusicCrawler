@@ -19,6 +19,10 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
     private const string FieldDeezerFans = "deezerFans";
     private const string FieldDeezerLink = "deezerLink";
     private const string FieldDeezerOverride = "deezerOverride";
+    private const string FieldMusicBrainzMbid = "musicBrainzMbid";
+    private const string FieldMusicBrainzName = "musicBrainzName";
+    private const string FieldMusicBrainzDisambiguation = "musicBrainzDisambiguation";
+    private const string FieldMusicBrainzOverride = "musicBrainzOverride";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -301,6 +305,70 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
         return new DeezerIdentity(id.ToInt64(), name, fans, link, image);
     }
 
+    public async Task<(MusicBrainzIdentity Identity, bool IsOverride)?> GetMusicBrainz(ArtistKey artist)
+    {
+        var doc = await (await Collection.FindAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName))).FirstOrDefaultAsync();
+        if (doc == null) return null;
+
+        var identity = ToMusicBrainzIdentity(doc);
+        if (identity == null) return null;
+
+        var isOverride = doc.TryGetValue(FieldMusicBrainzOverride, out var o) && o.IsBoolean && o.AsBoolean;
+        return (identity, isOverride);
+    }
+
+    public async Task SetMusicBrainzIdentity(ArtistKey artist, MusicBrainzIdentity identity, bool isOverride)
+    {
+        BsonValue name = identity.Name != null ? new BsonString(identity.Name) : BsonNull.Value;
+        BsonValue disambiguation = identity.Disambiguation != null
+            ? new BsonString(identity.Disambiguation)
+            : BsonNull.Value;
+
+        var update = Builders<BsonDocument>.Update
+            .Set(FieldMusicBrainzMbid, new BsonString(identity.Mbid))
+            .Set(FieldMusicBrainzName, name)
+            .Set(FieldMusicBrainzDisambiguation, disambiguation)
+            .Set(FieldMusicBrainzOverride, isOverride);
+
+        var filter = Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName);
+        if (!isOverride)
+        {
+            // Opportunistic writes must never overturn a user's pin.
+            filter = Builders<BsonDocument>.Filter.And(
+                filter,
+                Builders<BsonDocument>.Filter.Ne(FieldMusicBrainzOverride, true));
+        }
+
+        // Never create entries for artists outside the catalog.
+        await Collection.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = false });
+    }
+
+    public async Task ClearMusicBrainzOverride(ArtistKey artist)
+    {
+        var update = Builders<BsonDocument>.Update
+            .Unset(FieldMusicBrainzMbid)
+            .Unset(FieldMusicBrainzName)
+            .Unset(FieldMusicBrainzDisambiguation)
+            .Unset(FieldMusicBrainzOverride);
+
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", artist.ArtistName), update);
+    }
+
+    private static MusicBrainzIdentity? ToMusicBrainzIdentity(BsonDocument doc)
+    {
+        if (!doc.TryGetValue(FieldMusicBrainzMbid, out var mbid) || mbid.IsBsonNull
+            || mbid is not BsonString { Value.Length: > 0 }) return null;
+
+        var name = doc.TryGetValue(FieldMusicBrainzName, out var n) && !n.IsBsonNull ? n.AsString : null;
+        var disambiguation = doc.TryGetValue(FieldMusicBrainzDisambiguation, out var d) && !d.IsBsonNull
+            ? d.AsString
+            : null;
+
+        return new MusicBrainzIdentity(mbid.AsString, name, disambiguation);
+    }
+
     private static CatalogArtist ToCatalogArtist(BsonDocument doc)
     {
         var name = doc.TryGetValue(FieldName, out var n) && !n.IsBsonNull
@@ -318,10 +386,15 @@ public class ArtistCatalogRepo : IArtistCatalogRepo
         var deezer = ToDeezerIdentity(doc);
         var deezerOverride = doc.TryGetValue(FieldDeezerOverride, out var o) && o.IsBoolean && o.AsBoolean;
 
+        var musicBrainz = ToMusicBrainzIdentity(doc);
+        var musicBrainzOverride = doc.TryGetValue(FieldMusicBrainzOverride, out var mo) && mo.IsBoolean && mo.AsBoolean;
+
         var genres = doc.TryGetValue(FieldGenres, out var g) && g.IsBsonArray
             ? g.AsBsonArray.Where(x => !x.IsBsonNull).Select(x => x.AsString).ToArray()
             : Array.Empty<string>();
 
-        return new CatalogArtist(new ArtistKey(name), imageUrl, lastSeenAt, deezer, deezerOverride, genres);
+        return new CatalogArtist(
+            new ArtistKey(name), imageUrl, lastSeenAt, deezer, deezerOverride, genres,
+            musicBrainz, musicBrainzOverride);
     }
 }

@@ -1,22 +1,30 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { clearDeezerId, getArtists, refreshCatalog, resolveAllDeezer, setDeezerId } from '../api/artists'
-import { searchDeezerArtists } from '../api/deezer'
+import { getArtists, refreshCatalog, resolveAllDeezer } from '../api/artists'
+import { clearSource, getArtistSources, pinSource, searchSource } from '../api/sources'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
 import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
 import { rateFeedback } from '../effects/effectsBus'
-import type { ArtistAlbumItem, ArtistListItem, DeezerCandidate, DiscoveryStatus, FeedItem } from '../types'
+import type { ArtistAlbumItem, ArtistListItem, DiscoveryStatus, FeedItem, SourceCandidate, SourceIdentity } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
-import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
+import { IconApprove, IconCheck, IconClear, IconReject } from '../components/icons'
 
 // The detail pane is driven by a lightweight selection: just enough to render the readout and to key
 // the Albums / Related tab queries. A library row supplies the full ArtistListItem (looked up by name
 // for the Deezer link, genres, fans, correction); a related-artist card the user drills into may not
 // be in the library, so all we can carry is its name + photo — the tabs still work off the name.
 type SelectedArtist = { name: string; imageUrl: string | null }
-type DetailTab = 'albums' | 'related'
+type DetailTab = 'albums' | 'related' | 'sources'
+
+// Human labels for the source keys the backend emits.
+const SOURCE_LABELS: Record<string, string> = {
+  deezer: 'Deezer',
+  musicbrainz: 'MusicBrainz',
+  listenbrainz: 'ListenBrainz',
+}
+const sourceLabel = (s: string) => SOURCE_LABELS[s] ?? s
 
 const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : 'Disliked')
 
@@ -39,35 +47,107 @@ function formatFans(n: number | null): string {
   return String(n)
 }
 
-// Inline picker to pin the correct Deezer artist for a library artist. Searches Deezer (prefilled
-// with the artist's name) and lets the user pick the right candidate. We surface each candidate's
-// photo, fan count and a Deezer ↗ link rather than an audio preview, because the preview player
-// resolves by name — the very thing that's wrong here — so the link is the reliable way to verify.
-function CorrectPicker({
+// The "Sources" tab: every external source's resolved identity for the selected library artist —
+// its id, a link out to the source's page, the override flag — plus a per-source "Correct" button
+// for correctable sources (Deezer, MusicBrainz). ListenBrainz appears as a read-only link (its
+// identity is just the MusicBrainz MBID). Replaces the old single Deezer "Correct" button.
+function SourcesTab({ artist }: { artist: string }) {
+  const queryClient = useQueryClient()
+  const [correcting, setCorrecting] = useState<SourceIdentity | null>(null)
+
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['artist-sources', artist],
+    queryFn: () => getArtistSources(artist),
+  })
+
+  // A pin/clear changes the resolved ids and re-derives similarity edges — refresh this tab plus the
+  // artist list (Deezer columns / suspect badge) and the downstream feeds.
+  const afterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['artist-sources', artist] })
+    queryClient.invalidateQueries({ queryKey: ['artists'] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['related'] })
+    setCorrecting(null)
+  }
+
+  if (isPending) return <div className="disc-sub-albums"><em className="disc-sub-note">Loading sources…</em></div>
+  if (isError) return <div className="disc-sub-albums"><em className="disc-sub-note">Failed to load sources.</em></div>
+
+  return (
+    <div className="source-list">
+      {data.sources.map((s) => (
+        <div className="source-row" key={s.source}>
+          <span className="source-badge">{sourceLabel(s.source)}</span>
+          <div className="source-meta">
+            {s.id ? (
+              <>
+                <span className="source-name">{s.name ?? '(unknown)'}</span>
+                <span className="source-sub">
+                  {s.detail ? `${s.detail} · ` : ''}
+                  {s.id}
+                  {s.isOverride ? ' · pinned' : ''}
+                </span>
+              </>
+            ) : (
+              <span className="source-sub"><em>Not resolved yet</em></span>
+            )}
+          </div>
+          {s.link && (
+            <a className="deezer-link" href={s.link} target="_blank" rel="noopener noreferrer">
+              {sourceLabel(s.source)} ↗
+            </a>
+          )}
+          {s.correctable && (
+            <button className="auth-btn" onClick={() => setCorrecting(s)}>
+              Correct
+            </button>
+          )}
+        </div>
+      ))}
+
+      {correcting && (
+        <SourcePicker
+          artist={artist}
+          source={correcting}
+          onClose={() => setCorrecting(null)}
+          onApplied={afterChange}
+        />
+      )}
+    </div>
+  )
+}
+
+// Inline picker to pin the correct artist on one source. Searches that source (prefilled with the
+// library name) and lets the user pick the right candidate. We surface each candidate's link rather
+// than an audio preview, because verifying by name is exactly what's unreliable here.
+function SourcePicker({
   artist,
+  source,
   onClose,
   onApplied,
 }: {
-  artist: ArtistListItem
+  artist: string
+  source: SourceIdentity
   onClose: () => void
   onApplied: () => void
 }) {
-  const name = artist.artistKey.artistName
-  const [query, setQuery] = useState(name)
+  const key = source.source
+  const label = sourceLabel(key)
+  const [query, setQuery] = useState(artist)
 
   const search = useQuery({
-    queryKey: ['deezer-search', query],
-    queryFn: () => searchDeezerArtists(query),
+    queryKey: ['source-search', key, query],
+    queryFn: () => searchSource(key, query),
     enabled: query.trim().length > 0,
   })
 
   const apply = useMutation({
-    mutationFn: (id: number) => setDeezerId(name, id),
+    mutationFn: (id: string) => pinSource(key, artist, id),
     onSuccess: onApplied,
   })
 
   const reset = useMutation({
-    mutationFn: () => clearDeezerId(name),
+    mutationFn: () => clearSource(key, artist),
     onSuccess: onApplied,
   })
 
@@ -75,11 +155,11 @@ function CorrectPicker({
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
         <div className="picker-head">
-          <h2>Correct “{name}”</h2>
+          <h2>Correct {label} for “{artist}”</h2>
           <button className="auth-btn" onClick={onClose}>Close</button>
         </div>
         <p>
-          <em>Pick the right Deezer artist — use the ↗ link to confirm before applying.</em>
+          <em>Pick the right {label} artist — use the ↗ link to confirm before applying.</em>
         </p>
 
         <input
@@ -87,13 +167,13 @@ function CorrectPicker({
           type="text"
           value={query}
           autoFocus
-          placeholder="Search Deezer…"
+          placeholder={`Search ${label}…`}
           onChange={(e) => setQuery(e.target.value)}
         />
 
-        {artist.deezerOverride && (
+        {source.isOverride && (
           <p className="picker-pinned">
-            Currently pinned to Deezer #{artist.deezerId}.{' '}
+            Currently pinned to {label} {source.id}.{' '}
             <button className="link-btn" onClick={() => reset.mutate()} disabled={reset.isPending}>
               Reset to automatic
             </button>
@@ -104,8 +184,8 @@ function CorrectPicker({
         {search.isError && <p className="error">Search failed.</p>}
 
         <ul className="picker-results">
-          {(search.data ?? []).map((c: DeezerCandidate) => {
-            const current = c.id === artist.deezerId
+          {(search.data ?? []).map((c: SourceCandidate) => {
+            const current = c.id === source.id
             return (
               <li key={c.id} className={current ? 'picker-result current' : 'picker-result'}>
                 {c.imageUrl ? (
@@ -116,18 +196,16 @@ function CorrectPicker({
                 <div className="picker-meta">
                   <span className="picker-name">{c.name ?? '(unknown)'}</span>
                   <span className="picker-sub">
-                    {formatFans(c.fans)} fans · #{c.id}
+                    {c.detail ? `${c.detail} · ` : ''}
+                    {c.id}
                     {current && ' · current'}
                   </span>
                 </div>
-                <a
-                  className="deezer-link"
-                  href={c.link ?? `https://www.deezer.com/artist/${c.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Deezer ↗
-                </a>
+                {c.link && (
+                  <a className="deezer-link" href={c.link} target="_blank" rel="noopener noreferrer">
+                    {label} ↗
+                  </a>
+                )}
                 <button
                   className="auth-btn"
                   disabled={apply.isPending || current}
@@ -139,7 +217,7 @@ function CorrectPicker({
             )
           })}
           {search.data && search.data.length === 0 && query.trim() && (
-            <li><em>No Deezer matches.</em></li>
+            <li><em>No {label} matches.</em></li>
           )}
         </ul>
 
@@ -457,7 +535,6 @@ function DetailPane({
   ratePending,
   onTab,
   onRate,
-  onCorrect,
   onExplore,
   onClose,
 }: {
@@ -469,7 +546,6 @@ function DetailPane({
   ratePending: boolean
   onTab: (tab: DetailTab) => void
   onRate: (name: string, verdict: Verdict, current?: DiscoveryStatus) => void
-  onCorrect: (artist: ArtistListItem) => void
   onExplore: (sel: SelectedArtist) => void
   onClose: () => void
 }) {
@@ -534,8 +610,8 @@ function DetailPane({
           )}
 
           {/* Thumbs work for any selected artist: an owned one records a library rating, a related
-              stranger drilled into from the Related tab gets liked straight into the buy list. The
-              Correct (Deezer re-pin) action only makes sense for a library artist. */}
+              stranger drilled into from the Related tab gets liked straight into the buy list.
+              Source corrections live in the Sources tab (library artists only). */}
           {user && (
             <div className="detail-actions">
               <button
@@ -554,15 +630,6 @@ function DetailPane({
               >
                 <IconReject />
               </button>
-              {libItem && (
-                <button
-                  className="auth-btn detail-correct"
-                  title="Correct the Deezer association"
-                  onClick={() => onCorrect(libItem)}
-                >
-                  <IconWrench size={18} /> Correct
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -591,9 +658,31 @@ function DetailPane({
         >
           Related artists
         </button>
+        {/* Sources (id/link/correct per source) only apply to library artists — a related-artist
+            stranger drilled in from the Related tab has no catalog row to pin. */}
+        {libItem && (
+          <button
+            role="tab"
+            aria-selected={tab === 'sources'}
+            className={tab === 'sources' ? 'artist-tab active' : 'artist-tab'}
+            onClick={() => onTab('sources')}
+          >
+            Sources
+          </button>
+        )}
       </div>
 
-      {tab === 'albums' ? (
+      {tab === 'sources' ? (
+        libItem ? (
+          user ? (
+            <SourcesTab artist={name} />
+          ) : (
+            <div className="disc-sub-albums"><em className="disc-sub-note">Log in to view this artist’s sources.</em></div>
+          )
+        ) : (
+          <div className="disc-sub-albums"><em className="disc-sub-note">Sources apply to library artists.</em></div>
+        )
+      ) : tab === 'albums' ? (
         user ? (
           // The whole pane is keyed by selected artist, so the discography refetches/remounts cleanly
           // on selection change — no inner key needed.
@@ -613,7 +702,6 @@ export default function Artists() {
   const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
-  const [correcting, setCorrecting] = useState<ArtistListItem | null>(null)
   // The artist open in the right-hand readout (desktop) / drawer (mobile), and which of its tabs is
   // showing. Carried as a lightweight selection so a related-artist card the user drills into — which
   // may not be in the library — can still drive the readout.
@@ -683,14 +771,6 @@ export default function Artists() {
     mutationFn: resolveAllDeezer,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artists'] }),
   })
-
-  // After a correction is applied/reset, refresh the list (Deezer columns) and downstream feeds.
-  const afterCorrection = () => {
-    queryClient.invalidateQueries({ queryKey: ['artists'] })
-    queryClient.invalidateQueries({ queryKey: ['feed'] })
-    queryClient.invalidateQueries({ queryKey: ['related'] })
-    setCorrecting(null)
-  }
 
   const filtered = (artists ?? []).filter((a) =>
     normalize(a.artistKey.artistName).includes(normalize(query)),
@@ -835,16 +915,11 @@ export default function Artists() {
               onRate={(artistName, verdict, current) =>
                 rateArtist.mutate({ artist: artistName, verdict, current })
               }
-              onCorrect={setCorrecting}
               onExplore={setSelected}
               onClose={() => setSelected(null)}
             />
           </div>
         </>
-      )}
-
-      {correcting && (
-        <CorrectPicker artist={correcting} onClose={() => setCorrecting(null)} onApplied={afterCorrection} />
       )}
     </section>
   )

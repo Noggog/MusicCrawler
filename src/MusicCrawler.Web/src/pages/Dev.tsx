@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { getRelated } from '../api/related'
 import {
   clearPlexTags,
+  getSimilarityWarmStatus,
   reapplyPlexTags,
   rebuildPlexTags,
+  startSimilarityWarm,
   type RebuildResult,
 } from '../api/dev'
 
@@ -38,8 +40,91 @@ export default function Dev() {
     <section>
       <h1>Dev tools</h1>
       <PlexTagTools />
+      <SimilarityWarm />
       <SimilarityDebug />
     </section>
+  )
+}
+
+// ---- Whole-library similarity warm ----
+
+function SimilarityWarm() {
+  const queryClient = useQueryClient()
+  const [force, setForce] = useState(false)
+
+  const { data: status } = useQuery({
+    queryKey: ['dev', 'similarity-warm'],
+    queryFn: getSimilarityWarmStatus,
+    // Poll while a warm is in flight; idle otherwise.
+    refetchInterval: (query) => (query.state.data?.running ? 1500 : false),
+  })
+
+  const start = useMutation({
+    mutationFn: () => startSimilarityWarm(force),
+    onSuccess: (s) => queryClient.setQueryData(['dev', 'similarity-warm'], s),
+  })
+
+  const running = status?.running ?? false
+  const pct = status && status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0
+
+  return (
+    <div className="dev-tool">
+      <h2>Rebuild entire graph</h2>
+      <p>
+        Warms the similarity graph for <strong>every artist in the library</strong> across all
+        sources (Deezer + ListenBrainz), instead of waiting for the lazy path to fill it as you
+        browse/swipe. Runs in the background — bounded by MusicBrainz's ~1 request/second, so a large
+        library takes a while. <em>Force refresh</em> re-fetches even edges that are still fresh;
+        otherwise only missing/stale edges are filled.
+      </p>
+
+      <div className="controls">
+        <button
+          onClick={() => {
+            if (
+              window.confirm(
+                force
+                  ? 'Re-fetch similarity edges for EVERY library artist from all sources?'
+                  : 'Fill in missing/stale similarity edges for every library artist?',
+              )
+            ) {
+              start.mutate()
+            }
+          }}
+          disabled={running || start.isPending}
+        >
+          {running ? 'Warming…' : 'Rebuild entire graph'}
+        </button>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            disabled={running}
+          />
+          Force refresh
+        </label>
+      </div>
+
+      {start.isError && <p className="error">{(start.error as Error).message}</p>}
+
+      {status && (status.running || status.finishedAt) && (
+        <p className="dev-status">
+          {status.running ? (
+            <>
+              Processed {status.processed} / {status.total} ({pct}%)
+              {status.errors > 0 ? `, ${status.errors} error(s)` : ''}
+              {status.currentArtist ? ` — ${status.currentArtist}` : ''}
+            </>
+          ) : (
+            <>
+              ✓ Done. Processed {status.processed} / {status.total}
+              {status.errors > 0 ? `, ${status.errors} error(s)` : ''}.
+            </>
+          )}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -152,8 +237,9 @@ function SimilarityDebug() {
     <div className="dev-tool">
       <h2>Similarity graph</h2>
       <p>
-        Hits <code>GET /related/{'{artist}'}</code> — ingests from Deezer on a cache miss / stale
-        entry, persists the graph, then unifies across sources. Click a card to explore from it.
+        Hits <code>GET /related/{'{artist}'}</code> — ingests from every source (Deezer +
+        ListenBrainz) on a cache miss / stale entry, persists the graph, then unifies across sources.
+        Click a card to explore from it.
       </p>
 
       <form onSubmit={onSubmit} className="controls">

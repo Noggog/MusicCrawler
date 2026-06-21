@@ -77,6 +77,25 @@ public interface IArtistCatalogRepo
     /// resolution re-derives the identity from a name search.
     /// </summary>
     Task ClearDeezerOverride(ArtistKey artist);
+
+    /// <summary>
+    /// The stored MusicBrainz identity for an artist plus whether it's a sticky user override, or
+    /// null if the artist isn't cataloged or has never been resolved. Mirrors <see cref="GetDeezer"/>.
+    /// </summary>
+    Task<(MusicBrainzIdentity Identity, bool IsOverride)?> GetMusicBrainz(ArtistKey artist);
+
+    /// <summary>
+    /// Persists the MusicBrainz identity an artist resolved to. <paramref name="isOverride"/> marks a
+    /// user pin (resolved by MBID, never auto-changed). Opportunistic callers pass false and must not
+    /// clobber an existing override. Never creates entries for artists outside the catalog.
+    /// </summary>
+    Task SetMusicBrainzIdentity(ArtistKey artist, MusicBrainzIdentity identity, bool isOverride);
+
+    /// <summary>
+    /// Drops the override flag and clears the stored MusicBrainz fields for an artist, so the next
+    /// resolution re-derives the MBID from a name search.
+    /// </summary>
+    Task ClearMusicBrainzOverride(ArtistKey artist);
 }
 
 public record CatalogSyncResult(int Upserted, int MarkedAbsent, int TotalPresent);

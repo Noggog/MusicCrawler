@@ -5,6 +5,7 @@ using MusicCrawler.Backend.Services.Download;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Deezer;
 using MusicCrawler.Interfaces;
+using MusicCrawler.ListenBrainz;
 using MusicCrawler.MongoDB;
 using MusicCrawler.Plex;
 using Noggog.Autofac;
@@ -20,6 +21,9 @@ public class MainModule : Autofac.Module
         // Deezer is the live recommendation source (DeezerProvider : IRecommendationProvider),
         // replacing the deprecated Spotify recommendations API.
         builder.RegisterModule<DeezerModule>();
+        // ListenBrainz/MusicBrainz is a second, independent similarity source (ISimilaritySource);
+        // its edges are merged with Deezer's at read time. Self-disables via LISTENBRAINZ_ENABLED.
+        builder.RegisterModule<ListenBrainzModule>();
 
         // How long a stored similarity-graph edge set stays fresh before re-ingestion (env knob,
         // default 30 days). Read once here so the ingestion service stays env-free and testable.

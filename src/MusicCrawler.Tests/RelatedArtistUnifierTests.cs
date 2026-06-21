@@ -60,6 +60,22 @@ public class RelatedArtistUnifierTests
     }
 
     [Fact]
+    public void Dedup_ignores_diacritics_so_sources_that_spell_accents_differently_merge()
+    {
+        // Deezer's "Beyoncé" and ListenBrainz's ASCII "Beyonce" are the same artist — they must
+        // collapse to one entry carrying both sources, not split into two.
+        var result = RelatedArtistUnifier.Unify(new[]
+        {
+            Source("deezer", Rel("Beyoncé")),
+            Source("listenbrainz", Rel("Beyonce")),
+        });
+
+        result.Should().ContainSingle();
+        result[0].ArtistKey.ArtistName.Should().Be("Beyoncé"); // first-encountered spelling wins
+        result[0].Sources.Should().Equal("deezer", "listenbrainz");
+    }
+
+    [Fact]
     public void Image_uses_first_non_null_across_sources()
     {
         // First source has no image; second supplies one — the unified entry should adopt it.

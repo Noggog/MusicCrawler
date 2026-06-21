@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MusicCrawler.Interfaces;
 
 namespace MusicCrawler.Backend.Services.Singletons;
@@ -18,20 +19,38 @@ public interface IRelatedArtistReader
 /// </summary>
 public class RelatedArtistInteractor : IRelatedArtistReader
 {
-    private readonly SimilarityIngestionService _ingestion;
+    private readonly IEnumerable<ISimilaritySource> _sources;
     private readonly IRelatedArtistRepo _repo;
+    private readonly ILogger<RelatedArtistInteractor> _logger;
 
-    public RelatedArtistInteractor(SimilarityIngestionService ingestion, IRelatedArtistRepo repo)
+    public RelatedArtistInteractor(
+        IEnumerable<ISimilaritySource> sources,
+        IRelatedArtistRepo repo,
+        ILogger<RelatedArtistInteractor> logger)
     {
-        _ingestion = ingestion;
+        _sources = sources;
         _repo = repo;
+        _logger = logger;
     }
 
     public async Task<UnifiedRelations> GetRelated(ArtistKey artist, bool forceRefresh = false)
     {
-        // Currently only Deezer ingests; as more sources are added, each gets its own ensure call
-        // here while the unify step below already merges however many sources are stored.
-        await _ingestion.EnsureRelated(artist, forceRefresh);
+        // Ensure every registered source's edges are present/fresh; the unify step below then merges
+        // however many are stored. Sources are isolated: one throwing (a bug past its own graceful
+        // degradation) must not deny the user the others' recommendations.
+        foreach (var source in _sources)
+        {
+            try
+            {
+                await source.EnsureRelated(artist, forceRefresh);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex, "Source {Source} failed to ingest related artists for {Artist}",
+                    source.SourceName, artist.ArtistName);
+            }
+        }
 
         var perSource = await _repo.GetAllSources(artist);
         return new UnifiedRelations(artist, RelatedArtistUnifier.Unify(perSource));

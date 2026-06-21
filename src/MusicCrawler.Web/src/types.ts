@@ -33,6 +33,33 @@ export interface DeezerCandidate {
   imageUrl: string | null
 }
 
+// Mirror SourceIdentity / SourceCandidate / ArtistSources (Artist.cs) — the cross-source identity
+// view powering the Artists-page "Sources" tab (Deezer, MusicBrainz, ListenBrainz, …). `id` is null
+// when a correctable source hasn't been resolved yet; non-correctable sources have no pin/clear.
+export interface SourceIdentity {
+  source: string
+  id: string | null
+  name: string | null
+  detail: string | null
+  link: string | null
+  imageUrl: string | null
+  isOverride: boolean
+  correctable: boolean
+}
+
+export interface SourceCandidate {
+  id: string
+  name: string | null
+  detail: string | null
+  link: string | null
+  imageUrl: string | null
+}
+
+export interface ArtistSources {
+  artist: ArtistKey
+  sources: SourceIdentity[]
+}
+
 // Mirrors CatalogSyncResult (IArtistCatalogRepo.cs) — returned by POST /catalog/refresh.
 export interface CatalogSyncResult {
   upserted: number

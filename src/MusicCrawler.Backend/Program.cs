@@ -197,6 +197,60 @@ api.MapGet("/deezer/search", async (string q, int? limit, DeezerArtistResolver r
         Results.Ok(await resolver.SearchArtists(q, Math.Clamp(limit ?? 10, 1, 25))))
     .WithName("SearchDeezerArtists");
 
+// ---- Cross-source identity ("Sources" tab): one set of generic routes over every registered
+// ISourceIdentityCorrector (deezer, musicbrainz, …), dispatched by the {source} path segment. ----
+
+// Every source's resolved identity (id + link-out + override flag) for one artist, for the tab.
+api.MapGet("/artists/sources", async (string artist, ArtistSourcesService sources) =>
+        Results.Ok(await sources.Get(new ArtistKey(artist))))
+    .RequireAuthorization()
+    .WithName("GetArtistSources");
+
+// Free-text candidate search within one source, powering that source's "Correct association" picker.
+api.MapGet("/sources/{source}/search",
+        async (string source, string q, int? limit, IEnumerable<ISourceIdentityCorrector> correctors) =>
+        {
+            var corrector = correctors.FirstOrDefault(c => c.Source == source);
+            return corrector is null
+                ? Results.NotFound()
+                : Results.Ok(await corrector.Search(q, Math.Clamp(limit ?? 10, 1, 25)));
+        })
+    .RequireAuthorization()
+    .WithName("SearchSource");
+
+// Pin an artist to a specific id on one source (sticky override), then re-derive that artist's
+// similarity edges from the corrected ids and rebuild the caller's queue so the old (wrong) edges
+// drop off immediately — mirrors the original Deezer-pin behaviour, now source-generic.
+api.MapPost("/artists/sources/{source}",
+        async (HttpContext http, string source, string artist, string id,
+            IEnumerable<ISourceIdentityCorrector> correctors,
+            RelatedArtistInteractor interactor, DiscoveryEngine engine) =>
+        {
+            var corrector = correctors.FirstOrDefault(c => c.Source == source);
+            if (corrector is null) return Results.NotFound();
+
+            var identity = await corrector.Pin(new ArtistKey(artist), id);
+            if (identity is null) return Results.NotFound();
+
+            await interactor.GetRelated(new ArtistKey(artist), forceRefresh: true);
+            await engine.Rebuild(http.User.GetSubject()!);
+            return Results.Ok(identity);
+        })
+    .RequireAuthorization()
+    .WithName("PinArtistSource");
+
+// Clear a source's pin so the artist re-resolves from a name search next time.
+api.MapDelete("/artists/sources/{source}",
+        async (string source, string artist, IEnumerable<ISourceIdentityCorrector> correctors) =>
+        {
+            var corrector = correctors.FirstOrDefault(c => c.Source == source);
+            if (corrector is null) return Results.NotFound();
+            await corrector.Clear(new ArtistKey(artist));
+            return Results.NoContent();
+        })
+    .RequireAuthorization()
+    .WithName("ClearArtistSource");
+
 // Backfill the Deezer identity for every present artist (id/name/fans/link/photo) into the catalog
 // so the Artists page can flag misassociations. Heavy (one lookup per artist), so it's a one-shot
 // maintenance trigger; afterwards ids are captured opportunistically as artists are sampled/rated.
@@ -464,6 +518,20 @@ dev.MapPost("/rebuild", async (PlexTagMaintenance maint) =>
         return Results.Ok(new { cleared = result.Cleared, applied = result.Applied });
     })
     .WithName("DevRebuildPlexTags");
+
+// Whole-library similarity warm: force-populate every source's edges (Deezer + ListenBrainz) across
+// the entire catalog, instead of waiting for the lazy, usage-driven path. Long-running (bounded by
+// MusicBrainz's ~1 req/s), so it runs as a single-flight background job: POST kicks it off and
+// returns the live status; GET polls progress. Same DevUser gate as the tag tools.
+var devSim = api.MapGroup("/dev/similarity").RequireAuthorization("DevUser");
+
+devSim.MapPost("/warm", (SimilarityGraphWarmer warmer, bool? force) =>
+        Results.Ok(warmer.Start(force ?? false)))
+    .WithName("DevWarmSimilarity");
+
+devSim.MapGet("/warm", (SimilarityGraphWarmer warmer) =>
+        Results.Ok(warmer.GetStatus()))
+    .WithName("DevSimilarityWarmStatus");
 
 // The shared "to buy" list: every user's liked non-owned artists + liked albums not yet acquired,
 // persisted with a status (pending → sent → in-library). Reconciles on read so it's always current.
