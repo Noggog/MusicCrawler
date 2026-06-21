@@ -40,13 +40,3 @@ export async function clearDeezerId(artist: string): Promise<void> {
     throw new Error(`Failed to clear Deezer id for ${artist}: ${res.status} ${res.statusText}`)
   }
 }
-
-// Dev-only one-shot: resolve + persist the Deezer identity for every library artist so the page
-// can flag misassociations. Returns how many of the total resolved.
-export async function resolveAllDeezer(): Promise<{ total: number; resolved: number }> {
-  const res = await fetch('/api/artists/deezer/resolve-all', { method: 'POST' })
-  if (!res.ok) {
-    throw new Error(`Failed to resolve Deezer for all: ${res.status} ${res.statusText}`)
-  }
-  return (await res.json()) as { total: number; resolved: number }
-}

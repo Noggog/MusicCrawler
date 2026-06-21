@@ -2,6 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { getRelated } from '../api/related'
+import { refreshCatalog } from '../api/artists'
+import {
+  getCombinedArtists,
+  resolveCombinedArtists,
+  type CleanupResult,
+  type CombinedNameEntry,
+} from '../api/maintenance'
 import {
   clearPlexTags,
   getSimilarityWarmStatus,
@@ -39,10 +46,148 @@ export default function Dev() {
   return (
     <section>
       <h1>Dev tools</h1>
+      <CatalogRefresh />
+      <CleanupTool />
       <PlexTagTools />
       <SimilarityWarm />
       <SimilarityDebug />
     </section>
+  )
+}
+
+// ---- Combined-name cleanup (split Plex's semicolon-joined collaborators) ----
+
+const CLEANUP_SCOPE_LABEL: Record<CombinedNameEntry['scope'], string> = {
+  catalog: 'Library artist',
+  artistRating: 'Artist rating',
+  albumRating: 'Album rating',
+}
+
+function CleanupResultSummary({ result }: { result: CleanupResult }) {
+  const parts = [
+    result.catalogSplit > 0 && `${result.catalogSplit} library artist(s) split`,
+    result.artistRatingsSplit > 0 && `${result.artistRatingsSplit} artist rating(s) re-attributed`,
+    result.albumRatingsSplit > 0 && `${result.albumRatingsSplit} album rating(s) re-attributed`,
+    result.pendingRemoved > 0 && `${result.pendingRemoved} stale recommendation(s) dropped`,
+  ].filter(Boolean) as string[]
+
+  return (
+    <p className="dev-status">
+      ✓ Done. {parts.length > 0 ? parts.join(', ') + '.' : 'Nothing needed changing.'}
+    </p>
+  )
+}
+
+function CleanupTool() {
+  const queryClient = useQueryClient()
+
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: ['maintenance', 'combined-artists'],
+    queryFn: getCombinedArtists,
+  })
+
+  const resolve = useMutation({
+    mutationFn: resolveCombinedArtists,
+    onSuccess: () => {
+      // The sweep touches the catalog feed, ratings and the to-buy list — refresh them all.
+      queryClient.invalidateQueries({ queryKey: ['maintenance'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['ratings'] })
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    },
+  })
+
+  const entries = data ?? []
+
+  return (
+    <div className="dev-tool">
+      <h2>Cleanup {entries.length > 0 ? `(${entries.length})` : ''}</h2>
+      <p>
+        Plex sometimes joins collaborators into one name with a semicolon (e.g.{' '}
+        <code>Nina Simone;Hot Chip</code>). These are really two artists. Resolving splits them apart
+        in the library and re-attributes any ratings to each real artist.
+      </p>
+
+      {isError && <p className="error">Failed to scan: {(error as Error).message}</p>}
+      {resolve.isError && <p className="error">Cleanup failed: {(resolve.error as Error).message}</p>}
+      {isPending && <p><em>Scanning…</em></p>}
+
+      {resolve.isSuccess && !resolve.isPending && <CleanupResultSummary result={resolve.data} />}
+
+      {data && entries.length === 0 && !resolve.isSuccess && (
+        <p><em>Nothing to clean up — no combined names found. 🎉</em></p>
+      )}
+
+      {entries.length > 0 && (
+        <>
+          <div className="controls">
+            <button onClick={() => resolve.mutate()} disabled={resolve.isPending}>
+              {resolve.isPending ? 'Cleaning…' : `Clean up all ${entries.length}`}
+            </button>
+          </div>
+
+          <div className="disc-list cleanup-list">
+            {entries.map((e) => (
+              <div className="disc-row" key={`${e.scope}:${e.name}:${e.album ?? ''}`}>
+                <div className="disc-row-main">
+                  <span className="feed-badge">{CLEANUP_SCOPE_LABEL[e.scope]}</span>
+                  <div className="disc-name">
+                    {e.name}
+                    {e.album ? ` — ${e.album}` : ''}
+                  </div>
+                  <span className="disc-provenance">
+                    → {e.splitInto.join(' + ')}
+                    {e.affected > 1 ? ` (${e.affected} entries)` : ''}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ---- Library catalog refresh (the one Plex-touching sync) ----
+
+function CatalogRefresh() {
+  const queryClient = useQueryClient()
+  const refresh = useMutation({
+    mutationFn: refreshCatalog,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artists'] }),
+  })
+
+  return (
+    <div className="dev-tool">
+      <h2>Refresh from Plex</h2>
+      <p>
+        Re-syncs the <strong>library catalog</strong> from your Plex server — the one and only call
+        that touches Plex directly. It pulls the full artist list from your Plex music library and
+        upserts it into the local catalog store: artists new to Plex are added, artists still present
+        have their metadata refreshed, and artists no longer in Plex are <strong>marked absent</strong>{' '}
+        (soft-removed) so they drop out of the Artists list. It does <strong>not</strong> resolve
+        Deezer identities, warm the similarity graph, or change any ratings/tags — just the artist
+        roster. The catalog already auto-syncs on startup and once daily, so this is only needed when
+        you've just added/removed artists in Plex and want the change reflected immediately. Safe to
+        run repeatedly; it's idempotent.
+      </p>
+
+      <div className="controls">
+        <button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+          {refresh.isPending ? 'Refreshing…' : 'Refresh from Plex'}
+        </button>
+      </div>
+
+      {refresh.isError && <p className="error">Refresh failed: {(refresh.error as Error).message}</p>}
+
+      {refresh.isSuccess && (
+        <p className="dev-status">
+          ✓ Synced: {refresh.data.upserted} from Plex, {refresh.data.markedAbsent} removed,{' '}
+          {refresh.data.totalPresent} in catalog.
+        </p>
+      )}
+    </div>
   )
 }
 

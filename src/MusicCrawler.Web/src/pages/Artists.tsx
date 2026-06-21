@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getArtists, refreshCatalog, resolveAllDeezer } from '../api/artists'
+import { getArtists } from '../api/artists'
 import { clearSource, getArtistSources, pinSource, searchSource } from '../api/sources'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
 import { getRelated } from '../api/related'
@@ -31,7 +31,7 @@ const verdictStatus = (v: Verdict): DiscoveryStatus => (v === 'up' ? 'Liked' : '
 // The full library loads in one fetch, but rendering every row at once is the costly part — each
 // row extracts an accent colour from its photo — so we page the rendered rows. Search still spans
 // the whole library (it filters before paging).
-const PAGE_SIZE = 50
+const PAGE_SIZE = 25
 
 const normalize = (s: string) => s.trim().toLowerCase()
 
@@ -762,16 +762,6 @@ export default function Artists() {
     onSuccess: invalidate,
   })
 
-  const refresh = useMutation({
-    mutationFn: refreshCatalog,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artists'] }),
-  })
-
-  const resolveAll = useMutation({
-    mutationFn: resolveAllDeezer,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artists'] }),
-  })
-
   const filtered = (artists ?? []).filter((a) =>
     normalize(a.artistKey.artistName).includes(normalize(query)),
   )
@@ -821,41 +811,12 @@ export default function Artists() {
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem' }}>
         <h1>Artists</h1>
-        {/* The catalog auto-syncs on startup and daily; these manual triggers are dev-only
-            conveniences and are compiled out of production builds. */}
-        {import.meta.env.DEV && (
-          <button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-            {refresh.isPending ? 'Refreshing…' : 'Refresh from Plex (dev)'}
-          </button>
-        )}
-        {import.meta.env.DEV && user && (
-          <button onClick={() => resolveAll.mutate()} disabled={resolveAll.isPending}>
-            {resolveAll.isPending ? 'Resolving…' : 'Resolve Deezer for all (dev)'}
-          </button>
-        )}
       </div>
 
       {user && (
         <p>
           <em>Review your ratings</em>
         </p>
-      )}
-
-      {import.meta.env.DEV && refresh.isError && (
-        <p className="error">Refresh failed: {(refresh.error as Error).message}</p>
-      )}
-
-      {import.meta.env.DEV && refresh.isSuccess && (
-        <p>
-          <em>
-            Synced: {refresh.data.upserted} from Plex, {refresh.data.markedAbsent} removed,{' '}
-            {refresh.data.totalPresent} in catalog.
-          </em>
-        </p>
-      )}
-
-      {import.meta.env.DEV && resolveAll.isSuccess && (
-        <p><em>Resolved Deezer for {resolveAll.data.resolved} / {resolveAll.data.total} artists.</em></p>
       )}
 
       {isPending && <p><em>Loading…</em></p>}
