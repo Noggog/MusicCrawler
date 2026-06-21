@@ -1498,6 +1498,12 @@ input[type='checkbox'] {
   gap: 0.5rem;
 }
 
+/* "Go to artist" link on a missing-album card — sits between the album chips and the rate buttons.
+   Pulled up under the chips' 1rem gap and given a little breathing room before the actions. */
+.detail-goartist {
+  margin: -0.5rem 0 0.85rem;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists } from '../api/artists'
 import { clearSource, getArtistSources, pinSource, searchSource, unlinkSource } from '../api/sources'
@@ -895,6 +896,7 @@ function UncatalogedResults({
 export default function Artists() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   // The artist open in the right-hand readout (desktop) / drawer (mobile), and which of its tabs is
@@ -983,6 +985,21 @@ export default function Artists() {
     const list = artists ?? []
     if (list.length === 0) return
     setRandomized(true)
+
+    // Deep-link: /artists?artist=<name> (e.g. the Discover "Go to artist" link on a missing-album
+    // card) opens straight onto that artist instead of a random pick — filter the list to them and
+    // open the readout, on desktop and mobile alike since this is an explicit request. Strip the
+    // param afterward so closing the readout / paging behaves normally.
+    const focus = searchParams.get('artist')
+    if (focus) {
+      setQuery(focus)
+      setPage(0)
+      const hit = list.find((a) => normalize(a.artistKey.artistName) === normalize(focus))
+      setSelected({ name: hit?.artistKey.artistName ?? focus, imageUrl: hit?.artistImageUrl ?? null })
+      setSearchParams({}, { replace: true })
+      return
+    }
+
     const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
     const randPage = Math.floor(Math.random() * totalPages)
     setPage(randPage)
@@ -991,7 +1008,7 @@ export default function Artists() {
       const pick = pageItems[Math.floor(Math.random() * pageItems.length)]
       if (pick) setSelected({ name: pick.artistKey.artistName, imageUrl: pick.artistImageUrl })
     }
-  }, [artists, randomized])
+  }, [artists, randomized, searchParams, setSearchParams])
 
   // Once randomized, keep the readout populated: if it ends up empty (e.g. the user closes it), reopen
   // the current page's first artist so the pane never falls back to the bare placeholder. Desktop only.

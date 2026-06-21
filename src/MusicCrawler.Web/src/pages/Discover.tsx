@@ -510,10 +510,17 @@ function DetailPanel({
           <h2 className="detail-name">{item.album ?? name}</h2>
 
           {isAlbum ? (
-            <div className="detail-chips">
-              <span className="detail-chip">Album</span>
-              <span className="detail-chip via">{name}</span>
-            </div>
+            <>
+              <div className="detail-chips">
+                <span className="detail-chip">Album</span>
+                <span className="detail-chip via">{name}</span>
+              </div>
+              {/* Jump to this artist in the library (the Artists tab), filtered + opened to them —
+                  handy on a missing-album card to see what else of theirs you already own. */}
+              <Link className="deezer-link detail-goartist" to={`/artists?artist=${encodeURIComponent(name)}`}>
+                Go to artist ↗
+              </Link>
+            </>
           ) : item.sources.length > 0 ? (
             <>
               <div className="detail-section-label">Recommended via</div>
