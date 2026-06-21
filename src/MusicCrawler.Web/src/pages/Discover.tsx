@@ -691,6 +691,13 @@ export default function Discover() {
     setSelected(null)
   }, [page, seed, kindsKey])
 
+  // On mobile the readout takes over the screen; lock the background list so it can't scroll
+  // (or peek through the translucent top bar) behind it. CSS scopes the lock to the mobile breakpoint.
+  useEffect(() => {
+    document.body.classList.toggle('detail-open', selected != null)
+    return () => document.body.classList.remove('detail-open')
+  }, [selected])
+
   const toggleCategory = (kind: FeedKind) => {
     setShown((prev) => {
       const next = new Set(prev)

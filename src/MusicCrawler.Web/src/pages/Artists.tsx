@@ -807,6 +807,13 @@ export default function Artists() {
     setSelected({ name: firstItem.artistKey.artistName, imageUrl: firstItem.artistImageUrl })
   }, [firstItem, selected, randomized])
 
+  // On mobile the readout takes over the screen; lock the background list so it can't scroll
+  // (or peek through the translucent top bar) behind it. CSS scopes the lock to the mobile breakpoint.
+  useEffect(() => {
+    document.body.classList.toggle('detail-open', selected != null)
+    return () => document.body.classList.remove('detail-open')
+  }, [selected])
+
   return (
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem' }}>

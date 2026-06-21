@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import VolumeControl from './VolumeControl'
@@ -34,11 +34,26 @@ function AuthBox() {
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const topbarRef = useRef<HTMLElement>(null)
+
+  // The top bar wraps to two rows on narrow screens, so its height is variable. Publish the
+  // measured height to --topbar-h so the sticky offsets and the mobile full-screen detail pane
+  // (which starts below the bar) line up regardless of how many rows the bar takes.
+  useEffect(() => {
+    const el = topbarRef.current
+    if (!el) return
+    const apply = () =>
+      document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   return (
     <div className="app">
       <MyceliumBackdrop />
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         <div className="brand">Mycelium</div>
         <nav className="nav">
           <NavLink to="/" className={navClass} end>

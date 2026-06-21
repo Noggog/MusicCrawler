@@ -1825,48 +1825,67 @@ input[type='checkbox'] {
     max-width: none;
   }
 
-  /* Readout slides up from the bottom as a drawer when a row is selected. */
+  /* Readout takes over the full screen when a row is selected. */
   .disc-detail {
     position: fixed;
     left: 0;
     right: 0;
+    /* Stop below the sticky top bar so the nav + volume knob stay visible and usable. */
+    top: var(--topbar-h);
     bottom: 0;
-    top: auto;
     width: auto;
     min-width: 0;
     max-width: none;
-    max-height: 82vh;
-    border-radius: var(--radius) var(--radius) 0 0;
-    border-bottom: none;
-    z-index: 40;
-    box-shadow: 0 -12px 50px rgba(0, 0, 0, 0.6);
+    max-height: none;
+    height: auto;
+    border-radius: 0;
+    border: none;
+    /* Below the top bar (z-index 20) so it never covers the bar or its flyouts. */
+    z-index: 15;
+    overflow-y: auto;
+    /* Keep scroll inside the pane — don't chain to the list behind it at the top/bottom. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: none;
+    padding: 1.5rem 1.1rem calc(2rem + env(safe-area-inset-bottom));
+    /* Opaque base so the full-screen takeover reads as its own page, not a hovering panel. */
+    background:
+      linear-gradient(
+        180deg,
+        rgba(var(--art-accent, var(--art-accent-default)), 0.24),
+        rgba(11, 9, 18, 0.62) 70%
+      ),
+      var(--bg, #0b0912);
     animation: drawer-up 0.22s ease;
   }
   .detail-close {
     display: flex;
+    width: 38px;
+    height: 38px;
+    font-size: 1.05rem;
   }
   /* The empty placeholder is pointless on mobile — only render the drawer when selected. */
   .disc-detail.is-empty {
     display: none;
   }
-  /* The drawer is narrow — drop the side-by-side header back to a centred stack. */
+  /* With the readout open full-screen, freeze the page behind it so it can't scroll or peek
+     through the translucent top bar. Toggled by the pages when a row is selected. */
+  body.detail-open {
+    overflow: hidden;
+  }
+  /* Full-screen pane keeps the side-by-side header: art pinned left, name + rate buttons to its right. */
   .detail-header {
-    flex-direction: column;
-    gap: 0.75rem;
+    align-items: flex-start;
+    gap: 1rem;
   }
   .detail-hero {
-    width: 100%;
-    justify-content: center;
+    width: clamp(120px, 34%, 200px);
+    justify-content: flex-start;
   }
-  .detail-headinfo {
-    width: 100%;
-    align-items: center;
-    text-align: center;
-  }
+  /* Drop the neon halo behind the artwork in the full-screen view — keep just the outline. */
   .detail-hero img,
   .detail-hero .disc-avatar-fallback {
-    max-width: 220px;
-    margin: 0 auto;
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.4);
   }
 }
 
