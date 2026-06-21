@@ -872,15 +872,20 @@ input[type='checkbox'] {
   -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, background 0.15s ease;
 }
-.disc-row:hover {
-  border-color: rgba(var(--art-accent, var(--art-accent-default)), 0.8);
-  background: linear-gradient(
-      135deg,
-      rgba(var(--art-accent, var(--art-accent-default)), 0.32),
-      rgba(var(--art-accent, var(--art-accent-default)), 0.1) 65%
-    ),
-    var(--panel);
-  box-shadow: 0 0 24px -6px rgba(var(--art-accent, var(--art-accent-default)), 0.6);
+/* Hover effects are gated on `hover: hover` so they only fire for real pointers. On touch devices
+   there is no mouse-leave event, so a bare `:hover` would latch after a tap and leave the row/buttons
+   stuck in their hovered look until the next pointer move. */
+@media (hover: hover) {
+  .disc-row:hover {
+    border-color: rgba(var(--art-accent, var(--art-accent-default)), 0.8);
+    background: linear-gradient(
+        135deg,
+        rgba(var(--art-accent, var(--art-accent-default)), 0.32),
+        rgba(var(--art-accent, var(--art-accent-default)), 0.1) 65%
+      ),
+      var(--panel);
+    box-shadow: 0 0 24px -6px rgba(var(--art-accent, var(--art-accent-default)), 0.6);
+  }
 }
 /* Clickable rows in the two-pane view get a pointer + lift. position:relative + a raised z-index on
    hover lets the snooze flyout overflow *above* the readout pane instead of being painted under it. */
@@ -892,9 +897,11 @@ input[type='checkbox'] {
      against the backdrop-filter blur as they snapped between pixels). */
   will-change: transform;
 }
-.disc-main .disc-row:hover {
-  transform: translateX(2px);
-  z-index: 60;
+@media (hover: hover) {
+  .disc-main .disc-row:hover {
+    transform: translateX(2px);
+    z-index: 60;
+  }
 }
 /* The row currently open in the readout panel — the boldest expression of the art colour: a strong
    accent wash, a bright accent border + inner ring, and an outward glow. Falls back to the stock
@@ -1039,8 +1046,10 @@ input[type='checkbox'] {
   color: var(--text);
   transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease, background 0.12s ease, color 0.12s ease;
 }
-.disc-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .disc-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
 }
 /* Approve / reject icons carry their hue at rest, then flare on hover/active. */
 .disc-btn.up {
@@ -1049,13 +1058,15 @@ input[type='checkbox'] {
 .disc-btn.down {
   color: var(--salmon-light);
 }
-.disc-btn.up:hover:not(:disabled) {
-  border-color: var(--good);
-  box-shadow: 0 0 14px rgba(56, 232, 160, 0.5);
-}
-.disc-btn.down:hover:not(:disabled) {
-  border-color: var(--salmon-light);
-  box-shadow: var(--glow-salmon);
+@media (hover: hover) {
+  .disc-btn.up:hover:not(:disabled) {
+    border-color: var(--good);
+    box-shadow: 0 0 14px rgba(56, 232, 160, 0.5);
+  }
+  .disc-btn.down:hover:not(:disabled) {
+    border-color: var(--salmon-light);
+    box-shadow: var(--glow-salmon);
+  }
 }
 .disc-btn.play {
   font-size: 0.85rem;
@@ -1873,6 +1884,16 @@ input[type='checkbox'] {
   /* The empty placeholder is pointless on mobile — only render the drawer when selected. */
   .disc-detail.is-empty {
     display: none;
+  }
+  /* The two-pane hover lift promotes rows to their own layer at z-index 60 so the snooze flyout can
+     overflow the readout. Here the readout is a full-screen fixed drawer (z-index 15) that covers the
+     list, so a row outranking it would paint *above* the drawer — a tapped row floats at the bottom of
+     the screen until the pointer moves and clears the stuck `:hover`. Pin rows back beneath the drawer. */
+  .disc-main .disc-row,
+  .disc-main .disc-row:hover {
+    z-index: auto;
+    transform: none;
+    will-change: auto;
   }
   /* With the readout open full-screen, freeze the page behind it so it can't scroll or peek
      through the translucent top bar. Toggled by the pages when a row is selected. */
