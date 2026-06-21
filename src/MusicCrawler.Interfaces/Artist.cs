@@ -62,3 +62,16 @@ public record SourceCandidate(string Id, string? Name, string? Detail, string? L
 
 /// <summary>The cross-source identity view of one artist, one entry per surfaced source.</summary>
 public record ArtistSources(ArtistKey Artist, IReadOnlyList<SourceIdentity> Sources);
+
+/// <summary>A deep link to an artist's page on a library source (e.g. "Open in Plex").</summary>
+public record LibraryLink(string Label, string Url);
+
+/// <summary>
+/// An artist's presence on one library source (Plex, eventually Navidrome), for the Artists-page
+/// "Library" tab: whether the artist is in that library and deep links to open it there (one per
+/// matched item — a name can map to several Plex rating keys).
+/// </summary>
+public record LibrarySource(string Source, string Label, bool Present, IReadOnlyList<LibraryLink> Links);
+
+/// <summary>The library-presence view of one artist, one entry per registered library source.</summary>
+public record ArtistLibraries(ArtistKey Artist, IReadOnlyList<LibrarySource> Sources);

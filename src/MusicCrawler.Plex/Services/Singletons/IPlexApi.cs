@@ -20,4 +20,10 @@ public interface IPlexApi
     Task SetArtistCollections(
         int library, int ratingKey, IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove);
     Task<PlexLibrary> ResolveLibrary();
+
+    /// <summary>
+    /// The server's stable <c>machineIdentifier</c> (the id app.plex.tv deep links are keyed by), or
+    /// <c>null</c> if the server is unreachable. Cached after the first successful fetch.
+    /// </summary>
+    Task<string?> GetMachineIdentifier();
 }

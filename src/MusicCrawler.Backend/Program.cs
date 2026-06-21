@@ -206,6 +206,12 @@ api.MapGet("/artists/sources", async (string artist, ArtistSourcesService source
     .RequireAuthorization()
     .WithName("GetArtistSources");
 
+// Every library source's presence + open-in deep links for one artist, for the "Library" tab.
+api.MapGet("/artists/libraries", async (string artist, LibrarySourcesService libraries) =>
+        Results.Ok(await libraries.Get(new ArtistKey(artist))))
+    .RequireAuthorization()
+    .WithName("GetArtistLibraries");
+
 // Free-text candidate search within one source, powering that source's "Correct association" picker.
 api.MapGet("/sources/{source}/search",
         async (string source, string q, int? limit, IEnumerable<ISourceIdentityCorrector> correctors) =>

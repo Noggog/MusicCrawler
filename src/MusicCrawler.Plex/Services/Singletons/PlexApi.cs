@@ -12,6 +12,9 @@ public class PlexApi : IPlexApi
     private readonly ILogger<PlexApi> _logger;
     private readonly HttpClient httpClient;
 
+    // The server's machineIdentifier is immutable; fetched once and cached for the process lifetime.
+    private string? _machineIdentifier;
+
     public PlexApi(PlexEndpointInfo endpointInfo, PlexClientInfo clientInfo, ILogger<PlexApi> logger)
     {
         _endpointInfo = endpointInfo;
@@ -20,6 +23,27 @@ public class PlexApi : IPlexApi
         this.httpClient = new HttpClient();
         this.httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         this.httpClient.DefaultRequestHeaders.Add("X-Plex-Token", clientInfo.Token);
+    }
+
+    public async Task<string?> GetMachineIdentifier()
+    {
+        if (_machineIdentifier != null)
+        {
+            return _machineIdentifier;
+        }
+
+        // The root endpoint's MediaContainer carries the server identity, including machineIdentifier.
+        var url = $"{_endpointInfo.BaseUri}/";
+        _logger.LogDebug("Plex GetMachineIdentifier: {Url}", url);
+        var response = await httpClient.GetStringAsync(url);
+        var data = JObject.Parse(response);
+        var id = data["MediaContainer"]?["machineIdentifier"]?.ToString();
+        // Only cache a real answer so a transient failure doesn't pin a null for the process lifetime.
+        if (!string.IsNullOrEmpty(id))
+        {
+            _machineIdentifier = id;
+        }
+        return _machineIdentifier;
     }
 
     public async Task<PlexLibrary[]> GetLibraries()

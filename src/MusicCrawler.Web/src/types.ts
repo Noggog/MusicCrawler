@@ -62,6 +62,25 @@ export interface ArtistSources {
   sources: SourceIdentity[]
 }
 
+// Mirror LibraryLink / LibrarySource / ArtistLibraries (Artist.cs) — the per-library presence view
+// powering the Artists-page "Library" tab (Plex now, Navidrome eventually), with deep links out.
+export interface LibraryLink {
+  label: string
+  url: string
+}
+
+export interface LibrarySource {
+  source: string
+  label: string
+  present: boolean
+  links: LibraryLink[]
+}
+
+export interface ArtistLibraries {
+  artist: ArtistKey
+  sources: LibrarySource[]
+}
+
 // Mirrors CatalogSyncResult (IArtistCatalogRepo.cs) — returned by POST /catalog/refresh.
 export interface CatalogSyncResult {
   upserted: number

@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists } from '../api/artists'
 import { clearSource, getArtistSources, pinSource, searchSource, unlinkSource } from '../api/sources'
+import { getArtistLibraries } from '../api/library'
 import { clearRating, getArtistDiscography, getRatings, rate, type Verdict } from '../api/discovery'
 import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
@@ -16,7 +17,7 @@ import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../co
 // for the Deezer link, genres, fans, correction); a related-artist card the user drills into may not
 // be in the library, so all we can carry is its name + photo — the tabs still work off the name.
 type SelectedArtist = { name: string; imageUrl: string | null }
-type DetailTab = 'albums' | 'related' | 'sources'
+type DetailTab = 'albums' | 'related' | 'meta' | 'library'
 
 // Human labels for the source keys the backend emits.
 const SOURCE_LABELS: Record<string, string> = {
@@ -47,11 +48,11 @@ function formatFans(n: number | null): string {
   return String(n)
 }
 
-// The "Sources" tab: every external source's resolved identity for the selected library artist —
-// its id, a link out to the source's page, the override flag — plus a per-source "Correct" button
-// for correctable sources (Deezer, MusicBrainz). ListenBrainz appears as a read-only link (its
-// identity is just the MusicBrainz MBID). Replaces the old single Deezer "Correct" button.
-function SourcesTab({ artist }: { artist: string }) {
+// The "Meta" tab: every external metadata source's resolved identity for the selected library
+// artist — its id, a link out to the source's page, the override flag — plus a per-source wrench
+// (Correct) button for correctable sources (Deezer, MusicBrainz). ListenBrainz appears as a
+// read-only link (its identity is just the MusicBrainz MBID).
+function MetaTab({ artist }: { artist: string }) {
   const queryClient = useQueryClient()
   const [correcting, setCorrecting] = useState<SourceIdentity | null>(null)
 
@@ -256,6 +257,40 @@ function SourcePicker({
         {unlink.isError && <p className="error">Failed to unlink: {(unlink.error as Error).message}</p>}
         {reset.isError && <p className="error">Failed to reset: {(reset.error as Error).message}</p>}
       </div>
+    </div>
+  )
+}
+
+// The "Library" tab: where the selected artist lives in the user's media servers (Plex now,
+// Navidrome eventually), with a deep link to open the artist there. Reuses the source-row styling.
+function LibraryTab({ artist }: { artist: string }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['artist-libraries', artist],
+    queryFn: () => getArtistLibraries(artist),
+  })
+
+  if (isPending) return <div className="disc-sub-albums"><em className="disc-sub-note">Loading libraries…</em></div>
+  if (isError) return <div className="disc-sub-albums"><em className="disc-sub-note">Failed to load libraries.</em></div>
+
+  return (
+    <div className="source-list">
+      {data.sources.map((s) => (
+        <div className="source-row" key={s.source}>
+          <span className="source-badge">{s.label}</span>
+          <div className="source-meta">
+            {s.present ? (
+              <span className="source-sub">In this library</span>
+            ) : (
+              <span className="source-sub"><em>Not in this library</em></span>
+            )}
+          </div>
+          {s.links.map((l) => (
+            <a className="deezer-link" key={l.url} href={l.url} target="_blank" rel="noopener noreferrer">
+              {l.label} ↗
+            </a>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }
@@ -691,29 +726,49 @@ function DetailPane({
         >
           Related artists
         </button>
-        {/* Sources (id/link/correct per source) only apply to library artists — a related-artist
-            stranger drilled in from the Related tab has no catalog row to pin. */}
+        {/* Meta (source identities) and Library (Plex/Navidrome presence) only apply to library
+            artists — a related-artist stranger drilled in from the Related tab has no catalog row. */}
         {libItem && (
           <button
             role="tab"
-            aria-selected={tab === 'sources'}
-            className={tab === 'sources' ? 'artist-tab active' : 'artist-tab'}
-            onClick={() => onTab('sources')}
+            aria-selected={tab === 'meta'}
+            className={tab === 'meta' ? 'artist-tab active' : 'artist-tab'}
+            onClick={() => onTab('meta')}
           >
-            Sources
+            Meta
+          </button>
+        )}
+        {libItem && (
+          <button
+            role="tab"
+            aria-selected={tab === 'library'}
+            className={tab === 'library' ? 'artist-tab active' : 'artist-tab'}
+            onClick={() => onTab('library')}
+          >
+            Library
           </button>
         )}
       </div>
 
-      {tab === 'sources' ? (
+      {tab === 'meta' ? (
         libItem ? (
           user ? (
-            <SourcesTab artist={name} />
+            <MetaTab artist={name} />
           ) : (
-            <div className="disc-sub-albums"><em className="disc-sub-note">Log in to view this artist’s sources.</em></div>
+            <div className="disc-sub-albums"><em className="disc-sub-note">Log in to view this artist’s metadata sources.</em></div>
           )
         ) : (
-          <div className="disc-sub-albums"><em className="disc-sub-note">Sources apply to library artists.</em></div>
+          <div className="disc-sub-albums"><em className="disc-sub-note">Metadata sources apply to library artists.</em></div>
+        )
+      ) : tab === 'library' ? (
+        libItem ? (
+          user ? (
+            <LibraryTab artist={name} />
+          ) : (
+            <div className="disc-sub-albums"><em className="disc-sub-note">Log in to view this artist’s libraries.</em></div>
+          )
+        ) : (
+          <div className="disc-sub-albums"><em className="disc-sub-note">Library links apply to library artists.</em></div>
         )
       ) : tab === 'albums' ? (
         user ? (
