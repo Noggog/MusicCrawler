@@ -1894,11 +1894,12 @@ input[type='checkbox'] {
   to { transform: translateY(0); }
 }
 
-/* Let the top bar wrap to two rows on small screens (brand + auth, then nav). */
-@media (max-width: 640px) {
+/* Drop the nav to its own centred row before the single-row layout gets cramped: brand + controls
+   share the top row, nav sits beneath. Triggers well above the point where everything overlaps. */
+@media (max-width: 900px) {
   .topbar {
-    padding: 0.6rem 1rem;
-    gap: 0.4rem 1rem;
+    padding: 0.55rem 1.25rem;
+    gap: 0.3rem 1rem;
   }
   .nav {
     order: 3;
@@ -1910,6 +1911,13 @@ input[type='checkbox'] {
   }
   .auth-box {
     max-width: 100%;
+  }
+}
+
+/* Tighten padding further on the smallest screens. */
+@media (max-width: 640px) {
+  .topbar {
+    padding: 0.55rem 1rem;
   }
 }
 
