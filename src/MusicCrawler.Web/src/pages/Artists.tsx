@@ -904,15 +904,20 @@ export default function Artists() {
 
   return (
     <section>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem' }}>
+      <div className="artists-header">
         <h1>Artists</h1>
+        {artists && artists.length > 0 && (
+          <div className="artist-search">
+            <input
+              type="text"
+              value={query}
+              placeholder={`Search ${artists.length} artists…`}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+            {query && <span className="artist-search-count">{filtered.length} match</span>}
+          </div>
+        )}
       </div>
-
-      {user && (
-        <p>
-          <em>Review your ratings</em>
-        </p>
-      )}
 
       {isPending && <p><em>Loading…</em></p>}
 
@@ -926,16 +931,6 @@ export default function Artists() {
 
       {artists && artists.length > 0 && (
         <>
-          <div className="artist-search">
-            <input
-              type="text"
-              value={query}
-              placeholder={`Search ${artists.length} artists…`}
-              onChange={(e) => onSearch(e.target.value)}
-            />
-            {query && <span className="artist-search-count">{filtered.length} match</span>}
-          </div>
-
           <div className="disc-layout">
             <div className="disc-main">
               <div className="disc-list">

@@ -1934,12 +1934,21 @@ input[type='checkbox'] {
 /* Artists page — search filter, Deezer column, correction picker              */
 /* ========================================================================== */
 
-.artist-search {
+.artists-header {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.artists-header h1 {
+  margin: 0;
+}
+.artist-search {
+  display: flex;
+  align-items: center;
   gap: 0.6rem;
-  margin: 0.5rem auto 1.25rem;
 }
 .artist-search input {
   width: min(380px, 80vw);
