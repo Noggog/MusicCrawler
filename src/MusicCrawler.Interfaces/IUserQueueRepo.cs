@@ -69,6 +69,16 @@ public interface IUserQueueRepo
     Task DeletePending(string userId);
 
     /// <summary>
+    /// Removes <paramref name="sourceArtist"/> from the provenance of this user's <em>pending</em>
+    /// candidates: a candidate it solely recommended is deleted; one other liked artists also
+    /// recommend keeps its row but drops this source and has its score decayed proportionally. Called
+    /// when an artist leaves the frontier (disliked or un-liked) so the queue stops surfacing the
+    /// recommendations only that artist seeded — no manual rebuild needed. A no-op for an artist that
+    /// never seeded anything (it appears in no <c>sources</c> array).
+    /// </summary>
+    Task PruneBySource(string userId, string sourceArtist);
+
+    /// <summary>
     /// Every user id that has at least one queue row — the population the periodic replenisher tops
     /// up. Sourced here (not from a user repo) so it covers exactly the users who've engaged discovery.
     /// </summary>

@@ -24,7 +24,6 @@ import {
   getArtistAlbums,
   getMixedFeed,
   rate,
-  refreshQueue,
   snooze,
   type SnoozeDuration,
   type Verdict,
@@ -431,7 +430,6 @@ function DetailPanel({
   item,
   rated,
   busy,
-  rebuildPending,
   onRate,
   onSnooze,
   onUndo,
@@ -440,7 +438,6 @@ function DetailPanel({
   item: FeedItem | null
   rated: Map<string, RowMark>
   busy: boolean
-  rebuildPending: boolean
   onRate: (item: FeedItem, verdict: Verdict) => void
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
@@ -505,7 +502,6 @@ function DetailPanel({
                 <button
                   className="disc-btn up"
                   title={isAlbum ? 'Queue album to buy' : 'Approve'}
-                  disabled={rebuildPending}
                   onClick={() => onRate(item, 'up')}
                 >
                   <IconApprove />
@@ -513,12 +509,11 @@ function DetailPanel({
                 <button
                   className="disc-btn down"
                   title="Not interested"
-                  disabled={rebuildPending}
                   onClick={() => onRate(item, 'down')}
                 >
                   <IconReject />
                 </button>
-                <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={rebuildPending} />
+                <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={false} />
               </>
             )}
           </div>
@@ -547,7 +542,7 @@ function DetailPanel({
             rated={rated}
             onRate={onRate}
             onUndo={onUndo}
-            disabled={rebuildPending}
+            disabled={false}
           />
         </>
       )}
@@ -564,7 +559,6 @@ function DiscRow({
   selected,
   verdict,
   busy,
-  rebuildPending,
   onSelect,
   onRate,
   onSnooze,
@@ -574,7 +568,6 @@ function DiscRow({
   selected: boolean
   verdict: RowMark | undefined
   busy: boolean
-  rebuildPending: boolean
   onSelect: (item: FeedItem) => void
   onRate: (item: FeedItem, verdict: Verdict) => void
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
@@ -611,7 +604,6 @@ function DiscRow({
               <button
                 className="disc-btn up"
                 title={isAlbum ? 'Queue album to buy' : 'Approve'}
-                disabled={rebuildPending}
                 onClick={() => onRate(item, 'up')}
               >
                 <IconApprove />
@@ -619,7 +611,6 @@ function DiscRow({
               <button
                 className="disc-btn down"
                 title="Not interested"
-                disabled={rebuildPending}
                 onClick={() => onRate(item, 'down')}
               >
                 <IconReject />
@@ -627,7 +618,7 @@ function DiscRow({
               {/* Snooze hides a "not now" pick for a while — works for artists and missing albums. */}
               <SnoozeControl
                 onPick={(duration) => onSnooze(item, duration)}
-                disabled={rebuildPending}
+                disabled={false}
               />
             </>
           )}
@@ -718,17 +709,11 @@ export default function Discover() {
     // Freeze the feed for the session. Without this it defaults to stale-immediately and refetches on
     // every remount (i.e. navigating away and back) — and because the server drops just-rated artists
     // from the feed, that refetch made an approved artist's card (and its inline albums) disappear.
-    // A new seed/page is a different query key, so Shuffle and paging still fetch fresh; Rebuild
-    // invalidates ['feed'] explicitly; a full page reload starts a new session with a new seed.
+    // A new seed/page is a different query key, so Shuffle and paging still fetch fresh; a full page
+    // reload starts a new session with a new seed. (The queue rebuild now lives in the dev panel.)
     staleTime: Infinity,
     gcTime: 60 * 60 * 1000,
   })
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['feed'] })
-    queryClient.invalidateQueries({ queryKey: ['purchases'] })
-    queryClient.invalidateQueries({ queryKey: ['ratings'] })
-  }
 
   const rateMutation = useMutation({
     mutationFn: ({ item, verdict }: { item: FeedItem; verdict: Verdict }) => rate(item, verdict),
@@ -809,21 +794,12 @@ export default function Discover() {
       queryClient.invalidateQueries({ queryKey: ['purchases'] })
     },
   })
-  const rebuild = useMutation({
-    mutationFn: refreshQueue,
-    onSuccess: () => {
-      setRated(new Map())
-      setPage(0)
-      invalidate()
-    },
-  })
-
   const shuffle = () => {
     setSeed(newSeed())
     setPage(0)
   }
 
-  const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending || rebuild.isPending
+  const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
@@ -858,9 +834,6 @@ export default function Discover() {
         <button className="disc-rebuild" onClick={shuffle} disabled={busy || isFetching}>
           ⤮ Shuffle
         </button>
-        <button className="disc-rebuild" onClick={() => rebuild.mutate()} disabled={busy}>
-          {rebuild.isPending ? 'Rebuilding…' : 'Rebuild recommendations'}
-        </button>
       </div>
 
       {/* The category tags double as the filter: click a chip to show/hide that kind in the feed. */}
@@ -882,7 +855,6 @@ export default function Discover() {
         })}
       </div>
 
-      {rebuild.isError && <p className="error">Rebuild failed: {(rebuild.error as Error).message}</p>}
       {rateMutation.isError && <p className="error">Rating failed: {(rateMutation.error as Error).message}</p>}
       {snoozeMutation.isError && <p className="error">Snooze failed: {(snoozeMutation.error as Error).message}</p>}
       {isError && <p className="error">Failed to load feed: {(error as Error).message}</p>}
@@ -917,7 +889,6 @@ export default function Discover() {
                     selected={selectedKey === rowKey}
                     verdict={rated.get(rowKey)}
                     busy={busy}
-                    rebuildPending={rebuild.isPending}
                     onSelect={setSelected}
                     onRate={(it, verdict) => rateMutation.mutate({ item: it, verdict })}
                     onSnooze={(it, duration) => snoozeMutation.mutate({ item: it, duration })}
@@ -946,7 +917,6 @@ export default function Discover() {
             item={selected}
             rated={rated}
             busy={busy}
-            rebuildPending={rebuild.isPending}
             onRate={(item, verdict) => rateMutation.mutate({ item, verdict })}
             onSnooze={(item, duration) => snoozeMutation.mutate({ item, duration })}
             onUndo={(item) => undo.mutate(item)}

@@ -138,13 +138,38 @@ public class DiscoveryEngineTests
     }
 
     [Fact]
-    public async Task Disliking_an_artist_records_verdict_and_does_not_expand()
+    public async Task Disliking_an_artist_records_verdict_prunes_its_recommendations_and_does_not_expand()
     {
         await _sut.RateArtist(User, "Phoebe Bridgers", DiscoveryStatus.Disliked);
 
         await _queue.Received(1).Rate(User, "Phoebe Bridgers", DiscoveryStatus.Disliked, null);
+        // Dislike takes the artist out of the frontier, so its seeded recommendations are pruned…
+        await _queue.Received(1).PruneBySource(User, "Phoebe Bridgers");
+        // …but it never grows the frontier or rebuilds the queue.
         await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>());
         await _queue.DidNotReceive().UpsertCandidates(Arg.Any<string>(), Arg.Any<IReadOnlyList<DiscoveryCandidate>>());
+    }
+
+    [Fact]
+    public async Task Liking_an_artist_does_not_prune()
+    {
+        _queue.Rate(User, "Phoebe Bridgers", DiscoveryStatus.Liked, null)
+            .Returns(new DiscoveryCandidate(new ArtistKey("Phoebe Bridgers"), null, 3, new[] { "boygenius" }, 1));
+        Relates("Phoebe Bridgers", ("Better Oblivion", null, 1));
+
+        await _sut.RateArtist(User, "Phoebe Bridgers", DiscoveryStatus.Liked);
+
+        await _queue.DidNotReceive().PruneBySource(Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Clearing_an_artist_rating_prunes_the_recommendations_it_seeded()
+    {
+        await _sut.ClearArtistRating(User, "boygenius");
+
+        await _queue.Received(1).ClearVerdict(User, "boygenius");
+        // Un-liking drops the artist from the frontier, so the recommendations it seeded are pruned too.
+        await _queue.Received(1).PruneBySource(User, "boygenius");
     }
 
     [Fact]

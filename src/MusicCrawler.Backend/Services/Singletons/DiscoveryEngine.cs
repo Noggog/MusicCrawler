@@ -305,7 +305,8 @@ public class DiscoveryEngine : IQueueReplenisher
 
     /// <summary>
     /// Thumbs an artist. A like records the verdict and grows the frontier from it (queuing it to buy
-    /// too, if it isn't owned); a dislike just prunes — recording the verdict is enough.
+    /// too, if it isn't owned); a dislike records the verdict and prunes the recommendations that
+    /// artist alone had seeded, so the queue tracks current taste without a manual rebuild.
     /// </summary>
     public async Task RateArtist(string userId, string artistName, DiscoveryStatus status)
     {
@@ -313,6 +314,12 @@ public class DiscoveryEngine : IQueueReplenisher
         if (status == DiscoveryStatus.Liked)
         {
             await ExpandFrom(userId, new[] { artistName }, depth: (rated?.Depth ?? 0) + 1);
+        }
+        else if (status == DiscoveryStatus.Disliked)
+        {
+            // Disliking takes the artist out of the frontier; drop the pending candidates it seeded
+            // (or just its provenance + score share, where others also recommend them).
+            await _queue.PruneBySource(userId, artistName);
         }
     }
 
@@ -336,8 +343,13 @@ public class DiscoveryEngine : IQueueReplenisher
         _albumRatings.Rate(userId, artistName, albumName, albumArt, status);
 
     /// <summary>Clears an artist's verdict, returning it to the feed (recommended or library).</summary>
-    public Task ClearArtistRating(string userId, string artistName) =>
-        _queue.ClearVerdict(userId, artistName);
+    public async Task ClearArtistRating(string userId, string artistName)
+    {
+        await _queue.ClearVerdict(userId, artistName);
+        // Un-liking drops the artist from the frontier, so prune the recommendations it seeded — same
+        // as a dislike. A no-op when the cleared verdict wasn't a like (it seeded nothing).
+        await _queue.PruneBySource(userId, artistName);
+    }
 
     /// <summary>Clears an album's verdict, returning it to the missing-albums feed.</summary>
     public Task ClearAlbumRating(string userId, string artistName, string albumName) =>

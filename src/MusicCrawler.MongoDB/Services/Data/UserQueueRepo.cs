@@ -281,6 +281,51 @@ public class UserQueueRepo : IUserQueueRepo
             Builders<BsonDocument>.Filter.Eq(FieldUserId, userId)
             & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusPending));
 
+    public async Task PruneBySource(string userId, string sourceArtist)
+    {
+        var f = Builders<BsonDocument>.Filter;
+        // Only pending rows carry expansion provenance worth pruning — a Liked/Disliked/Snoozed row is
+        // the user's own verdict. An equality match on the array field hits docs whose sources contain it.
+        var filter = f.Eq(FieldUserId, userId)
+                     & f.Eq(FieldStatus, StatusPending)
+                     & f.Eq(FieldSources, sourceArtist);
+        var docs = await (await Collection.FindAsync(filter)).ToListAsync();
+        if (docs.Count == 0)
+        {
+            return;
+        }
+
+        var models = new List<WriteModel<BsonDocument>>(docs.Count);
+        foreach (var doc in docs)
+        {
+            var id = doc["_id"];
+            var sources = doc.TryGetValue(FieldSources, out var src) && src.IsBsonArray
+                ? src.AsBsonArray.Where(x => !x.IsBsonNull).Select(x => x.AsString).ToList()
+                : new List<string>();
+            var remaining = sources
+                .Where(s => !string.Equals(s, sourceArtist, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (remaining.Count == 0)
+            {
+                // The departing artist was this candidate's only recommender — it has no reason to stay.
+                models.Add(new DeleteOneModel<BsonDocument>(f.Eq("_id", id)));
+                continue;
+            }
+
+            // Still recommended by other liked artists: strip this provenance and decay the score by the
+            // share of sources lost. Exact per-source contributions aren't stored, so scale proportionally
+            // — enough to keep the score-ranked order sane without resurrecting the per-source math.
+            var score = doc.TryGetValue(FieldScore, out var s) && s.IsNumeric ? s.ToDouble() : 0;
+            var decayed = score * remaining.Count / sources.Count;
+            models.Add(new UpdateOneModel<BsonDocument>(
+                f.Eq("_id", id),
+                Builders<BsonDocument>.Update.Set(FieldSources, remaining).Set(FieldScore, decayed)));
+        }
+
+        await Collection.BulkWriteAsync(models, new BulkWriteOptions { IsOrdered = false });
+    }
+
     public async Task<string[]> GetAllUserIds()
     {
         var ids = await Collection.DistinctAsync<string>(FieldUserId, Builders<BsonDocument>.Filter.Empty);
