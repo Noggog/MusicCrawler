@@ -130,6 +130,34 @@ public class PurchaseServiceTests
     }
 
     [Fact]
+    public async Task Album_owned_under_a_typographically_different_title_closes_out_to_in_library()
+    {
+        const string likedTitle = "who told you to think??!!?!?!?!";
+        // Plex stored the same album with a zero-width space and extra whitespace. A case-only
+        // compare misses it, leaving an already-downloaded album stuck on the queue forever;
+        // reconcile must match it the same canonical way the missing-album diff does.
+        const string plexTitle = "Who told you to ​think??!!?!?!?!";
+
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("Milo"), new AlbumKey(likedTitle), "art", DiscoveryStatus.Liked),
+        });
+        await _sut.Reconcile();
+        await _purchases.SetStatus(PurchaseKey.ForAlbum("Milo", likedTitle), PurchaseStatus.Sent);
+
+        // It has since landed in Plex under the typographically-different title.
+        _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Milo"] = new(StringComparer.OrdinalIgnoreCase) { plexTitle },
+        });
+
+        var active = await _sut.GetActive();
+
+        active.Should().BeEmpty();
+        _purchases.Items.Single().Status.Should().Be(PurchaseStatus.InLibrary);
+    }
+
+    [Fact]
     public async Task Album_items_carry_the_deezer_album_id_from_the_missing_set()
     {
         _albumRatings.GetAllLiked().Returns(new[]

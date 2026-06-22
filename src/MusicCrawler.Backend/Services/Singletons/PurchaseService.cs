@@ -100,7 +100,13 @@ public class PurchaseService
         var owned = (await _library.GetAllArtistMetadata())
             .Select(a => a.ArtistKey.ArtistName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ownedAlbums = await _catalog.GetOwnedAlbums();
+        // Normalize the owned album titles up front so typography / whitespace / zero-width
+        // differences between Plex and Deezer can't keep an already-owned album stuck in the queue.
+        // This is the same canonical match the missing-album diff uses, so the two agree.
+        var ownedAlbums = (await _catalog.GetOwnedAlbums()).ToDictionary(
+            kvp => kvp.Key,
+            kvp => kvp.Value.Select(AlbumTitleMatcher.Normalize).ToHashSet(StringComparer.Ordinal),
+            StringComparer.OrdinalIgnoreCase);
 
         // The Deezer album id per (artist, album) — sourced from the global missing-albums set so a
         // liked album carries the id the downloader needs without threading it through the rating flow.
@@ -171,5 +177,5 @@ public class PurchaseService
     }
 
     private static bool AlbumIsOwned(Dictionary<string, HashSet<string>> ownedAlbums, string artist, string album) =>
-        ownedAlbums.TryGetValue(artist, out var set) && set.Contains(album);
+        ownedAlbums.TryGetValue(artist, out var set) && set.Contains(AlbumTitleMatcher.Normalize(album));
 }

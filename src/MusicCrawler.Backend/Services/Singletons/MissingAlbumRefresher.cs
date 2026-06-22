@@ -1,4 +1,3 @@
-using System.Text;
 using MusicCrawler.Deezer.Services;
 using MusicCrawler.Interfaces;
 
@@ -154,45 +153,5 @@ public class MissingAlbumRefresher
         return (all, missing);
     }
 
-    /// <summary>
-    /// Canonical form for matching album titles across sources: trimmed, lower-cased, with curly
-    /// quotes/apostrophes and en/em dashes folded to ASCII and internal whitespace collapsed — so a
-    /// title that differs only in typography (Plex's "Don't" vs. Deezer's "Don't") still matches.
-    /// </summary>
-    private static string NormalizeTitle(string? title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            return string.Empty;
-        }
-
-        var sb = new StringBuilder(title.Length);
-        var lastWasSpace = false;
-        foreach (var ch in title.Trim())
-        {
-            var c = ch switch
-            {
-                '‘' or '’' or 'ʼ' or '′' => '\'', // curly/modifier apostrophes, prime
-                '“' or '”' => '"',                          // curly double quotes
-                '–' or '—' => '-',                          // en/em dash
-                _ => char.ToLowerInvariant(ch),
-            };
-
-            if (char.IsWhiteSpace(c))
-            {
-                if (!lastWasSpace)
-                {
-                    sb.Append(' ');
-                }
-                lastWasSpace = true;
-            }
-            else
-            {
-                sb.Append(c);
-                lastWasSpace = false;
-            }
-        }
-
-        return sb.ToString().Trim();
-    }
+    private static string NormalizeTitle(string? title) => AlbumTitleMatcher.Normalize(title);
 }
