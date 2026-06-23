@@ -75,3 +75,19 @@ public record LibrarySource(string Source, string Label, bool Present, IReadOnly
 
 /// <summary>The library-presence view of one artist, one entry per registered library source.</summary>
 public record ArtistLibraries(ArtistKey Artist, IReadOnlyList<LibrarySource> Sources);
+
+/// <summary>
+/// A compact summary of the user's per-song Plex ratings for one artist, on a 0–5 star scale, for the
+/// discovery readout. Plex only has songs for artists already in the library, so <see cref="Present"/>
+/// is false when the artist has no Plex rating keys. <see cref="RatedCount"/> is 0 when the artist is in
+/// Plex but no song is rated (or Plex was unreachable); <see cref="Highest"/>/<see cref="Lowest"/>/
+/// <see cref="Average"/> are null in both empty cases. <see cref="TrackCount"/> is the total songs seen.
+/// </summary>
+public record ArtistRatingStats(
+    ArtistKey Artist,
+    bool Present,
+    double? Highest,
+    double? Lowest,
+    double? Average,
+    int RatedCount,
+    int TrackCount);

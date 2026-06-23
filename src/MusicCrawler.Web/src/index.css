@@ -1410,6 +1410,61 @@ input[type='checkbox'] {
   margin-top: 0;
 }
 
+/* The user's Plex song-rating summary, pinned to the far right of the header (the headinfo column's
+   flex:1 pushes it over) and top-aligned with the art. A compact card so it reads as a stat block. */
+.plex-ratings {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(var(--art-accent, 225, 96, 99), 0.45);
+  border-radius: var(--radius);
+  background: rgba(var(--art-accent, 225, 96, 99), 0.08);
+}
+.plex-ratings-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.plex-ratings-row {
+  display: flex;
+  gap: 0.9rem;
+}
+.plex-rating-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+.plex-rating-val {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.plex-rating-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+.plex-ratings-count {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+/* On the narrow full-screen drawer (≤960px, where the header switches to the pinned-art layout) the
+   stats can't share the row with the metadata column, so wrap them onto their own full-width line. */
+@media (max-width: 960px) {
+  .detail-header {
+    flex-wrap: wrap;
+  }
+  .plex-ratings {
+    flex-basis: 100%;
+    align-self: stretch;
+  }
+}
+
 /* Hero image with a neon halo — now left-aligned in the header rather than centred in the pane. */
 .detail-hero {
   position: relative;

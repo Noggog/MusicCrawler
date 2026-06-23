@@ -81,6 +81,19 @@ export interface ArtistLibraries {
   sources: LibrarySource[]
 }
 
+// Mirror ArtistRatingStats (Artist.cs) — the user's per-song Plex rating summary (0–5 stars) for one
+// artist, shown in the detail readout. `present` is false for artists not in Plex; `ratedCount` is 0
+// when the artist is in Plex but nothing's rated. highest/lowest/average are null in both empty cases.
+export interface ArtistRatingStats {
+  artist: ArtistKey
+  present: boolean
+  highest: number | null
+  lowest: number | null
+  average: number | null
+  ratedCount: number
+  trackCount: number
+}
+
 // Mirrors CatalogSyncResult (IArtistCatalogRepo.cs) — returned by POST /catalog/refresh.
 export interface CatalogSyncResult {
   upserted: number

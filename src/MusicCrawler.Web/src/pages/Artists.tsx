@@ -11,6 +11,7 @@ import { rateFeedback } from '../effects/effectsBus'
 import type { ArtistAlbumItem, ArtistListItem, DiscoveryStatus, FeedItem, SourceCandidate, SourceIdentity } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
+import { PlexRatingStats } from '../components/PlexRatingStats'
 import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
 
 // The detail pane is driven by a lightweight selection: just enough to render the readout and to key
@@ -705,6 +706,10 @@ function DetailPane({
             </div>
           )}
         </div>
+
+        {/* The user's song ratings for this artist, pinned to the right of the art. Library artists
+            only — Plex has no songs (so no ratings) for a not-yet-owned recommendation. */}
+        {libItem && <PlexRatingStats artist={name} />}
       </div>
 
       {/* Sample the artist's top tracks (30s Deezer previews) right in the readout, like Discover.

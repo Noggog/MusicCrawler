@@ -114,6 +114,28 @@ public class PlexApi : IPlexApi
         return metadata?.ToObject<PlexMusicAlbum[]>() ?? Array.Empty<PlexMusicAlbum>();
     }
 
+    /// <summary>
+    /// All tracks under an artist via <c>/library/metadata/{ratingKey}/allLeaves</c> — Plex flattens the
+    /// artist's albums into one track list. Each track carries <c>userRating</c> (0–10, the token
+    /// account's rating; absent when unrated). Returns empty when the key 404s (item removed / keys
+    /// shifted on a rebuild) so the rating summary degrades to "no stats" rather than throwing.
+    /// </summary>
+    public async Task<PlexTrack[]> GetArtistTracks(int ratingKey)
+    {
+        var url = $"{_endpointInfo.BaseUri}/library/metadata/{ratingKey}/allLeaves";
+        _logger.LogDebug("Plex GetArtistTracks {RatingKey}: {Url}", ratingKey, url);
+        var response = await httpClient.GetAsync(url);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Array.Empty<PlexTrack>();
+        }
+
+        response.EnsureSuccessStatusCode();
+        var data = JObject.Parse(await response.Content.ReadAsStringAsync());
+        var metadata = data["MediaContainer"]?["Metadata"];
+        return metadata?.ToObject<PlexTrack[]>() ?? Array.Empty<PlexTrack>();
+    }
+
     public async Task<PlexRecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5)
     {
         string url = $"{_endpointInfo.BaseUri}/library/sections/{libraryKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={maxResults}";
@@ -253,4 +275,15 @@ public record PlexMusicAlbum
     public int RatingKey { get; set; }
     public string Title { get; set; }       // album title
     public string ParentTitle { get; set; } // owning artist's name
+}
+
+/// <summary>
+/// A track ("leaf") returned by <c>allLeaves</c>. <see cref="UserRating"/> is the token account's rating
+/// on Plex's 0–10 scale (10 = five stars) and is <c>null</c> for an unrated track — only rated tracks
+/// feed the artist rating summary.
+/// </summary>
+public record PlexTrack
+{
+    public string Title { get; set; }
+    public double? UserRating { get; set; }
 }

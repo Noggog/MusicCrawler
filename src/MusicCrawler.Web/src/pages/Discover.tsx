@@ -34,6 +34,7 @@ import { useArtAccent } from '../art/artColors'
 import type { FeedItem, FeedKind } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
+import { PlexRatingStats } from '../components/PlexRatingStats'
 import { IconApprove, IconMoon, IconReject } from '../components/icons'
 import { rateFeedback } from '../effects/effectsBus'
 
@@ -559,6 +560,10 @@ function DetailPanel({
           {/* Open the owned artist where it lives (Plex / Navidrome), just under the rate buttons. */}
           {!isAlbum && IN_LIBRARY_KINDS.has(item.kind) && <LibraryLinks artist={name} />}
         </div>
+
+        {/* The user's song ratings for this artist, pinned to the right of the art. Owned artists
+            only — Plex has no songs (so no ratings) for a not-yet-owned recommendation or an album. */}
+        {!isAlbum && IN_LIBRARY_KINDS.has(item.kind) && <PlexRatingStats artist={name} />}
       </div>
 
       {canPlay && (

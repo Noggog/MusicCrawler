@@ -212,6 +212,13 @@ api.MapGet("/artists/libraries", async (string artist, LibrarySourcesService lib
     .RequireAuthorization()
     .WithName("GetArtistLibraries");
 
+// The user's per-song Plex rating summary (highest / lowest / average, 0–5 stars) for one artist,
+// shown in the discovery readout. Present=false for artists not in Plex (nothing to show).
+api.MapGet("/artists/ratings", async (string artist, ArtistRatingStatsService ratings) =>
+        Results.Ok(await ratings.Get(new ArtistKey(artist))))
+    .RequireAuthorization()
+    .WithName("GetArtistRatings");
+
 // Free-text candidate search within one source, powering that source's "Correct association" picker.
 api.MapGet("/sources/{source}/search",
         async (string source, string q, int? limit, IEnumerable<ISourceIdentityCorrector> correctors) =>

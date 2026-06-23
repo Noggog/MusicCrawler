@@ -15,6 +15,14 @@ public interface IPlexApi
     Task<PlexMusicArtist?> GetMusicArtist(int ratingKey);
 
     Task<PlexMusicAlbum[]> GetMusicAlbums(int library);
+
+    /// <summary>
+    /// Every track ("leaf") under an artist rating key, across all their albums, carrying each track's
+    /// per-account <c>userRating</c> (Plex's 0–10 scale; null when unrated). Empty when the key no longer
+    /// resolves. Used to summarise the user's song ratings for an artist in the discovery readout.
+    /// </summary>
+    Task<PlexTrack[]> GetArtistTracks(int ratingKey);
+
     Task<PlexRecentlyAddedItem[]> GetRecentlyAdded(int libraryKey, int maxResults = 5);
     Task RefreshLibrary(int libraryKey);
     Task SetArtistCollections(
