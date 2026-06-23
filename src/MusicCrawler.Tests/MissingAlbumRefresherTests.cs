@@ -32,8 +32,18 @@ public class MissingAlbumRefresherTests
         _deezer.SearchArtist(Artist).Returns(new DeezerArtist { id = DeezerId, name = Artist });
     }
 
-    private static DeezerAlbum Album(string title, string recordType = "album") =>
-        new() { id = 1, title = title, record_type = recordType };
+    private static DeezerAlbum Album(string title, string recordType = "album", long id = 1) =>
+        new() { id = id, title = title, record_type = recordType };
+
+    private static Dictionary<string, HashSet<string>> Owned(params (string Artist, string[] Albums)[] entries)
+    {
+        var d = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (artist, albums) in entries)
+        {
+            d[artist] = new HashSet<string>(albums, StringComparer.OrdinalIgnoreCase);
+        }
+        return d;
+    }
 
     private IReadOnlyList<MissingAlbum> CapturedMissing()
     {
@@ -89,9 +99,47 @@ public class MissingAlbumRefresherTests
             Album("an ep", recordType: "ep"),
         });
 
-        var result = await _sut.RefreshOne(new ArtistKey(Artist), Array.Empty<string>());
+        var result = await _sut.RefreshOne(new ArtistKey(Artist), Owned());
 
         result.Select(m => m.Album.AlbumName).Should().BeEquivalentTo("first lp", "second lp");
         CapturedMissing().Select(m => m.Album.AlbumName).Should().BeEquivalentTo("first lp", "second lp");
+    }
+
+    [Fact]
+    public async Task Collaboration_owned_under_its_album_artist_is_not_missing()
+    {
+        // "milo" lists a duo record on Deezer whose real album-artist is "nostrum grocers" — which is
+        // how the library filed it. Even though milo's own owned set lacks it, it must NOT surface as
+        // missing: it's owned under the album-artist.
+        _catalog.GetOwnedAlbums().Returns(Owned(("nostrum grocers", new[] { "Nostrum Grocers" })));
+        _deezer.GetAlbums(DeezerId).Returns(new[] { Album("nostrum grocers", id: 99) });
+        _deezer.GetAlbum(99).Returns(new DeezerAlbum
+        {
+            id = 99, title = "nostrum grocers", artist = new DeezerArtist { name = "nostrum grocers" },
+        });
+
+        await _sut.Refresh();
+
+        CapturedMissing().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Collaboration_not_owned_is_missing_but_carries_its_album_artist()
+    {
+        // Same duo record, but the library doesn't have it anywhere. It surfaces as missing under the
+        // listing artist (so it stays discoverable on milo's feed), yet matches ownership under the
+        // album-artist the library would file it under.
+        _catalog.GetOwnedAlbums().Returns(Owned());
+        _deezer.GetAlbums(DeezerId).Returns(new[] { Album("nostrum grocers", id: 99) });
+        _deezer.GetAlbum(99).Returns(new DeezerAlbum
+        {
+            id = 99, title = "nostrum grocers", artist = new DeezerArtist { name = "Nostrum Grocers" },
+        });
+
+        await _sut.Refresh();
+
+        var m = CapturedMissing().Single();
+        m.Artist.ArtistName.Should().Be(Artist);                 // surfaces under the listing artist
+        m.MatchArtist.ArtistName.Should().Be("Nostrum Grocers"); // matches ownership under the album-artist
     }
 }

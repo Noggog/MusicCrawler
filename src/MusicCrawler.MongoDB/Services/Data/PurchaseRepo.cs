@@ -23,6 +23,7 @@ public class PurchaseRepo : IPurchaseRepo
     private const string FieldRequestedAt = "requestedAt";
     private const string FieldSentAt = "sentAt";
     private const string FieldDeezerAlbumId = "deezerAlbumId";
+    private const string FieldAlbumArtist = "albumArtist";
 
     private readonly IMongoDbProvider _mongoDbProvider;
 
@@ -54,6 +55,14 @@ public class PurchaseRepo : IPurchaseRepo
             .Set(FieldScore, item.Score)
             .Set(FieldSources, new BsonArray(item.Sources))
             .Set(FieldDeezerAlbumId, item.DeezerAlbumId is null ? (BsonValue)BsonNull.Value : new BsonInt64(item.DeezerAlbumId.Value));
+
+        // Album-artist is an immutable fact we may only learn once (while the album is still in the
+        // missing set). Set it when we have it, but never overwrite a known value back to null on a
+        // later reconcile where the missing set no longer supplies it.
+        if (item.AlbumArtist != null)
+        {
+            update = update.Set(FieldAlbumArtist, item.AlbumArtist);
+        }
 
         return Collection.UpdateOneAsync(
             Builders<BsonDocument>.Filter.Eq("_id", item.Id),
@@ -99,6 +108,7 @@ public class PurchaseRepo : IPurchaseRepo
 
         return new PurchaseItem(
             doc["_id"].AsString, kind, new ArtistKey(Str(FieldArtist)), StrN(FieldAlbum),
-            StrN(FieldImageUrl), score, sources, status, requestedAt, sentAt, deezerAlbumId);
+            StrN(FieldImageUrl), score, sources, status, requestedAt, sentAt, deezerAlbumId,
+            StrN(FieldAlbumArtist));
     }
 }

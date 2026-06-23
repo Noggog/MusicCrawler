@@ -40,7 +40,10 @@ public record PurchaseItem(
     PurchaseStatus Status,
     DateTimeOffset RequestedAt,
     DateTimeOffset? SentAt,
-    long? DeezerAlbumId);
+    long? DeezerAlbumId,
+    // The act the library files this album under (Deezer's album-artist) — used to match ownership
+    // for a collaboration whose listing/display artist differs. Null for artists and non-collabs.
+    string? AlbumArtist = null);
 
 /// <summary>
 /// A live snapshot of the download subsystem for the monitoring panel: whether downloads are on,

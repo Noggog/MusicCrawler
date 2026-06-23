@@ -12,6 +12,14 @@ public class DeezerAlbum
     public string? title { get; set; }
     public string? record_type { get; set; }
 
+    /// <summary>
+    /// The album's album-artist — present on <c>GET /album/{id}</c> but NOT on the
+    /// <c>GET /artist/{id}/albums</c> discography listing (there an album is implicitly the listed
+    /// artist's). For a collaboration this is the credited release act (e.g. a duo name), which is
+    /// what a downloader tags the files with and what the library files the album under.
+    /// </summary>
+    public DeezerArtist? artist { get; set; }
+
     // Deezer ships several cover sizes; we prefer the largest available.
     public string? cover_xl { get; set; }
     public string? cover_big { get; set; }

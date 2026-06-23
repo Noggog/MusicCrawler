@@ -108,11 +108,25 @@ public class PurchaseService
             kvp => kvp.Value.Select(AlbumTitleMatcher.Normalize).ToHashSet(StringComparer.Ordinal),
             StringComparer.OrdinalIgnoreCase);
 
-        // The Deezer album id per (artist, album) — sourced from the global missing-albums set so a
-        // liked album carries the id the downloader needs without threading it through the rating flow.
-        var deezerIds = (await _missing.GetAll())
+        // Per (listing-artist, album), sourced from the global missing-albums set so a liked album
+        // carries what reconcile needs without threading it through the rating flow:
+        //   - the Deezer id the downloader needs, and
+        //   - the album-artist the library files it under (differs from the listing artist for a
+        //     collaboration, e.g. a duo record surfaced via one member) — the key to match ownership.
+        var missingAll = await _missing.GetAll();
+        var deezerIds = missingAll
             .GroupBy(m => AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName))
             .ToDictionary(g => g.Key, g => g.First().DeezerAlbumId);
+        var albumArtists = missingAll
+            .GroupBy(m => AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName))
+            .ToDictionary(g => g.Key, g => g.First().MatchArtist.ArtistName);
+
+        // The act the library files an album under: the persisted album-artist if we have one, else
+        // the freshest from the missing set, else the listing artist (non-collaboration default).
+        string MatchArtistFor(string listingArtist, string album, string? persisted) =>
+            persisted
+            ?? (albumArtists.TryGetValue(AlbumRatingKey.For(listingArtist, album), out var aa) ? aa : null)
+            ?? listingArtist;
 
         // Desired = the current liked-but-unowned items, keyed and deduped across users.
         var desired = new Dictionary<string, PurchaseItem>();
@@ -127,21 +141,24 @@ public class PurchaseService
                 g.Select(c => c.ImageUrl).FirstOrDefault(u => u != null),
                 g.Max(c => c.Score),
                 g.SelectMany(c => c.Sources).Distinct().ToArray(),
-                PurchaseStatus.Pending, default, null, null);
+                PurchaseStatus.Pending, default, null, null, null);
         }
 
         foreach (var g in (await _albumRatings.GetAllLiked())
-                     .Where(r => !AlbumIsOwned(ownedAlbums, r.Artist.ArtistName, r.Album.AlbumName))
+                     .Where(r => !AlbumIsOwned(ownedAlbums, MatchArtistFor(r.Artist.ArtistName, r.Album.AlbumName, null), r.Album.AlbumName))
                      .GroupBy(r => PurchaseKey.ForAlbum(r.Artist.ArtistName, r.Album.AlbumName)))
         {
             var first = g.First();
             var ratingKey = AlbumRatingKey.For(first.Artist.ArtistName, first.Album.AlbumName);
             long? deezerAlbumId = deezerIds.TryGetValue(ratingKey, out var did) && did != 0 ? did : null;
+            // Persist the album-artist on the row so it still reconciles once the album leaves the
+            // missing set (it drops out as soon as the library owns it).
+            var albumArtist = albumArtists.TryGetValue(ratingKey, out var aa) ? aa : null;
             desired[g.Key] = new PurchaseItem(
                 g.Key, FeedKind.MissingAlbum, first.Artist, first.Album.AlbumName,
                 g.Select(r => r.AlbumArt).FirstOrDefault(a => a != null),
                 0, Array.Empty<string>(),
-                PurchaseStatus.Pending, default, null, deezerAlbumId);
+                PurchaseStatus.Pending, default, null, deezerAlbumId, albumArtist);
         }
 
         // Insert new wants as pending / refresh display fields on existing rows.
@@ -154,7 +171,7 @@ public class PurchaseService
         foreach (var row in await _purchases.GetAll())
         {
             var nowOwned = row.Kind == FeedKind.MissingAlbum
-                ? AlbumIsOwned(ownedAlbums, row.Artist.ArtistName, row.Album ?? "")
+                ? AlbumIsOwned(ownedAlbums, MatchArtistFor(row.Artist.ArtistName, row.Album ?? "", row.AlbumArtist), row.Album ?? "")
                 : owned.Contains(row.Artist.ArtistName);
 
             if (nowOwned)

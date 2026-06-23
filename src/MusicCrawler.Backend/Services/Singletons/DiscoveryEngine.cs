@@ -223,11 +223,7 @@ public class DiscoveryEngine : IQueueReplenisher
     public async Task<IReadOnlyList<FeedItem>> ArtistAlbums(string userId, string artistName)
     {
         var ownedAlbums = await _catalog.GetOwnedAlbums();
-        var owned = ownedAlbums.TryGetValue(artistName, out var set)
-            ? (IEnumerable<string>)set
-            : Array.Empty<string>();
-
-        var rows = await _albumRefresher.RefreshOne(new ArtistKey(artistName), owned);
+        var rows = await _albumRefresher.RefreshOne(new ArtistKey(artistName), ownedAlbums);
         var decided = await _albumRatings.GetDecidedKeys(userId);
         return rows
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
@@ -245,11 +241,7 @@ public class DiscoveryEngine : IQueueReplenisher
     public async Task<IReadOnlyList<ArtistAlbumItem>> ArtistDiscography(string userId, string artistName)
     {
         var ownedAlbums = await _catalog.GetOwnedAlbums();
-        var owned = ownedAlbums.TryGetValue(artistName, out var set)
-            ? (IReadOnlyCollection<string>)set
-            : Array.Empty<string>();
-
-        var albums = await _albumRefresher.Discography(new ArtistKey(artistName), owned);
+        var albums = await _albumRefresher.Discography(new ArtistKey(artistName), ownedAlbums);
 
         // The user's verdicts on this artist's albums, keyed like the album-rating store, so a missing
         // album already queued/dismissed/snoozed shows that state instead of fresh action buttons.

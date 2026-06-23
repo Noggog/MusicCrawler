@@ -17,7 +17,14 @@ internal sealed class FakePurchaseRepo : IPurchaseRepo
     public Task Upsert(PurchaseItem item)
     {
         _items[item.Id] = _items.TryGetValue(item.Id, out var existing)
-            ? item with { Status = existing.Status, RequestedAt = existing.RequestedAt, SentAt = existing.SentAt }
+            ? item with
+            {
+                Status = existing.Status,
+                RequestedAt = existing.RequestedAt,
+                SentAt = existing.SentAt,
+                // Album-artist is sticky once learned (mirrors the Mongo repo): don't null it out.
+                AlbumArtist = item.AlbumArtist ?? existing.AlbumArtist,
+            }
             : item with { Status = PurchaseStatus.Pending };
         return Task.CompletedTask;
     }

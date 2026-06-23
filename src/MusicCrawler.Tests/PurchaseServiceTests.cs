@@ -158,6 +158,36 @@ public class PurchaseServiceTests
     }
 
     [Fact]
+    public async Task Album_owned_under_a_different_album_artist_closes_out_to_in_library()
+    {
+        // A collaboration surfaced/liked under "Milo", but the library files it under the duo
+        // "Nostrum Grocers" (Deezer's album-artist, carried on the missing record). Reconcile must
+        // match ownership under the album-artist, not the display artist, and close the row out.
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("Milo"), new AlbumKey("Nostrum Grocers"), "art", DiscoveryStatus.Liked),
+        });
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("Milo"), new AlbumKey("Nostrum Grocers"), "art", 456880775,
+                new ArtistKey("Nostrum Grocers")),
+        });
+        await _sut.Reconcile();
+        await _purchases.SetStatus(PurchaseKey.ForAlbum("Milo", "Nostrum Grocers"), PurchaseStatus.Sent);
+
+        // It has since landed in Plex, filed under the album-artist "Nostrum Grocers" — not "Milo".
+        _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Nostrum Grocers"] = new(StringComparer.OrdinalIgnoreCase) { "Nostrum Grocers" },
+        });
+
+        var active = await _sut.GetActive();
+
+        active.Should().BeEmpty();
+        _purchases.Items.Single().Status.Should().Be(PurchaseStatus.InLibrary);
+    }
+
+    [Fact]
     public async Task Album_items_carry_the_deezer_album_id_from_the_missing_set()
     {
         _albumRatings.GetAllLiked().Returns(new[]

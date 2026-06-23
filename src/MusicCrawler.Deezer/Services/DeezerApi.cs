@@ -74,6 +74,12 @@ public class DeezerApi : IDeezerApi
         return result?.data.ToArray() ?? Array.Empty<DeezerAlbum>();
     }
 
+    public async Task<DeezerAlbum?> GetAlbum(long albumId)
+    {
+        var url = $"{_endpointInfo.BaseUri}/album/{albumId}";
+        return await Get<DeezerAlbum>(url);
+    }
+
     public async Task<DeezerTrack[]> GetAlbumTracks(long albumId)
     {
         var url = $"{_endpointInfo.BaseUri}/album/{albumId}/tracks";
