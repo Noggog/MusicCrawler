@@ -898,7 +898,7 @@ function UncatalogedResults({
   )
 }
 
-export default function Artists() {
+export default function Browse() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -991,7 +991,7 @@ export default function Artists() {
     if (list.length === 0) return
     setRandomized(true)
 
-    // Deep-link: /artists?artist=<name> (e.g. the Discover "Go to artist" link on a missing-album
+    // Deep-link: /browse?artist=<name> (e.g. the Discover "Go to artist" link on a missing-album
     // card) opens straight onto that artist instead of a random pick — filter the list to them and
     // open the readout, on desktop and mobile alike since this is an explicit request. Strip the
     // param afterward so closing the readout / paging behaves normally.
@@ -1034,7 +1034,7 @@ export default function Artists() {
   return (
     <section>
       <div className="artists-header">
-        <h1>Artists</h1>
+        <h1>Browse</h1>
         {artists && artists.length > 0 && (
           <div className="artist-search">
             <input

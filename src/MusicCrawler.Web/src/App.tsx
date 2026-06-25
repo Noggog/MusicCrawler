@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
-import Artists from './pages/Artists'
+import Browse from './pages/Browse'
 import Discover from './pages/Discover'
 import Purchases from './pages/Purchases'
 import Dev from './pages/Dev'
@@ -12,9 +12,9 @@ export default function App() {
         <Route path="/" element={<Discover />} />
         {/* Discover used to live here; keep old links/bookmarks working. */}
         <Route path="/discover" element={<Navigate to="/" replace />} />
-        <Route path="/artists" element={<Artists />} />
-        {/* Ratings was folded into the Artists drill-down + Download queue; keep old links working. */}
-        <Route path="/ratings" element={<Navigate to="/artists" replace />} />
+        <Route path="/browse" element={<Browse />} />
+        {/* Ratings was folded into the Browse drill-down + Download queue; keep old links working. */}
+        <Route path="/ratings" element={<Navigate to="/browse" replace />} />
         <Route path="/purchases" element={<Purchases />} />
         {/* Cleanup and the old similarity debugger were folded into the dev panel. Keep old links working. */}
         <Route path="/cleanup" element={<Navigate to="/dev" replace />} />

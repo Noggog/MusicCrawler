@@ -176,7 +176,7 @@ export default function Purchases() {
         <p>
           <em>
             Nothing here yet. Thumbs-up albums on the <Link to="/">Discover</Link> page, or add an
-            artist's albums from the <Link to="/artists">Artists</Link> page, to queue them.
+            artist's albums from the <Link to="/browse">Browse</Link> page, to queue them.
           </em>
         </p>
       )}

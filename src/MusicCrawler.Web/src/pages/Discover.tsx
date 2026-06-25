@@ -518,7 +518,7 @@ function DetailPanel({
               </div>
               {/* Jump to this artist in the library (the Artists tab), filtered + opened to them —
                   handy on a missing-album card to see what else of theirs you already own. */}
-              <Link className="deezer-link detail-goartist" to={`/artists?artist=${encodeURIComponent(name)}`}>
+              <Link className="deezer-link detail-goartist" to={`/browse?artist=${encodeURIComponent(name)}`}>
                 Go to artist ↗
               </Link>
             </>
@@ -921,7 +921,7 @@ export default function Discover() {
       {kinds.length > 0 && !isPending && total === 0 && (
         <p>
           <em>
-            Nothing in the feed. Thumb some bands on the <Link to="/artists">Artists</Link> page to
+            Nothing in the feed. Thumb some bands on the <Link to="/browse">Browse</Link> page to
             seed recommendations, or check more categories above.
           </em>
         </p>
