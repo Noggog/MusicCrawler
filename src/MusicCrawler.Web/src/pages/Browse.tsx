@@ -266,6 +266,33 @@ function SourcePicker({
   )
 }
 
+// Compact deep links to open the selected artist where it lives (Plex now, Navidrome later), shown
+// inline in the readout header — the same per-library links as the Library tab, surfaced without a
+// tab switch (mirrors the Discover readout's "In your library" links).
+function LibraryLinks({ artist }: { artist: string }) {
+  const { data } = useQuery({
+    queryKey: ['artist-libraries', artist],
+    queryFn: () => getArtistLibraries(artist),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const links = (data?.sources ?? []).filter((s) => s.present).flatMap((s) => s.links)
+  if (links.length === 0) return null
+
+  return (
+    <>
+      <div className="detail-section-label">In your library</div>
+      <div className="detail-library-links">
+        {links.map((l) => (
+          <a className="deezer-link" key={l.url} href={l.url} target="_blank" rel="noopener noreferrer">
+            {l.label} ↗
+          </a>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // The "Library" tab: where the selected artist lives in the user's media servers (Plex now,
 // Navidrome eventually), with a deep link to open the artist there. Reuses the source-row styling.
 function LibraryTab({ artist }: { artist: string }) {
@@ -705,6 +732,10 @@ function DetailPane({
               </button>
             </div>
           )}
+
+          {/* Open the owned artist where it lives (Plex / Navidrome), inline under the rate buttons —
+              the same compact links as the Library tab, surfaced without a tab switch. */}
+          {libItem && <LibraryLinks artist={name} />}
         </div>
 
         {/* The user's song ratings for this artist, pinned to the right of the art. Library artists

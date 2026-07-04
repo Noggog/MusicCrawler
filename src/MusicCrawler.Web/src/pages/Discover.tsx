@@ -557,8 +557,9 @@ function DetailPanel({
             )}
           </div>
 
-          {/* Open the owned artist where it lives (Plex / Navidrome), just under the rate buttons. */}
-          {!isAlbum && IN_LIBRARY_KINDS.has(item.kind) && <LibraryLinks artist={name} />}
+          {/* Open the owned artist where it lives (Plex / Navidrome), just under the rate buttons.
+              On a missing-album card the artist is owned too, so offer the same link there. */}
+          {(isAlbum || IN_LIBRARY_KINDS.has(item.kind)) && <LibraryLinks artist={name} />}
         </div>
 
         {/* The user's song ratings for this artist, pinned to the right of the art. Owned artists
