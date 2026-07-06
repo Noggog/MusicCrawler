@@ -171,3 +171,24 @@ export async function unsendPurchase(id: string): Promise<void> {
   }
 }
 
+// The library albums a queued (near-miss titled) album can be merged into — every album owned under
+// the act this purchase is filed. Fetched on demand when the "Already in library?" pane opens.
+export async function getLibraryAlbums(id: string): Promise<string[]> {
+  const res = await fetch(`/api/purchases/library-albums?id=${encodeURIComponent(id)}`)
+  if (!res.ok) {
+    throw new Error(`Failed to load library albums: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as string[]
+}
+
+// Merge a queued album into one already in the library under a different title. Records a durable
+// match override (honoured by the reconcile and the missing-album diff) and drops the row from the
+// queue on the next reconcile.
+export async function mergePurchase(id: string, libraryAlbum: string): Promise<void> {
+  const params = new URLSearchParams({ id, libraryAlbum })
+  const res = await fetch(`/api/purchases/merge?${params}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to merge album: ${res.status} ${res.statusText}`)
+  }
+}
+

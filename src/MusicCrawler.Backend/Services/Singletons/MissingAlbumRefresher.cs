@@ -28,6 +28,7 @@ public class MissingAlbumRefresher
     private readonly DeezerArtistResolver _resolver;
     private readonly IDeezerApi _deezer;
     private readonly IMissingAlbumRepo _missing;
+    private readonly IAlbumMatchOverrideRepo _overrides;
     private readonly ILogger<MissingAlbumRefresher> _logger;
 
     // A Deezer album id -> its album-artist name. The discography listing omits the album-artist, so
@@ -41,12 +42,14 @@ public class MissingAlbumRefresher
         DeezerArtistResolver resolver,
         IDeezerApi deezer,
         IMissingAlbumRepo missing,
+        IAlbumMatchOverrideRepo overrides,
         ILogger<MissingAlbumRefresher> logger)
     {
         _catalog = catalog;
         _resolver = resolver;
         _deezer = deezer;
         _missing = missing;
+        _overrides = overrides;
         _logger = logger;
     }
 
@@ -148,6 +151,12 @@ public class MissingAlbumRefresher
 
         var scannedOwned = OwnedTitlesFor(artist.ArtistName);
 
+        // User-asserted merges — a release the diff would call missing that the user has confirmed is
+        // already in the library under a near-miss title. Same keys the purchase reconcile builds.
+        var overrideKeys = (await _overrides.GetAll())
+            .Select(o => AlbumOverrideKey.For(o.MatchArtist, o.DeezerTitle))
+            .ToHashSet();
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var all = new List<DiscographyAlbum>();
         var missing = new List<MissingAlbum>();
@@ -163,8 +172,10 @@ public class MissingAlbumRefresher
                 continue;
             }
 
-            // Owned under the scanning artist (their own catalogued album) — the cheap, common case.
-            var isOwned = scannedOwned.Contains(key);
+            // Owned under the scanning artist (their own catalogued album) — the cheap, common case;
+            // or a user-recorded merge into a near-miss library title under the scanning artist.
+            var isOwned = scannedOwned.Contains(key)
+                          || overrideKeys.Contains(AlbumOverrideKey.For(artist.ArtistName, title));
             var albumArtist = artist;
             if (!isOwned)
             {
@@ -178,7 +189,8 @@ public class MissingAlbumRefresher
                     && !string.Equals(resolved, artist.ArtistName, StringComparison.OrdinalIgnoreCase))
                 {
                     albumArtist = new ArtistKey(resolved);
-                    isOwned = OwnedTitlesFor(resolved).Contains(key);
+                    isOwned = OwnedTitlesFor(resolved).Contains(key)
+                              || overrideKeys.Contains(AlbumOverrideKey.For(resolved, title));
                 }
             }
 

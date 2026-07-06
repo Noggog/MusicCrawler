@@ -646,6 +646,23 @@ api.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
     .RequireAuthorization()
     .WithName("UnsendPurchase");
 
+// The library albums a queued (near-miss titled) album can be merged into — every album owned under
+// the act this purchase is filed. Feeds the "Already in library?" pane on the Download page. `id` is
+// a query param so purchase keys containing '/' survive.
+api.MapGet("/purchases/library-albums", async (string id, PurchaseService purchases) =>
+        Results.Ok(await purchases.LibraryAlbumsFor(id)))
+    .RequireAuthorization()
+    .WithName("PurchaseLibraryAlbums");
+
+// Merge a queued album into one already in the library under a different title (e.g. Deezer's "DOOM
+// (Original Game Soundtrack)" vs. Plex's "Doom: Original Game Soundtrack"): records a durable match
+// override honoured by both the reconcile and the missing-album diff, then closes the row as
+// in-library. Query params so names with '/' survive.
+api.MapPost("/purchases/merge", async (string id, string libraryAlbum, PurchaseService purchases) =>
+        await purchases.Merge(id, libraryAlbum) ? Results.NoContent() : Results.NotFound())
+    .RequireAuthorization()
+    .WithName("MergePurchase");
+
 app.MapDefaultEndpoints();
 
 // Any unmatched, non-API route serves the SPA shell so client-side deep links work.

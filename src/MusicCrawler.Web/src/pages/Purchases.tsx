@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -5,7 +6,9 @@ import {
   clearRating,
   downloadPurchase,
   getDownloadStatus,
+  getLibraryAlbums,
   getPurchases,
+  mergePurchase,
   unsendPurchase,
 } from '../api/discovery'
 import { useArtAccent } from '../art/artColors'
@@ -48,6 +51,71 @@ function PurchaseRow({ item, actions }: { item: PurchaseItem; actions: ReactNode
   )
 }
 
+// "Already in library?" — resolve a near-miss title mismatch by hand. Lists the albums the library
+// already owns under this act (Deezer's "DOOM (Original Game Soundtrack)" won't auto-match Plex's
+// "Doom: Original Game Soundtrack"); picking one records a durable merge so the row leaves the queue
+// and never resurfaces as missing. Uses the app's shared picker-modal chrome.
+function MergePane({
+  item,
+  onClose,
+  onMerged,
+}: {
+  item: PurchaseItem
+  onClose: () => void
+  onMerged: () => void
+}) {
+  const albums = useQuery({
+    queryKey: ['library-albums', item.id],
+    queryFn: () => getLibraryAlbums(item.id),
+  })
+  const merge = useMutation({
+    mutationFn: (libraryAlbum: string) => mergePurchase(item.id, libraryAlbum),
+    onSuccess: onMerged,
+  })
+
+  return (
+    <div className="picker-backdrop" onClick={onClose}>
+      <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="picker-head">
+          <h2>Already in library?</h2>
+          <button className="auth-btn" onClick={onClose}>Close</button>
+        </div>
+        <p>
+          <em>
+            Pick the album this already matches — “{item.album}” by {item.artist.artistName} will be
+            merged into it and dropped from the queue.
+          </em>
+        </p>
+
+        {albums.isPending && <p><em>Loading library…</em></p>}
+        {albums.isError && <p className="error">Failed to load library albums.</p>}
+        {albums.data && albums.data.length === 0 && (
+          <p><em>No albums are in the library under {item.artist.artistName}.</em></p>
+        )}
+
+        <ul className="picker-results">
+          {(albums.data ?? []).map((title) => (
+            <li key={title} className="picker-result">
+              <div className="picker-meta">
+                <span className="picker-name">{title}</span>
+              </div>
+              <button
+                className="auth-btn"
+                disabled={merge.isPending}
+                onClick={() => merge.mutate(title)}
+              >
+                This one
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {merge.isError && <p className="error">Merge failed — try again.</p>}
+      </div>
+    </div>
+  )
+}
+
 function Monitor({ s }: { s: DownloadSnapshot }) {
   const current = s.current[0]
   const activity = current
@@ -84,6 +152,7 @@ function Monitor({ s }: { s: DownloadSnapshot }) {
 export default function Purchases() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
+  const [mergingId, setMergingId] = useState<string | null>(null)
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['purchases'],
@@ -140,6 +209,20 @@ export default function Purchases() {
       <IconClear />
     </button>
   )
+
+  // "Already in library?" — opens the merge pane to reconcile a near-miss title against an album
+  // Plex already has (which is why it's stuck in the queue rather than flipping to in-library).
+  const mergeBtn = (item: PurchaseItem) => (
+    <button
+      className="disc-btn"
+      title="Already in library? Merge with an owned album"
+      disabled={busy}
+      onClick={() => setMergingId(item.id)}
+    >
+      In library?
+    </button>
+  )
+  const mergingItem = mergingId ? (data ?? []).find((i) => i.id === mergingId) : undefined
 
   if (!user) {
     return (
@@ -234,6 +317,7 @@ export default function Purchases() {
                   >
                     Download now
                   </button>
+                  {mergeBtn(item)}
                   {removeBtn(item)}
                 </>,
               ),
@@ -252,18 +336,34 @@ export default function Purchases() {
             {sent.map((item) =>
               row(
                 item,
-                <button
-                  className="disc-btn"
-                  title="Undo — move back to queued"
-                  disabled={busy}
-                  onClick={() => unsend.mutate(item.id)}
-                >
-                  Undo
-                </button>,
+                <>
+                  {mergeBtn(item)}
+                  <button
+                    className="disc-btn"
+                    title="Undo — move back to queued"
+                    disabled={busy}
+                    onClick={() => unsend.mutate(item.id)}
+                  >
+                    Undo
+                  </button>
+                </>,
               ),
             )}
           </div>
         </>
+      )}
+
+      {mergingItem && (
+        <MergePane
+          item={mergingItem}
+          onClose={() => setMergingId(null)}
+          onMerged={() => {
+            setMergingId(null)
+            invalidate()
+            queryClient.invalidateQueries({ queryKey: ['ratings'] })
+            queryClient.invalidateQueries({ queryKey: ['feed'] })
+          }}
+        />
       )}
     </section>
   )

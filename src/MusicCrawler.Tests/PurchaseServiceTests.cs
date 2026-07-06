@@ -16,6 +16,7 @@ public class PurchaseServiceTests
     private readonly ILibraryProvider _library = Substitute.For<ILibraryProvider>();
     private readonly IArtistCatalogRepo _catalog = Substitute.For<IArtistCatalogRepo>();
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
+    private readonly FakeAlbumMatchOverrideRepo _overrides = new();
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
     private readonly PurchaseService _sut;
 
@@ -27,7 +28,7 @@ public class PurchaseServiceTests
     public PurchaseServiceTests()
     {
         _sut = new PurchaseService(
-            _purchases, _queue, _albumRatings, _library, _catalog, _missing, _downloader, Config,
+            _purchases, _queue, _albumRatings, _library, _catalog, _missing, _overrides, _downloader, Config,
             NullLogger<PurchaseService>.Instance);
 
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
@@ -242,5 +243,44 @@ public class PurchaseServiceTests
         snap.Queued.Should().Be(1); // only the downloadable pending album with a Deezer id
         snap.Ordered.Should().Be(1);
         snap.BatchSize.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Merge_records_an_override_and_closes_the_row_out_to_in_library()
+    {
+        // A structural title mismatch the normalizer can't fold: Deezer's "DOOM (Original Game
+        // Soundtrack)" vs. the copy already in Plex, "Doom: Original Game Soundtrack". It sits stuck
+        // as Pending because reconcile can't see it's owned.
+        const string deezerTitle = "DOOM (Original Game Soundtrack)";
+        const string plexTitle = "Doom: Original Game Soundtrack";
+        _albumRatings.GetAllLiked().Returns(new[]
+        {
+            new AlbumRating(new ArtistKey("Mick Gordon"), new AlbumKey(deezerTitle), "art", DiscoveryStatus.Liked),
+        });
+        await _sut.Reconcile();
+        var id = PurchaseKey.ForAlbum("Mick Gordon", deezerTitle);
+        (await _sut.GetActive()).Single(p => p.Id == id).Status.Should().Be(PurchaseStatus.Pending);
+
+        // The library owns it under the near-miss title; the user merges the two by hand.
+        _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Mick Gordon"] = new(StringComparer.OrdinalIgnoreCase) { plexTitle },
+        });
+        (await _sut.LibraryAlbumsFor(id)).Should().Equal(plexTitle);
+
+        (await _sut.Merge(id, plexTitle)).Should().BeTrue();
+
+        // The override is recorded, and the row closes out — and stays closed across a fresh reconcile
+        // (the override is honoured, not just a one-off status flip).
+        _overrides.Items.Should().ContainSingle(o =>
+            o.MatchArtist == "Mick Gordon" && o.DeezerTitle == deezerTitle && o.LibraryTitle == plexTitle);
+        (await _sut.GetActive()).Should().BeEmpty();
+        _purchases.Items.Single().Status.Should().Be(PurchaseStatus.InLibrary);
+    }
+
+    [Fact]
+    public async Task Merge_returns_false_for_an_unknown_id()
+    {
+        (await _sut.Merge("album:nobody nothing", "Whatever")).Should().BeFalse();
     }
 }

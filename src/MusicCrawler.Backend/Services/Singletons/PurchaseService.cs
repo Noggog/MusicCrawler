@@ -22,6 +22,7 @@ public class PurchaseService
     private readonly ILibraryProvider _library;
     private readonly IArtistCatalogRepo _catalog;
     private readonly IMissingAlbumRepo _missing;
+    private readonly IAlbumMatchOverrideRepo _overrides;
     private readonly IDownloader _downloader;
     private readonly DownloaderConfig _config;
     private readonly ILogger<PurchaseService> _logger;
@@ -33,6 +34,7 @@ public class PurchaseService
         ILibraryProvider library,
         IArtistCatalogRepo catalog,
         IMissingAlbumRepo missing,
+        IAlbumMatchOverrideRepo overrides,
         IDownloader downloader,
         DownloaderConfig config,
         ILogger<PurchaseService> logger)
@@ -43,6 +45,7 @@ public class PurchaseService
         _library = library;
         _catalog = catalog;
         _missing = missing;
+        _overrides = overrides;
         _downloader = downloader;
         _config = config;
         _logger = logger;
@@ -107,6 +110,9 @@ public class PurchaseService
             kvp => kvp.Key,
             kvp => kvp.Value.Select(AlbumTitleMatcher.Normalize).ToHashSet(StringComparer.Ordinal),
             StringComparer.OrdinalIgnoreCase);
+        // User-asserted merges (near-miss titles the normalizer can't collapse): an album carrying an
+        // override key is treated as owned, so it leaves the queue and stays gone across reconciles.
+        var overrideKeys = await LoadOverrideKeys();
 
         // Per (listing-artist, album), sourced from the global missing-albums set so a liked album
         // carries what reconcile needs without threading it through the rating flow:
@@ -145,7 +151,7 @@ public class PurchaseService
         }
 
         foreach (var g in (await _albumRatings.GetAllLiked())
-                     .Where(r => !AlbumIsOwned(ownedAlbums, MatchArtistFor(r.Artist.ArtistName, r.Album.AlbumName, null), r.Album.AlbumName))
+                     .Where(r => !AlbumIsOwned(ownedAlbums, overrideKeys, MatchArtistFor(r.Artist.ArtistName, r.Album.AlbumName, null), r.Album.AlbumName))
                      .GroupBy(r => PurchaseKey.ForAlbum(r.Artist.ArtistName, r.Album.AlbumName)))
         {
             var first = g.First();
@@ -171,7 +177,7 @@ public class PurchaseService
         foreach (var row in await _purchases.GetAll())
         {
             var nowOwned = row.Kind == FeedKind.MissingAlbum
-                ? AlbumIsOwned(ownedAlbums, MatchArtistFor(row.Artist.ArtistName, row.Album ?? "", row.AlbumArtist), row.Album ?? "")
+                ? AlbumIsOwned(ownedAlbums, overrideKeys, MatchArtistFor(row.Artist.ArtistName, row.Album ?? "", row.AlbumArtist), row.Album ?? "")
                 : owned.Contains(row.Artist.ArtistName);
 
             if (nowOwned)
@@ -193,6 +199,56 @@ public class PurchaseService
         }
     }
 
-    private static bool AlbumIsOwned(Dictionary<string, HashSet<string>> ownedAlbums, string artist, string album) =>
-        ownedAlbums.TryGetValue(artist, out var set) && set.Contains(AlbumTitleMatcher.Normalize(album));
+    private static bool AlbumIsOwned(
+        Dictionary<string, HashSet<string>> ownedAlbums, HashSet<string> overrideKeys, string artist, string album) =>
+        (ownedAlbums.TryGetValue(artist, out var set) && set.Contains(AlbumTitleMatcher.Normalize(album)))
+        || overrideKeys.Contains(AlbumOverrideKey.For(artist, album));
+
+    /// <summary>The merge lookup keys (see <see cref="AlbumOverrideKey"/>), one per recorded override.</summary>
+    private async Task<HashSet<string>> LoadOverrideKeys() =>
+        (await _overrides.GetAll())
+        .Select(o => AlbumOverrideKey.For(o.MatchArtist, o.DeezerTitle))
+        .ToHashSet();
+
+    /// <summary>
+    /// The library albums a queued (near-miss titled) album can be merged into: every album owned
+    /// under the act this purchase is filed (its persisted album-artist, else the listing artist),
+    /// alphabetical. Empty when the id is unknown, not an album, or the artist owns nothing.
+    /// </summary>
+    public async Task<string[]> LibraryAlbumsFor(string purchaseId)
+    {
+        var row = (await _purchases.GetAll()).FirstOrDefault(p => p.Id == purchaseId);
+        if (row is null || row.Kind != FeedKind.MissingAlbum)
+        {
+            return Array.Empty<string>();
+        }
+
+        var matchArtist = row.AlbumArtist ?? row.Artist.ArtistName;
+        return (await _catalog.GetOwnedAlbums()).TryGetValue(matchArtist, out var owned)
+            ? owned.OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase).ToArray()
+            : Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// Merges a queued album into one already in the library under a different title: records a
+    /// durable match override (honoured by the reconcile AND the missing-album diff) and closes the
+    /// row out as <see cref="PurchaseStatus.InLibrary"/> so it drops off the active list. Returns
+    /// false when the id is unknown or the row isn't a downloadable album.
+    /// </summary>
+    public async Task<bool> Merge(string purchaseId, string libraryAlbum)
+    {
+        var row = (await _purchases.GetAll()).FirstOrDefault(p => p.Id == purchaseId);
+        if (row is null || row.Kind != FeedKind.MissingAlbum || string.IsNullOrWhiteSpace(row.Album))
+        {
+            return false;
+        }
+
+        var matchArtist = row.AlbumArtist ?? row.Artist.ArtistName;
+        await _overrides.Add(new AlbumMatchOverride(matchArtist, row.Album, libraryAlbum));
+        await _purchases.SetStatus(row.Id, PurchaseStatus.InLibrary);
+        _logger.LogInformation(
+            "Merged queued album \"{Album}\" ({Artist}) into library album \"{Library}\"",
+            row.Album, matchArtist, libraryAlbum);
+        return true;
+    }
 }

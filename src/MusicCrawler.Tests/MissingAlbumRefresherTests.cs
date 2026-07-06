@@ -20,13 +20,15 @@ public class MissingAlbumRefresherTests
     private readonly IArtistCatalogRepo _catalog = Substitute.For<IArtistCatalogRepo>();
     private readonly IDeezerApi _deezer = Substitute.For<IDeezerApi>();
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
+    private readonly IAlbumMatchOverrideRepo _overrides = Substitute.For<IAlbumMatchOverrideRepo>();
     private readonly MissingAlbumRefresher _sut;
 
     public MissingAlbumRefresherTests()
     {
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
         var resolver = new DeezerArtistResolver(_deezer, cache, _catalog);
-        _sut = new MissingAlbumRefresher(_catalog, resolver, _deezer, _missing, NullLogger<MissingAlbumRefresher>.Instance);
+        _overrides.GetAll().Returns(Array.Empty<AlbumMatchOverride>());
+        _sut = new MissingAlbumRefresher(_catalog, resolver, _deezer, _missing, _overrides, NullLogger<MissingAlbumRefresher>.Instance);
 
         _catalog.GetAllPresent().Returns(new[] { new CatalogArtist(new ArtistKey(Artist), null, default) });
         _deezer.SearchArtist(Artist).Returns(new DeezerArtist { id = DeezerId, name = Artist });
