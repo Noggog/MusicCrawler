@@ -3,8 +3,8 @@ namespace MusicCrawler.Deezer.Models;
 /// <summary>
 /// An album as returned by the Deezer public API (<c>GET /artist/{id}/albums</c>). Field names are
 /// lower/snake-case to match the JSON verbatim (Newtonsoft binds by exact name). <c>record_type</c>
-/// is one of "album" / "single" / "ep" / "compilation" — the missing-album diff keeps only "album"
-/// to avoid drowning the feed in singles.
+/// is one of "album" / "single" / "ep" / "compilation" — the missing-album diff keeps "album" and
+/// "ep", dropping singles/compilations to avoid drowning the feed.
 /// </summary>
 public class DeezerAlbum
 {

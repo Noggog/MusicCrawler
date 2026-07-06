@@ -19,9 +19,10 @@ public record DiscographyAlbum(string Title, string? CoverUrl, long? DeezerAlbum
 /// </summary>
 public class MissingAlbumRefresher
 {
-    // Deezer marks LPs as record_type "album"; "single"/"ep"/"compilation" are filtered out so the
-    // feed isn't drowned in singles and reissues.
-    private const string AlbumRecordType = "album";
+    // Deezer marks records as record_type "album" / "ep" / "single" / "compilation". We keep LPs and
+    // EPs; "single"/"compilation" stay filtered out so the feed isn't drowned in singles and reissues.
+    private static readonly HashSet<string> AcceptedRecordTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "album", "ep" };
 
     private readonly IArtistCatalogRepo _catalog;
     private readonly DeezerArtistResolver _resolver;
@@ -155,7 +156,8 @@ public class MissingAlbumRefresher
             var title = album.title;
             var key = NormalizeTitle(title);
             if (string.IsNullOrEmpty(key)
-                || !string.Equals(album.record_type, AlbumRecordType, StringComparison.OrdinalIgnoreCase)
+                || album.record_type is null
+                || !AcceptedRecordTypes.Contains(album.record_type)
                 || !seen.Add(key))
             {
                 continue;
