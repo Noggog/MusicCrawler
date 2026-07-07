@@ -97,3 +97,23 @@ export function IconX(props: IconProps) {
     </Svg>
   )
 }
+
+// Download — an arrow into a tray. The "Download now" action on a queued album.
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3v11M8 10l4 4 4-4" />
+      <path d="M5 20h14" />
+    </Svg>
+  )
+}
+
+// Undo — a curved arrow doubling back, the "move an ordered album back to queued" action.
+export function IconUndo(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 7 4 12l5 5" />
+      <path d="M4 12h11a5 5 0 0 1 0 10h-1" />
+    </Svg>
+  )
+}

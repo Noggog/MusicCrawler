@@ -1015,6 +1015,17 @@ input[type='checkbox'] {
   flex: 1;
   min-width: 0;
 }
+/* When the row's name block is a deep link into Browse (the Download queue), strip the anchor
+   chrome so it reads as plain text; underline the name on hover to signal it's clickable. */
+a.disc-row-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+a.disc-row-link:hover .disc-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .disc-name {
   font-weight: 600;
   color: var(--text);

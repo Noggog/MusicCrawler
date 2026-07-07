@@ -14,7 +14,7 @@ import {
 import { useArtAccent } from '../art/artColors'
 import type { DownloadSnapshot, FeedItem, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
-import { IconCheck, IconClear, IconWrench, IconX } from '../components/icons'
+import { IconCheck, IconClear, IconDownload, IconUndo, IconWrench, IconX } from '../components/icons'
 
 function Avatar({ item }: { item: PurchaseItem }) {
   const label = item.album ?? item.artist.artistName
@@ -36,7 +36,14 @@ function PurchaseRow({ item, actions }: { item: PurchaseItem; actions: ReactNode
   return (
     <div className="disc-row" style={accentStyle}>
       <Avatar item={item} />
-      <div className="disc-row-main">
+      {/* The name/provenance block deep-links into Browse, opened + filtered to this artist
+          (the same /browse?artist= mechanism the Discover "Go to artist" link uses) so you can
+          jump from a queued album to the artist's full readout. */}
+      <Link
+        className="disc-row-main disc-row-link"
+        to={`/browse?artist=${encodeURIComponent(item.artist.artistName)}`}
+        title={`Go to ${item.artist.artistName} in Browse`}
+      >
         <div className="disc-name">{item.album ?? item.artist.artistName}</div>
         <span className="disc-provenance">
           {item.album
@@ -45,7 +52,7 @@ function PurchaseRow({ item, actions }: { item: PurchaseItem; actions: ReactNode
               ? `Artist · via ${item.sources.slice(0, 3).join(', ')}`
               : 'Artist'}
         </span>
-      </div>
+      </Link>
       <div className="disc-actions">{actions}</div>
     </div>
   )
@@ -313,7 +320,7 @@ export default function Purchases() {
                     disabled={busy}
                     onClick={() => download.mutate(item.id)}
                   >
-                    Download now
+                    <IconDownload />
                   </button>
                   {mergeBtn(item)}
                   {removeBtn(item)}
@@ -342,7 +349,7 @@ export default function Purchases() {
                     disabled={busy}
                     onClick={() => unsend.mutate(item.id)}
                   >
-                    Undo
+                    <IconUndo />
                   </button>
                 </>,
               ),
