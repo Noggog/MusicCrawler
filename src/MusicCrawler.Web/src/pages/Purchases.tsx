@@ -143,7 +143,7 @@ function Monitor({ s }: { s: DownloadSnapshot }) {
       <div className="dl-counts">
         <span>Queued <strong>{s.queued}</strong></span>
         <span>Downloading <strong>{s.downloading}</strong></span>
-        <span>Ordered <strong>{s.ordered}</strong></span>
+        <span>Complete <strong>{s.complete}</strong></span>
         <span>Failed <strong>{s.failed}</strong></span>
       </div>
       <div className="dl-throttle">
@@ -241,7 +241,11 @@ export default function Purchases() {
   const items = data ?? []
   // Only albums are actionable here — they're what the downloader can grab. Liked artists still seed
   // recommendations, but they're managed on the Artists page, not shown as wishlist rows.
-  const downloading = items.filter((i) => i.status === 'Downloading' && i.album)
+  // Everything in the download pipeline shows in the "Downloading now" section: the one actively
+  // fetching plus any requested-and-waiting (Queued) behind it — matching the monitor's tally.
+  const downloading = items.filter(
+    (i) => (i.status === 'Downloading' || i.status === 'Queued') && i.album,
+  )
   const pendingAlbums = items.filter((i) => i.status === 'Pending' && i.album)
   const sent = items.filter((i) => i.status === 'Sent' && i.album)
   const failed = items.filter((i) => i.status === 'Failed' && i.album)
@@ -275,7 +279,16 @@ export default function Purchases() {
             Downloading now <span className="feed-count">{downloading.length}</span>
           </h2>
           <div className="disc-list">
-            {downloading.map((item) => row(item, <span className="dl-spinner" title="Downloading">⬇</span>))}
+            {downloading.map((item) =>
+              row(
+                item,
+                item.status === 'Downloading' ? (
+                  <span className="dl-spinner" title="Downloading">⬇</span>
+                ) : (
+                  <span className="disc-provenance" title="Queued to download">Queued…</span>
+                ),
+              ),
+            )}
           </div>
         </>
       )}
@@ -334,7 +347,7 @@ export default function Purchases() {
       {sent.length > 0 && (
         <>
           <h2 className="feed-section-title">
-            Ordered <span className="feed-count">{sent.length}</span>
+            Complete <span className="feed-count">{sent.length}</span>
           </h2>
           <p className="disc-sub"><em>Downloaded — awaiting arrival in the library.</em></p>
           <div className="disc-list">

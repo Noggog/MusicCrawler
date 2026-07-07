@@ -38,7 +38,7 @@ public class DownloadServiceTests
     public async Task Successful_download_marks_the_item_sent()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        var item = Album("Big Thief", "Capacity", 12345);
+        var item = Album("Big Thief", "Capacity", 12345, PurchaseStatus.Queued);
         _repo.Seed(item);
 
         var ran = await Sut().ProcessOne(item.Id);
@@ -51,7 +51,7 @@ public class DownloadServiceTests
     public async Task Failed_download_marks_the_item_failed()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(false);
-        var item = Album("Big Thief", "Capacity", 12345);
+        var item = Album("Big Thief", "Capacity", 12345, PurchaseStatus.Queued);
         _repo.Seed(item);
 
         await Sut().ProcessOne(item.Id);
@@ -63,7 +63,7 @@ public class DownloadServiceTests
     public async Task A_thrown_downloader_is_caught_and_the_item_marked_failed()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns<bool>(_ => throw new InvalidOperationException("boom"));
-        var item = Album("Big Thief", "Capacity", 12345);
+        var item = Album("Big Thief", "Capacity", 12345, PurchaseStatus.Queued);
         _repo.Seed(item);
 
         await Sut().ProcessOne(item.Id);
@@ -72,14 +72,16 @@ public class DownloadServiceTests
     }
 
     [Fact]
-    public async Task Non_pending_or_non_downloadable_items_are_skipped()
+    public async Task Non_queued_or_non_downloadable_items_are_skipped()
     {
         _downloader.Request(Arg.Any<PurchaseItem>()).Returns(true);
-        _repo.Seed(Album("A", "already-sent", 1, PurchaseStatus.Sent)); // not pending
-        _repo.Seed(Album("B", "no-id", 0));                              // no deezer id
-        _repo.Seed(Artist("Phoebe Bridgers"));                          // artist, not an album
+        _repo.Seed(Album("A", "already-sent", 1, PurchaseStatus.Sent));       // not queued
+        _repo.Seed(Album("P", "still-pending", 3));                           // pending, not yet requested
+        _repo.Seed(Album("B", "no-id", 0, PurchaseStatus.Queued));            // no deezer id
+        _repo.Seed(Artist("Phoebe Bridgers"));                               // artist, not an album
 
         (await Sut().ProcessOne(PurchaseKey.ForAlbum("A", "already-sent"))).Should().BeFalse();
+        (await Sut().ProcessOne(PurchaseKey.ForAlbum("P", "still-pending"))).Should().BeFalse();
         (await Sut().ProcessOne(PurchaseKey.ForAlbum("B", "no-id"))).Should().BeFalse();
         (await Sut().ProcessOne(PurchaseKey.ForArtist("Phoebe Bridgers"))).Should().BeFalse();
 
@@ -89,13 +91,13 @@ public class DownloadServiceTests
     // ---- RequestDownload (the manual "Download now" trigger) ----
 
     [Fact]
-    public async Task Manual_request_resets_a_failed_album_to_pending()
+    public async Task Manual_request_queues_a_failed_album_for_retry()
     {
         _repo.Seed(Album("Big Thief", "Capacity", 12345, PurchaseStatus.Failed));
 
         (await Sut().RequestDownload(PurchaseKey.ForAlbum("Big Thief", "Capacity"))).Should().BeTrue();
 
-        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Pending);
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Queued);
     }
 
     [Fact]
@@ -113,11 +115,13 @@ public class DownloadServiceTests
     public async Task Reset_returns_stranded_downloads_to_pending()
     {
         _repo.Seed(Album("Big Thief", "Capacity", 1, PurchaseStatus.Downloading));
+        _repo.Seed(Album("Waiting", "InQueue", 3, PurchaseStatus.Queued));
         _repo.Seed(Album("Other", "Done", 2, PurchaseStatus.Sent));
 
         await Sut().ResetStuckDownloads();
 
         _repo.Items.Single(i => i.Album == "Capacity").Status.Should().Be(PurchaseStatus.Pending);
+        _repo.Items.Single(i => i.Album == "InQueue").Status.Should().Be(PurchaseStatus.Pending);
         _repo.Items.Single(i => i.Album == "Done").Status.Should().Be(PurchaseStatus.Sent);
     }
 }

@@ -9,6 +9,11 @@ public enum PurchaseStatus
     /// <summary>Queued to acquire — liked by at least one user, not yet ordered.</summary>
     Pending,
 
+    /// <summary>Requested for download and waiting in the drainer's in-memory queue. Counts under
+    /// "downloading" in the monitor (the drainer is single-flight, so most sit here); reset to
+    /// Pending on restart, since the queue is in-memory and doesn't survive a crash.</summary>
+    Queued,
+
     /// <summary>Actively being fetched by the downloader right now (single-flight).</summary>
     Downloading,
 
@@ -58,7 +63,7 @@ public record DownloadSnapshot(
     double BatchIntervalMinutes,
     int Queued,
     int Downloading,
-    int Ordered,
+    int Complete,
     int Failed,
     PurchaseItem[] Current);
 

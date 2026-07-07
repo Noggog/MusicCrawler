@@ -69,16 +69,22 @@ public class PurchaseService
     /// <summary>
     /// A live snapshot of the download subsystem for the monitoring panel — backend + throttle
     /// config and current counts. Cheap (one read, no reconcile); the list query reconciles. "Queued"
-    /// is downloadable albums waiting (wishlist artists don't download, so they're excluded).
+    /// is downloadable albums still on the wishlist (not yet requested; wishlist artists don't
+    /// download, so they're excluded). "Downloading" is everything already in the pipeline — requested
+    /// and waiting in the drainer's queue plus the one in flight — so pressing Download visibly moves
+    /// an album out of the queue at once, even though the drainer fetches them one at a time.
     /// </summary>
     public async Task<DownloadSnapshot> GetDownloadSnapshot()
     {
         var all = await _purchases.GetAll();
         var queued = all.Count(p => p.Status == PurchaseStatus.Pending
                                     && p.Kind == FeedKind.MissingAlbum && p.DeezerAlbumId is > 0);
+        // In-flight = queued-for-download + actively downloading, with the one in flight first so the
+        // activity readout names what's fetching now.
         var current = all
-            .Where(p => p.Status == PurchaseStatus.Downloading)
-            .OrderBy(p => p.RequestedAt)
+            .Where(p => p.Status is PurchaseStatus.Queued or PurchaseStatus.Downloading)
+            .OrderBy(p => p.Status == PurchaseStatus.Downloading ? 0 : 1)
+            .ThenBy(p => p.RequestedAt)
             .ToArray();
 
         return new DownloadSnapshot(

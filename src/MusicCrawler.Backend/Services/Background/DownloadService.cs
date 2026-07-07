@@ -15,7 +15,7 @@ namespace MusicCrawler.Backend.Services.Background;
 ///     pending albums every <c>DOWNLOAD_BATCH_INTERVAL_MINUTES</c>.
 ///   • <b>Manual</b>: <see cref="RequestDownload"/> (the "Download now" button) enqueues one id and
 ///     returns immediately, so the HTTP request never blocks on the multi-minute fetch.
-/// Each item goes Pending → Downloading → Sent/Failed; the catalog sync then closes the loop
+/// Each item goes Pending → Queued → Downloading → Sent/Failed; the catalog sync then closes the loop
 /// (file lands in Plex → reconcile → in-library, drops off the list). Registered as a shared
 /// singleton hosted service so the endpoint and the loop are the same instance.
 /// </summary>
@@ -48,9 +48,10 @@ public class DownloadService : BackgroundService
     }
 
     /// <summary>
-    /// Manually queues one item for download now (the "Download now"/"Retry" button). Resets it to
-    /// Pending (so a failed item retries) and enqueues it; returns false if it's unknown or not a
-    /// downloadable Deezer album. Non-blocking — the consumer loop does the actual fetch.
+    /// Manually queues one item for download now (the "Download now"/"Retry" button). Moves it to
+    /// Queued (so it tallies as in-flight immediately, and a failed item retries) and enqueues it;
+    /// returns false if it's unknown or not a downloadable Deezer album. Non-blocking — the consumer
+    /// loop does the actual fetch.
     /// </summary>
     public async Task<bool> RequestDownload(string id)
     {
@@ -59,12 +60,12 @@ public class DownloadService : BackgroundService
         {
             return false;
         }
-        if (item.Status == PurchaseStatus.Downloading)
+        if (item.Status is PurchaseStatus.Queued or PurchaseStatus.Downloading)
         {
-            return true; // already in flight
+            return true; // already queued / in flight
         }
 
-        await _repo.SetStatus(id, PurchaseStatus.Pending);
+        await _repo.SetStatus(id, PurchaseStatus.Queued);
         _queue.Writer.TryWrite(id);
         _logger.LogInformation("Manual download requested for {Id}", id);
         return true;
@@ -72,7 +73,8 @@ public class DownloadService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Recover from a crash mid-download: anything left marked Downloading never finished.
+        // Recover from a crash mid-download: anything left Queued/Downloading never finished (and the
+        // in-memory queue is gone), so return it to Pending to be re-requested.
         await ResetStuckDownloads();
 
         _logger.LogInformation(
@@ -109,14 +111,14 @@ public class DownloadService : BackgroundService
     }
 
     /// <summary>
-    /// Downloads one queued id if it's still a pending downloadable album (re-checked here, so
+    /// Downloads one queued id if it's still a queued downloadable album (re-checked here, so
     /// duplicate/auto+manual enqueues of the same id are harmless). Returns whether a fetch ran.
     /// </summary>
     public async Task<bool> ProcessOne(string id)
     {
         var item = (await _repo.GetAll()).FirstOrDefault(p => p.Id == id);
         if (item is null
-            || item.Status != PurchaseStatus.Pending
+            || item.Status != PurchaseStatus.Queued
             || item.Kind != FeedKind.MissingAlbum
             || item.DeezerAlbumId is null or 0)
         {
@@ -166,9 +168,13 @@ public class DownloadService : BackgroundService
                             && p.Kind == FeedKind.MissingAlbum
                             && p.DeezerAlbumId is > 0)
                 .OrderBy(p => p.RequestedAt)
-                .Take(_config.BatchSize);
+                .Take(_config.BatchSize)
+                .ToList();
             foreach (var item in pending)
             {
+                // Mark it queued before writing so it tallies as in-flight straight away (the drainer
+                // is single-flight, so it'd otherwise sit as Pending until its turn came up).
+                await _repo.SetStatus(item.Id, PurchaseStatus.Queued);
                 _queue.Writer.TryWrite(item.Id);
             }
         }
@@ -179,11 +185,13 @@ public class DownloadService : BackgroundService
         }
     }
 
-    /// <summary>Returns rows stranded in <see cref="PurchaseStatus.Downloading"/> (e.g. by a crash)
-    /// to <see cref="PurchaseStatus.Pending"/> so they're retried.</summary>
+    /// <summary>Returns rows stranded mid-pipeline in <see cref="PurchaseStatus.Queued"/> or
+    /// <see cref="PurchaseStatus.Downloading"/> (e.g. by a crash — the queue is in-memory and lost on
+    /// restart) to <see cref="PurchaseStatus.Pending"/> so they're re-requested.</summary>
     public async Task ResetStuckDownloads()
     {
-        foreach (var item in (await _repo.GetAll()).Where(p => p.Status == PurchaseStatus.Downloading))
+        foreach (var item in (await _repo.GetAll())
+                     .Where(p => p.Status is PurchaseStatus.Queued or PurchaseStatus.Downloading))
         {
             await _repo.SetStatus(item.Id, PurchaseStatus.Pending);
             _logger.LogInformation("Reset stranded download {Id} to pending", item.Id);

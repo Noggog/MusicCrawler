@@ -241,7 +241,7 @@ public class PurchaseServiceTests
         snap.Automatic.Should().BeTrue();
         snap.Backend.Should().Be(_downloader.Name);
         snap.Queued.Should().Be(1); // only the downloadable pending album with a Deezer id
-        snap.Ordered.Should().Be(1);
+        snap.Complete.Should().Be(1);
         snap.BatchSize.Should().Be(3);
     }
 
