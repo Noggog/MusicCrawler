@@ -88,3 +88,12 @@ export function IconWrench(props: IconProps) {
     </Svg>
   )
 }
+
+// A plain close cross — dismiss a dialog.
+export function IconX(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Svg>
+  )
+}

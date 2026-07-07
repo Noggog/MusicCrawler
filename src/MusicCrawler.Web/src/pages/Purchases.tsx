@@ -14,7 +14,7 @@ import {
 import { useArtAccent } from '../art/artColors'
 import type { DownloadSnapshot, FeedItem, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
-import { IconClear } from '../components/icons'
+import { IconCheck, IconClear, IconWrench, IconX } from '../components/icons'
 
 function Avatar({ item }: { item: PurchaseItem }) {
   const label = item.album ?? item.artist.artistName
@@ -77,15 +77,12 @@ function MergePane({
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
         <div className="picker-head">
-          <h2>Already in library?</h2>
-          <button className="auth-btn" onClick={onClose}>Close</button>
+          <h2>Match Existing Album</h2>
+          <button className="disc-btn" title="Close" onClick={onClose}>
+            <IconX />
+          </button>
         </div>
-        <p>
-          <em>
-            Pick the album this already matches — “{item.album}” by {item.artist.artistName} will be
-            merged into it and dropped from the queue.
-          </em>
-        </p>
+        <p className="picker-pinned">Merge “{item.album}” into an album already in your library.</p>
 
         {albums.isPending && <p><em>Loading library…</em></p>}
         {albums.isError && <p className="error">Failed to load library albums.</p>}
@@ -100,11 +97,12 @@ function MergePane({
                 <span className="picker-name">{title}</span>
               </div>
               <button
-                className="auth-btn"
+                className="disc-btn up"
+                title="Merge into this album"
                 disabled={merge.isPending}
                 onClick={() => merge.mutate(title)}
               >
-                This one
+                <IconCheck />
               </button>
             </li>
           ))}
@@ -215,11 +213,11 @@ export default function Purchases() {
   const mergeBtn = (item: PurchaseItem) => (
     <button
       className="disc-btn"
-      title="Already in library? Merge with an owned album"
+      title="Match an album already in the library"
       disabled={busy}
       onClick={() => setMergingId(item.id)}
     >
-      In library?
+      <IconWrench />
     </button>
   )
   const mergingItem = mergingId ? (data ?? []).find((i) => i.id === mergingId) : undefined
