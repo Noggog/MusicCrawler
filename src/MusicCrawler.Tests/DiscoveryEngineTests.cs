@@ -54,7 +54,10 @@ public class DiscoveryEngineTests
             .Select(r => new UnifiedRelatedArtist(
                 new ArtistKey(r.name), r.image, Enumerable.Repeat("deezer", r.sources).ToArray()))
             .ToArray();
-        _related.GetRelated(new ArtistKey(artist)).Returns(new UnifiedRelations(new ArtistKey(artist), list));
+        // Match any forceRefresh/readOnly so both the fetch paths (TopUp/Rebuild/RateArtist) and the
+        // readOnly feed paths (EnsureQueue/OwnedRecommendedByLiked) resolve to the same stub.
+        _related.GetRelated(new ArtistKey(artist), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(new UnifiedRelations(new ArtistKey(artist), list));
     }
 
     private static IReadOnlyList<DiscoveryCandidate> Captured(IUserQueueRepo queue)
@@ -88,7 +91,7 @@ public class DiscoveryEngineTests
 
         await Recommended();
 
-        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>());
+        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>(), Arg.Any<bool>(), Arg.Any<bool>());
         await _queue.DidNotReceive().UpsertCandidates(Arg.Any<string>(), Arg.Any<IReadOnlyList<DiscoveryCandidate>>());
     }
 
@@ -148,7 +151,7 @@ public class DiscoveryEngineTests
         // Dislike takes the artist out of the frontier, so its seeded recommendations are pruned…
         await _queue.Received(1).PruneBySource(User, "Phoebe Bridgers");
         // …but it never grows the frontier or rebuilds the queue.
-        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>());
+        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>(), Arg.Any<bool>(), Arg.Any<bool>());
         await _queue.DidNotReceive().UpsertCandidates(Arg.Any<string>(), Arg.Any<IReadOnlyList<DiscoveryCandidate>>());
     }
 
@@ -182,7 +185,7 @@ public class DiscoveryEngineTests
         // Snooze writes a future snoozeUntil and never grows the frontier (it's "not now", not "yes").
         await _queue.Received(1).Snooze(
             User, "Phoebe Bridgers", Arg.Is<DateTimeOffset>(d => d > DateTimeOffset.UtcNow), null);
-        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>());
+        await _related.DidNotReceive().GetRelated(Arg.Any<ArtistKey>(), Arg.Any<bool>(), Arg.Any<bool>());
         await _queue.DidNotReceive().UpsertCandidates(Arg.Any<string>(), Arg.Any<IReadOnlyList<DiscoveryCandidate>>());
     }
 

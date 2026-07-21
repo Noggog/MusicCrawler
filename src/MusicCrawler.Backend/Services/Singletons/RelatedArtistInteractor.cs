@@ -9,7 +9,14 @@ namespace MusicCrawler.Backend.Services.Singletons;
 /// </summary>
 public interface IRelatedArtistReader
 {
-    Task<UnifiedRelations> GetRelated(ArtistKey artist, bool forceRefresh = false);
+    /// <param name="forceRefresh">Re-fetch every source's edges even if still fresh.</param>
+    /// <param name="readOnly">
+    /// Serve whatever edges are already stored without touching the network — no ingest, no staleness
+    /// refresh. For request paths (e.g. serving the discover feed) that must return promptly and must
+    /// not block on the rate-limited source APIs; the background replenisher/warmer keeps edges fresh,
+    /// so refreshed results simply appear on the next read.
+    /// </param>
+    Task<UnifiedRelations> GetRelated(ArtistKey artist, bool forceRefresh = false, bool readOnly = false);
 }
 
 /// <summary>
@@ -33,22 +40,27 @@ public class RelatedArtistInteractor : IRelatedArtistReader
         _logger = logger;
     }
 
-    public async Task<UnifiedRelations> GetRelated(ArtistKey artist, bool forceRefresh = false)
+    public async Task<UnifiedRelations> GetRelated(ArtistKey artist, bool forceRefresh = false, bool readOnly = false)
     {
         // Ensure every registered source's edges are present/fresh; the unify step below then merges
         // however many are stored. Sources are isolated: one throwing (a bug past its own graceful
-        // degradation) must not deny the user the others' recommendations.
-        foreach (var source in _sources)
+        // degradation) must not deny the user the others' recommendations. In readOnly mode we skip
+        // this entirely and just serve what's stored — the caller can't afford to block on the
+        // rate-limited source APIs, and the background replenisher/warmer refreshes edges out of band.
+        if (!readOnly)
         {
-            try
+            foreach (var source in _sources)
             {
-                await source.EnsureRelated(artist, forceRefresh);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex, "Source {Source} failed to ingest related artists for {Artist}",
-                    source.SourceName, artist.ArtistName);
+                try
+                {
+                    await source.EnsureRelated(artist, forceRefresh);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex, "Source {Source} failed to ingest related artists for {Artist}",
+                        source.SourceName, artist.ArtistName);
+                }
             }
         }
 

@@ -162,7 +162,8 @@ public class DiscoveryEngine : IQueueReplenisher
     /// Of the given owned artists, those at least one <em>liked</em> artist recommends — mapped to the
     /// liked artists that point at them (provenance). Computed live from the similarity graph (the
     /// same edges the frontier expansion walks), so there's nothing to precompute or keep in sync.
-    /// Liked artists' related edges are already cached from expansion, so this is graph reads, no fetch.
+    /// Reads are readOnly (see the GetRelated call below), so this never fetches — the background
+    /// replenisher/warmer keeps the edges fresh out of band.
     /// </summary>
     private async Task<Dictionary<string, List<string>>> OwnedRecommendedByLiked(
         string userId, IReadOnlyList<ArtistMetadata> owned)
@@ -172,7 +173,9 @@ public class DiscoveryEngine : IQueueReplenisher
 
         foreach (var likedArtist in await _queue.GetLikedArtistNames(userId))
         {
-            var unified = await _related.GetRelated(new ArtistKey(likedArtist));
+            // Serving the feed: read stored edges only. The background replenisher keeps liked
+            // artists' edges fresh, so this never blocks the request on a source fetch.
+            var unified = await _related.GetRelated(new ArtistKey(likedArtist), readOnly: true);
             foreach (var rel in unified.Related)
             {
                 var name = rel.ArtistKey.ArtistName;
@@ -431,16 +434,20 @@ public class DiscoveryEngine : IQueueReplenisher
             return;
         }
 
-        await ExpandFrom(userId, liked, depth: 1);
+        // Cold-start safety net driven by the feed request itself: read stored edges only so the
+        // discover request never blocks on ingestion. If the graph has nothing yet, the queue stays
+        // empty until the background replenisher fills it — and shows up on the next load.
+        await ExpandFrom(userId, liked, depth: 1, readOnly: true);
     }
 
     /// <summary>
     /// Walks one step out from <paramref name="frontier"/>: pulls each frontier artist's related
-    /// artists from the similarity graph (ingesting from the source on a miss), aggregates them so a
-    /// candidate several frontier artists agree on accrues score and provenance, drops anything
-    /// owned/already-decided, and upserts the survivors as pending candidates.
+    /// artists from the similarity graph (ingesting from the source on a miss, unless
+    /// <paramref name="readOnly"/>), aggregates them so a candidate several frontier artists agree on
+    /// accrues score and provenance, drops anything owned/already-decided, and upserts the survivors as
+    /// pending candidates.
     /// </summary>
-    private async Task ExpandFrom(string userId, IReadOnlyList<string> frontier, int depth)
+    private async Task ExpandFrom(string userId, IReadOnlyList<string> frontier, int depth, bool readOnly = false)
     {
         if (frontier.Count == 0)
         {
@@ -456,7 +463,7 @@ public class DiscoveryEngine : IQueueReplenisher
 
         foreach (var frontierArtist in frontier)
         {
-            var unified = await _related.GetRelated(new ArtistKey(frontierArtist));
+            var unified = await _related.GetRelated(new ArtistKey(frontierArtist), readOnly: readOnly);
             foreach (var candidate in unified.Related)
             {
                 var name = candidate.ArtistKey.ArtistName;
