@@ -28,10 +28,30 @@ public class DeezerApi : IDeezerApi
         _logger = logger;
     }
 
+    // How many candidates to pull before picking a best match. Deezer's relevance order buries the
+    // canonical artist behind collaborations/near-duplicates (e.g. "RJD2 & Supastition" outranks the
+    // real "RJD2"), so we look past the top hit to find an exact-name match — one page is plenty.
+    private const int SearchCandidates = 25;
+
     public async Task<DeezerArtist?> SearchArtist(string artistName)
     {
-        // Deezer orders search results by relevance; the first is the strongest match.
-        return (await SearchArtists(artistName, 1)).FirstOrDefault();
+        return PickBestMatch(await SearchArtists(artistName, SearchCandidates), artistName);
+    }
+
+    /// <summary>
+    /// Chooses the best artist from a Deezer search result set. Prefers an exact (case-insensitive)
+    /// name match, and when several artists share that name (Deezer has many "Rjd2" entries) takes the
+    /// most-followed — the canonical act. Only when nothing matches by name does it defer to Deezer's
+    /// own relevance order (the first result, its strongest guess).
+    /// </summary>
+    internal static DeezerArtist? PickBestMatch(IReadOnlyList<DeezerArtist> candidates, string artistName)
+    {
+        var exact = candidates
+            .Where(a => string.Equals(a.name?.Trim(), artistName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(a => a.nb_fan ?? 0)
+            .FirstOrDefault();
+
+        return exact ?? candidates.FirstOrDefault();
     }
 
     public async Task<DeezerArtist[]> SearchArtists(string query, int limit)
