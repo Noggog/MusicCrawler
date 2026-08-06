@@ -109,6 +109,23 @@ public class MissingAlbumRefresherTests
     }
 
     [Fact]
+    public async Task Missing_album_carries_the_deezer_release_year()
+    {
+        // The year is shown beside the title in the feed. Deezer sends a full date; a release it has no
+        // date for must simply come through as null rather than blocking the row.
+        _deezer.GetAlbums(DeezerId).Returns(new[]
+        {
+            new DeezerAlbum { id = 1, title = "dated lp", record_type = "album", release_date = "1997-08-19" },
+            new DeezerAlbum { id = 2, title = "undated lp", record_type = "album", release_date = "" },
+        });
+
+        var result = await _sut.RefreshOne(new ArtistKey(Artist), Owned());
+
+        result.Select(m => (m.Album.AlbumName, m.Year))
+            .Should().BeEquivalentTo(new[] { ("dated lp", (int?)1997), ("undated lp", null) });
+    }
+
+    [Fact]
     public async Task Collaboration_owned_under_its_album_artist_is_not_missing()
     {
         // "milo" lists a duo record on Deezer whose real album-artist is "nostrum grocers" — which is

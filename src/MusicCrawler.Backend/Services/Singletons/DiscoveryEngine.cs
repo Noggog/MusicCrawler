@@ -210,7 +210,8 @@ public class DiscoveryEngine : IQueueReplenisher
             .Where(m => liked.Contains(m.Artist.ArtistName))
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
             .Select(m => new FeedItem(
-                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))
+                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(),
+                m.DeezerAlbumId, m.Year))
             .ToList();
     }
 
@@ -231,7 +232,8 @@ public class DiscoveryEngine : IQueueReplenisher
         return rows
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
             .Select(m => new FeedItem(
-                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(), m.DeezerAlbumId))
+                FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(),
+                m.DeezerAlbumId, m.Year))
             .ToList();
     }
 
@@ -262,7 +264,7 @@ public class DiscoveryEngine : IQueueReplenisher
                     && verdicts.TryGetValue(AlbumRatingKey.For(artistName, a.Title), out var v)
                     ? v
                     : null;
-                return new ArtistAlbumItem(artist, a.Title, a.CoverUrl, a.DeezerAlbumId, a.Owned, verdict);
+                return new ArtistAlbumItem(artist, a.Title, a.CoverUrl, a.DeezerAlbumId, a.Owned, verdict, a.Year);
             })
             .ToList();
     }

@@ -150,6 +150,8 @@ export interface FeedItem {
   sources: string[]
   // Deezer album id for MissingAlbum items (lets the UI sample/link the album); null otherwise.
   deezerAlbumId: number | null
+  // Release year for album items, null when Deezer supplied no date (or for artist items).
+  year: number | null
 }
 
 // A paged feed section for a single FeedKind.
@@ -182,6 +184,8 @@ export interface ArtistAlbumItem {
   deezerAlbumId: number | null
   owned: boolean
   verdict: DiscoveryStatus | null
+  // Deezer's release year; null for owned-only albums Deezer doesn't list, or when it gave no date.
+  year: number | null
 }
 
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a

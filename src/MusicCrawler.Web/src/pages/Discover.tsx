@@ -348,7 +348,10 @@ function SubAlbumRow({
         onClick={canPlay ? onToggle : undefined}
       >
         <FeedAvatar item={album} size={36} />
-        <div className="disc-sub-album-name">{album.album}</div>
+        <div className="disc-sub-album-name">
+          {album.album}
+          {album.year && <span className="album-year">{album.year}</span>}
+        </div>
         <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
           {verdict ? (
             <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
@@ -515,6 +518,7 @@ function DetailPanel({
               <div className="detail-chips">
                 <span className="detail-chip">Album</span>
                 <span className="detail-chip via">{name}</span>
+                {item.year && <span className="detail-chip">{item.year}</span>}
               </div>
               {/* Jump to this artist in the library (the Artists tab), filtered + opened to them —
                   handy on a missing-album card to see what else of theirs you already own. */}
@@ -651,7 +655,12 @@ function DiscRow({
           <span className={`feed-badge feed-badge-${item.kind}`}>{BADGE[item.kind]}</span>
           <div className="disc-name">{item.album ?? name}</div>
           {isAlbum ? (
-            <span className="disc-provenance">{name}</span>
+            // "Björk · 1997" — the artist the album belongs to, dated so a recommendation reads as a
+            // new record or a back-catalogue gap at a glance.
+            <span className="disc-provenance">
+              {name}
+              {item.year && <> · {item.year}</>}
+            </span>
           ) : (
             <Provenance sources={item.sources} />
           )}

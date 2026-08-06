@@ -989,6 +989,13 @@ input[type='checkbox'] {
   font-size: 0.92rem;
   font-weight: 500;
 }
+/* The release year beside an album title — quiet enough not to compete with the title itself. */
+.album-year {
+  margin-left: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-faint);
+}
 
 .disc-avatar {
   border-radius: var(--radius-sm);

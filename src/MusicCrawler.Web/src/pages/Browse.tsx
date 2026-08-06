@@ -389,7 +389,10 @@ function AlbumSubRow({
         onClick={canPlay ? onToggle : undefined}
       >
         <AlbumThumb item={a} />
-        <div className="disc-sub-album-name">{a.album}</div>
+        <div className="disc-sub-album-name">
+          {a.album}
+          {a.year && <span className="album-year">{a.year}</span>}
+        </div>
         <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
           {a.owned ? (
             <span className="album-owned" title="Already in your library">
@@ -452,6 +455,7 @@ function ArtistAlbums({ artist }: { artist: string }) {
     score: 0,
     sources: [],
     deezerAlbumId: a.deezerAlbumId,
+    year: a.year,
   })
 
   const rateAlbum = useMutation({
@@ -986,6 +990,7 @@ export default function Browse() {
         score: 0,
         sources: [],
         deezerAlbumId: null,
+        year: null,
       }
       return current === verdictStatus(verdict) ? clearRating(item) : rate(item, verdict)
     },

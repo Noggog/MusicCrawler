@@ -7,8 +7,12 @@ namespace MusicCrawler.Backend.Services.Singletons;
 /// <summary>The outcome of one missing-album sync pass.</summary>
 public record MissingAlbumSyncResult(int ArtistsScanned, int MissingTotal);
 
-/// <summary>One album from an artist's Deezer discography, flagged with whether the library owns it.</summary>
-public record DiscographyAlbum(string Title, string? CoverUrl, long? DeezerAlbumId, bool Owned);
+/// <summary>
+/// One album from an artist's Deezer discography, flagged with whether the library owns it.
+/// <paramref name="Year"/> is Deezer's release year (null when it supplied no date, or for an owned
+/// album Deezer doesn't list at all).
+/// </summary>
+public record DiscographyAlbum(string Title, string? CoverUrl, long? DeezerAlbumId, bool Owned, int? Year = null);
 
 /// <summary>
 /// The missing-album sync job: for each owned artist, pulls its Deezer discography and diffs it
@@ -194,10 +198,11 @@ public class MissingAlbumRefresher
                 }
             }
 
-            all.Add(new DiscographyAlbum(title, album.BestCoverUrl, album.id, isOwned));
+            all.Add(new DiscographyAlbum(title, album.BestCoverUrl, album.id, isOwned, album.Year));
             if (!isOwned)
             {
-                missing.Add(new MissingAlbum(artist, new AlbumKey(title), album.BestCoverUrl, album.id, albumArtist));
+                missing.Add(new MissingAlbum(
+                    artist, new AlbumKey(title), album.BestCoverUrl, album.id, albumArtist, album.Year));
             }
         }
 

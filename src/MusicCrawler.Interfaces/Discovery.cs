@@ -80,7 +80,8 @@ public enum FeedKind
 /// One thing to react to in the discovery feed. <paramref name="Album"/> and
 /// <paramref name="DeezerAlbumId"/> are set only for <see cref="FeedKind.MissingAlbum"/> (the id lets
 /// the UI sample/link the album on Deezer); <paramref name="Score"/>/<paramref name="Sources"/> rank
-/// and explain recommended artists (0/empty for the other kinds).
+/// and explain recommended artists (0/empty for the other kinds). <paramref name="Year"/> is the
+/// album's release year (album kinds only, null when Deezer supplied no date).
 /// </summary>
 public record FeedItem(
     FeedKind Kind,
@@ -89,7 +90,8 @@ public record FeedItem(
     string? ImageUrl,
     double Score,
     IReadOnlyList<string> Sources,
-    long? DeezerAlbumId);
+    long? DeezerAlbumId,
+    int? Year = null);
 
 /// <summary>A paged feed section for a single <see cref="FeedKind"/>.</summary>
 public record DiscoveryFeedPage(
@@ -123,7 +125,7 @@ public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus S
 /// marks albums already in the library; missing ones carry <paramref name="DeezerAlbumId"/> so they can
 /// be queued to buy. <paramref name="Verdict"/> reflects any rating the user has placed on a missing
 /// album (null = not yet decided, or owned). Owned albums the library has that Deezer doesn't list as an
-/// LP carry no Deezer id/art.
+/// LP carry no Deezer id/art — nor a <paramref name="Year"/>, which comes from Deezer's release date.
 /// </summary>
 public record ArtistAlbumItem(
     ArtistKey Artist,
@@ -131,4 +133,5 @@ public record ArtistAlbumItem(
     string? ImageUrl,
     long? DeezerAlbumId,
     bool Owned,
-    DiscoveryStatus? Verdict);
+    DiscoveryStatus? Verdict,
+    int? Year = null);

@@ -15,8 +15,17 @@ public record ArtistAlbums(ArtistKey Artist, IReadOnlyList<string> Albums);
 /// <see cref="AlbumArtist"/> is the album's real credited act per Deezer — for a collaboration
 /// surfaced via one member (e.g. a duo record under "Milo") these differ, and the library files
 /// the album under the album-artist, so that is the key to match ownership against.
+///
+/// <see cref="Year"/> is the Deezer release year, surfaced beside the title so a recommendation can
+/// be placed in time; null when Deezer gave no date (or for rows written before year tracking).
 /// </summary>
-public record MissingAlbum(ArtistKey Artist, AlbumKey Album, string? AlbumArt, long DeezerAlbumId, ArtistKey? AlbumArtist = null)
+public record MissingAlbum(
+    ArtistKey Artist,
+    AlbumKey Album,
+    string? AlbumArt,
+    long DeezerAlbumId,
+    ArtistKey? AlbumArtist = null,
+    int? Year = null)
 {
     /// <summary>The artist the library files this album under — <see cref="AlbumArtist"/> when known,
     /// else <see cref="Artist"/> (non-collaboration albums are filed under the listing artist).</summary>
