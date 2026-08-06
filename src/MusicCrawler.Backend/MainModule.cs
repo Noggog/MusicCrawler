@@ -45,8 +45,9 @@ public class MainModule : Autofac.Module
         builder.RegisterType<HttpClient>().AsSelf().SingleInstance();
 
         // Deezer download subsystem (env-driven; ARL lives in streamrip's own config). streamrip is
-        // always the backend; DEEZER_DOWNLOADS_AUTOMATIC only governs the background drainer — manual
-        // "download now" works regardless. DownloadService is a shared singleton hosted service so the
+        // always the backend. Whether the drainer runs unattended isn't configured here at all — it's
+        // the Download page's switch, stored in Mongo (DownloadSettings) — and manual "download now"
+        // works regardless. DownloadService is a shared singleton hosted service so the
         // endpoint that enqueues a manual download and the loop that drains it are the same instance.
         builder.RegisterInstance(BuildDownloaderConfig());
         builder.RegisterType<StreamripDownloader>().As<IDownloader>().AsSelf().SingleInstance();
@@ -67,15 +68,12 @@ public class MainModule : Autofac.Module
     private static DownloaderConfig BuildDownloaderConfig()
     {
         static string Env(string name) => Environment.GetEnvironmentVariable(name) ?? "";
-        static bool EnvBool(string name) =>
-            Env(name) is var v && (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase));
         static double EnvDouble(string name, double fallback) =>
             double.TryParse(Environment.GetEnvironmentVariable(name), out var d) ? d : fallback;
         static int EnvInt(string name, int fallback) =>
             int.TryParse(Environment.GetEnvironmentVariable(name), out var i) ? i : fallback;
 
         return new DownloaderConfig(
-            Automatic: EnvBool("DEEZER_DOWNLOADS_AUTOMATIC"),
             DownloadDir: Env("MUSIC_DOWNLOAD_DIR"),
             RipBinary: Environment.GetEnvironmentVariable("STREAMRIP_BIN") ?? "rip",
             Quality: Environment.GetEnvironmentVariable("DEEZER_QUALITY") ?? "2",          // streamrip: 2 = FLAC
@@ -84,7 +82,9 @@ public class MainModule : Autofac.Module
             BatchSize: EnvInt("DOWNLOAD_BATCH_SIZE", 3),
             ItemDelay: TimeSpan.FromSeconds(EnvDouble("DOWNLOAD_ITEM_DELAY_SECONDS", 60)),
             BatchInterval: TimeSpan.FromMinutes(EnvDouble("DOWNLOAD_BATCH_INTERVAL_MINUTES", 30)),
-            DownloadTimeout: TimeSpan.FromMinutes(EnvDouble("DEEZER_DOWNLOAD_TIMEOUT_MINUTES", 15)));
+            DownloadTimeout: TimeSpan.FromMinutes(EnvDouble("DEEZER_DOWNLOAD_TIMEOUT_MINUTES", 15)),
+            SettleInterval: TimeSpan.FromMinutes(EnvDouble("DOWNLOAD_SETTLE_INTERVAL_MINUTES", 15)),
+            SettleWindow: TimeSpan.FromHours(EnvDouble("DOWNLOAD_SETTLE_WINDOW_HOURS", 6)));
     }
 
     private static LibraryScannerConfig BuildLibraryScannerConfig()

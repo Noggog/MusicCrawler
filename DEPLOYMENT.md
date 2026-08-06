@@ -101,8 +101,9 @@ folder_format = "{albumartist}/{title}"
 track_format  = "{tracknumber}. {title}"
 ```
 
-The "Download now" button works as soon as the ARL is set; set `DEEZER_DOWNLOADS_AUTOMATIC=true` to
-also drain the queue in the background.
+The "Download now" button works as soon as the ARL is set. The queue also drains in the background by
+default — flip the **auto/manual switch** on the Download page to change that. That choice is stored
+in Mongo (not an env var), so it survives redeploys and takes effect without a restart.
 
 ## Notes / troubleshooting
 

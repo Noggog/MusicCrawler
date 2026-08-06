@@ -40,7 +40,6 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     // Deezer download subsystem (streamrip). MUSIC_DOWNLOAD_DIR is the library root downloads land in;
     // the rest are optional throttle/quality knobs (backend defaults them). The ARL and the
     // artist/album folder_format live in streamrip's own config, not here.
-    .WithEnvironment("DEEZER_DOWNLOADS_AUTOMATIC", Environment.GetEnvironmentVariable("DEEZER_DOWNLOADS_AUTOMATIC"))
     .WithEnvironment("MUSIC_DOWNLOAD_DIR", Environment.GetEnvironmentVariable("MUSIC_DOWNLOAD_DIR"))
     .WithEnvironment("STREAMRIP_BIN", Environment.GetEnvironmentVariable("STREAMRIP_BIN"))
     .WithEnvironment("DEEZER_QUALITY", Environment.GetEnvironmentVariable("DEEZER_QUALITY"))

@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using MusicCrawler.Backend.Services.Background;
 using MusicCrawler.Backend.Services.Download;
+using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Interfaces;
 using NSubstitute;
 using Xunit;
@@ -11,17 +12,68 @@ namespace MusicCrawler.Tests;
 public class DownloadServiceTests
 {
     private readonly FakePurchaseRepo _repo = new();
+    private readonly FakeAppSettingsRepo _settingsRepo = new();
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
 
-    private DownloadService Sut()
+    // The catalog side of the settle pass: a real CatalogRefresher over a substituted Plex read, so a
+    // settle test can say "Plex now reports this album" and watch the row close out for real.
+    private readonly ILibraryQuery _libraryQuery = Substitute.For<ILibraryQuery>();
+    private readonly IArtistCatalogRepo _catalogRepo = Substitute.For<IArtistCatalogRepo>();
+    private readonly ILibraryProvider _library = Substitute.For<ILibraryProvider>();
+    private readonly IUserQueueRepo _queue = Substitute.For<IUserQueueRepo>();
+    private readonly IUserAlbumRatingRepo _albumRatings = Substitute.For<IUserAlbumRatingRepo>();
+    private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
+    private readonly FakeAlbumMatchOverrideRepo _overrides = new();
+    private readonly List<AlbumRating> _liked = new();
+    private readonly List<MissingAlbum> _missingAlbums = new();
+
+    public DownloadServiceTests()
     {
-        var config = new DownloaderConfig(
-            Automatic: false, DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
+        _libraryQuery.QueryAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
+        _libraryQuery.QueryAllAlbums().Returns(Array.Empty<ArtistAlbums>());
+        _catalogRepo.SyncFromLibrary(Arg.Any<IReadOnlyList<ArtistMetadata>>(), Arg.Any<DateTimeOffset>())
+            .Returns(new CatalogSyncResult(0, 0, 0));
+        _catalogRepo.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
+        _library.GetAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
+        _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
+        _albumRatings.GetAllLiked().Returns(Array.Empty<AlbumRating>());
+        _missing.GetAll().Returns(Array.Empty<MissingAlbum>());
+    }
+
+    private static DownloaderConfig Config(TimeSpan? settleWindow = null) =>
+        new(DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
             Codec: "", BatchSize: 10, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero,
-            DownloadTimeout: TimeSpan.FromMinutes(15));
-        // PurchaseService is only used by the background loop, not the methods under test — null is fine.
-        return new DownloadService(_repo, _downloader, config, purchases: null!,
+            DownloadTimeout: TimeSpan.FromMinutes(15), SettleInterval: TimeSpan.FromMinutes(15),
+            SettleWindow: settleWindow ?? TimeSpan.FromHours(6));
+
+    private DownloadService Sut(DownloaderConfig? config = null)
+    {
+        config ??= Config();
+        var settings = new DownloadSettings(_settingsRepo, NullLogger<DownloadSettings>.Instance);
+        var purchases = new PurchaseService(
+            _repo, _queue, _albumRatings, _library, _catalogRepo, _missing, _overrides, _downloader,
+            config, settings, NullLogger<PurchaseService>.Instance);
+        var catalog = new CatalogRefresher(_libraryQuery, _catalogRepo, NullLogger<CatalogRefresher>.Instance);
+        return new DownloadService(_repo, _downloader, config, settings, purchases, catalog,
             Substitute.For<ILibraryScanner>(), NullLogger<DownloadService>.Instance);
+    }
+
+    /// <summary>
+    /// Marks an album as liked-but-unowned, the way the real queue gets its rows: the automatic pass
+    /// reconciles first, which derives the pending list from likes — so a row merely seeded into the
+    /// repo (with nobody wanting it) is pruned before the pass ever sees it. A null
+    /// <paramref name="deezerId"/> leaves it un-fetchable, as if the missing-album diff never found it.
+    /// </summary>
+    private void Wanted(string artist, string album, long? deezerId)
+    {
+        _liked.Add(new AlbumRating(new ArtistKey(artist), new AlbumKey(album), null, DiscoveryStatus.Liked));
+        if (deezerId is not null)
+        {
+            _missingAlbums.Add(new MissingAlbum(
+                new ArtistKey(artist), new AlbumKey(album), null, deezerId.Value, new ArtistKey(artist)));
+        }
+        _albumRatings.GetAllLiked().Returns(_liked.ToArray());
+        _missing.GetAll().Returns(_missingAlbums.ToArray());
     }
 
     private static PurchaseItem Album(string artist, string album, long deezerId, PurchaseStatus status = PurchaseStatus.Pending) =>
@@ -107,6 +159,126 @@ public class DownloadServiceTests
 
         (await Sut().RequestDownload(PurchaseKey.ForArtist("Phoebe Bridgers"))).Should().BeFalse();
         (await Sut().RequestDownload("nope")).Should().BeFalse();
+    }
+
+    // ---- The automatic/manual switch (env default, overridden by the stored value) ----
+
+    [Fact]
+    public async Task Automatic_is_on_until_the_switch_is_turned_off()
+    {
+        // Nothing stored: the drainer runs unattended. There is no env var to say otherwise.
+        var settings = new DownloadSettings(_settingsRepo, NullLogger<DownloadSettings>.Instance);
+
+        (await settings.Automatic()).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task The_stored_switch_is_what_the_drainer_reads_in_both_directions()
+    {
+        var settings = new DownloadSettings(_settingsRepo, NullLogger<DownloadSettings>.Instance);
+
+        await settings.SetAutomatic(false);
+        (await settings.Automatic()).Should().BeFalse();
+
+        await settings.SetAutomatic(true);
+        (await settings.Automatic()).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Automatic_mode_enqueues_pending_downloadable_albums()
+    {
+        Wanted("Big Thief", "Capacity", deezerId: 12345);
+        Wanted("No Id", "Unfetchable", deezerId: null);   // liked, but nothing to fetch it by
+
+        await Sut().EnqueuePendingBatch();
+
+        _repo.Items.Single(i => i.Album == "Capacity").Status.Should().Be(PurchaseStatus.Queued);
+        _repo.Items.Single(i => i.Album == "Unfetchable").Status.Should().Be(PurchaseStatus.Pending);
+    }
+
+    [Fact]
+    public async Task Manual_mode_leaves_pending_albums_alone()
+    {
+        // Seeded as well as wanted: a manual pass returns before it reconciles, so the row has to
+        // already be there for the assertion to mean "left alone" rather than "never created".
+        Wanted("Big Thief", "Capacity", deezerId: 12345);
+        _repo.Seed(Album("Big Thief", "Capacity", 12345));
+        await _settingsRepo.SetDownloadsAutomatic(false);
+
+        await Sut().EnqueuePendingBatch();
+
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Pending);
+    }
+
+    [Fact]
+    public async Task Flipping_the_switch_on_starts_the_next_pass_draining_without_a_restart()
+    {
+        Wanted("Big Thief", "Capacity", deezerId: 12345);
+        _repo.Seed(Album("Big Thief", "Capacity", 12345));
+        await _settingsRepo.SetDownloadsAutomatic(false);
+        var settings = new DownloadSettings(_settingsRepo, NullLogger<DownloadSettings>.Instance);
+        var sut = Sut();
+
+        await sut.EnqueuePendingBatch();
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Pending);
+
+        await settings.SetAutomatic(true);   // the same store the service reads through
+        await sut.EnqueuePendingBatch();
+
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Queued);
+    }
+
+    // ---- The settle pass (a downloaded album showing up in the library) ----
+
+    [Fact]
+    public async Task Settle_closes_out_a_downloaded_album_once_the_library_reports_it()
+    {
+        _repo.Seed(Album("Big Thief", "Capacity", 1, PurchaseStatus.Sent) with { SentAt = DateTimeOffset.UtcNow });
+        // The file has landed and Plex now lists it, so the refresh this pass triggers finds it owned.
+        _catalogRepo.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Big Thief"] = new(StringComparer.Ordinal) { "capacity" },
+        });
+
+        await Sut().SettleOnce();
+
+        await _libraryQuery.Received(1).QueryAllArtistMetadata();
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.InLibrary);
+    }
+
+    [Fact]
+    public async Task Settle_leaves_a_download_that_has_not_landed_yet_alone()
+    {
+        _repo.Seed(Album("Big Thief", "Capacity", 1, PurchaseStatus.Sent) with { SentAt = DateTimeOffset.UtcNow });
+
+        await Sut().SettleOnce();
+
+        await _libraryQuery.Received(1).QueryAllArtistMetadata();
+        _repo.Items.Single().Status.Should().Be(PurchaseStatus.Sent);
+    }
+
+    [Fact]
+    public async Task Settle_does_not_touch_plex_when_nothing_is_waiting_to_land()
+    {
+        _repo.Seed(Album("Waiting", "ToDownload", 1));                        // pending, not downloaded
+        _repo.Seed(Album("Already", "Home", 2, PurchaseStatus.InLibrary));    // closed out already
+
+        await Sut().SettleOnce();
+
+        await _libraryQuery.DidNotReceive().QueryAllArtistMetadata();
+    }
+
+    [Fact]
+    public async Task Settle_gives_up_on_a_download_that_never_arrived()
+    {
+        // Past the settle window: an album Plex files under a title we can't match would otherwise
+        // keep re-reading the whole library forever. It's left for the daily sync (or a manual merge).
+        _repo.Seed(Album("Big Thief", "Capacity", 1, PurchaseStatus.Sent)
+            with { SentAt = DateTimeOffset.UtcNow - TimeSpan.FromHours(9) });
+
+        await Sut(Config(settleWindow: TimeSpan.FromHours(6))).SettleOnce();
+
+        await _libraryQuery.DidNotReceive().QueryAllArtistMetadata();
     }
 
     // ---- Crash recovery ----

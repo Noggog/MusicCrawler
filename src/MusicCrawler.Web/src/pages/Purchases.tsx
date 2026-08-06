@@ -9,6 +9,7 @@ import {
   getLibraryAlbums,
   getPurchases,
   mergePurchase,
+  setDownloadsAutomatic,
   unsendPurchase,
 } from '../api/discovery'
 import { useArtAccent } from '../art/artColors'
@@ -121,7 +122,15 @@ function MergePane({
   )
 }
 
-function Monitor({ s }: { s: DownloadSnapshot }) {
+function Monitor({
+  s,
+  onToggleAutomatic,
+  busy,
+}: {
+  s: DownloadSnapshot
+  onToggleAutomatic: (automatic: boolean) => void
+  busy: boolean
+}) {
   const current = s.current[0]
   const activity = current
     ? `⬇ Downloading: ${current.album ?? current.artist.artistName} — ${current.artist.artistName}`
@@ -134,9 +143,27 @@ function Monitor({ s }: { s: DownloadSnapshot }) {
   return (
     <div className="dl-monitor">
       <div className="dl-monitor-head">
-        <span className={s.automatic ? 'dl-badge on' : 'dl-badge off'}>
-          {s.automatic ? '● auto' : '○ manual'}
-        </span>
+        {/* The drainer switch. Server-side state (shared, and persisted across redeploys), so this
+            reflects what the backend will actually do rather than a local preference. */}
+        <button
+          className={s.automatic ? 'dl-switch on' : 'dl-switch off'}
+          role="switch"
+          aria-checked={s.automatic}
+          disabled={busy}
+          title={
+            s.automatic
+              ? 'Downloading automatically — switch to manual'
+              : 'Manual only — switch to automatic'
+          }
+          onClick={() => onToggleAutomatic(!s.automatic)}
+        >
+          <span className="dl-switch-track">
+            <span className="dl-switch-knob" />
+          </span>
+          <span className={s.automatic ? 'dl-badge on' : 'dl-badge off'}>
+            {s.automatic ? 'auto' : 'manual'}
+          </span>
+        </button>
         <span className="dl-backend">backend: {s.backend}</span>
       </div>
       <div className={current ? 'dl-activity active' : 'dl-activity'}>{activity}</div>
@@ -178,6 +205,10 @@ export default function Purchases() {
   }
   const download = useMutation({ mutationFn: (id: string) => downloadPurchase(id), onSuccess: invalidate })
   const unsend = useMutation({ mutationFn: (id: string) => unsendPurchase(id), onSuccess: invalidate })
+  const setAutomatic = useMutation({
+    mutationFn: (automatic: boolean) => setDownloadsAutomatic(automatic),
+    onSuccess: invalidate,
+  })
 
   // "Nevermind" — clearing the underlying like drops the item from the queue on the next reconcile
   // (the list is derived from liked-but-unowned ratings), so this intercepts an item before download.
@@ -259,7 +290,13 @@ export default function Purchases() {
     <section>
       <h1>Downloading {shownCount > 0 ? `(${shownCount})` : ''}</h1>
 
-      {status && <Monitor s={status} />}
+      {status && (
+        <Monitor
+          s={status}
+          busy={setAutomatic.isPending}
+          onToggleAutomatic={(automatic) => setAutomatic.mutate(automatic)}
+        />
+      )}
 
       {isError && <p className="error">Failed to load wishlist: {(error as Error).message}</p>}
       {isPending && <p><em>Loading…</em></p>}
@@ -274,7 +311,7 @@ export default function Purchases() {
       )}
 
       {downloading.length > 0 && (
-        <>
+        <div className="dl-section">
           <h2 className="feed-section-title">
             Downloading now <span className="feed-count">{downloading.length}</span>
           </h2>
@@ -290,11 +327,11 @@ export default function Purchases() {
               ),
             )}
           </div>
-        </>
+        </div>
       )}
 
       {failed.length > 0 && (
-        <>
+        <div className="dl-section">
           <h2 className="feed-section-title">
             Failed <span className="feed-count">{failed.length}</span>
           </h2>
@@ -317,11 +354,11 @@ export default function Purchases() {
               ),
             )}
           </div>
-        </>
+        </div>
       )}
 
       {pendingAlbums.length > 0 && (
-        <>
+        <div className="dl-section">
           <div className="disc-list">
             {pendingAlbums.map((item) =>
               row(
@@ -341,15 +378,20 @@ export default function Purchases() {
               ),
             )}
           </div>
-        </>
+        </div>
       )}
 
       {sent.length > 0 && (
-        <>
+        <div className="dl-section">
           <h2 className="feed-section-title">
             Complete <span className="feed-count">{sent.length}</span>
           </h2>
-          <p className="disc-sub"><em>Downloaded — awaiting arrival in the library.</em></p>
+          <p className="disc-sub">
+            <em>
+              Downloaded — these clear themselves once the album turns up in your library, which the
+              server re-checks every few minutes for a while after the download.
+            </em>
+          </p>
           <div className="disc-list">
             {sent.map((item) =>
               row(
@@ -368,7 +410,7 @@ export default function Purchases() {
               ),
             )}
           </div>
-        </>
+        </div>
       )}
 
       {mergingItem && (

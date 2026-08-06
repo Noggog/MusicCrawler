@@ -1863,6 +1863,67 @@ a.detail-chip.via:hover {
   font-size: 0.8rem;
   color: var(--text-dim);
 }
+/* One block of the download queue (Downloading now / Failed / waiting / Complete). Each carries its
+   own top margin: the sections are bare lists and headings, so without this the next heading sat
+   flush against the list above it — and the unlabelled "waiting" list ran straight into the
+   downloading one with no seam at all. */
+.dl-section {
+  margin-top: 1.6rem;
+}
+.dl-section .feed-section-title {
+  margin-bottom: 0.5rem;
+}
+/* A section's lead-in note ("The downloader couldn't grab these") sits between heading and list. */
+.dl-section .disc-sub {
+  margin: -0.15rem 0 0.6rem;
+}
+
+/* The auto/manual drainer switch in the monitor head: an iOS-style track + knob, with the mode word
+   beside it. Backed by server state, so it animates to wherever the next poll says the backend is. */
+.dl-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.dl-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.dl-switch-track {
+  position: relative;
+  width: 2.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-bright);
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.dl-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.12rem;
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transform: translateY(-50%);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.dl-switch.on .dl-switch-track {
+  background: rgba(56, 232, 160, 0.22);
+  border-color: rgba(56, 232, 160, 0.6);
+}
+.dl-switch.on .dl-switch-knob {
+  background: var(--good);
+  box-shadow: 0 0 10px rgba(56, 232, 160, 0.55);
+  transform: translate(0.87rem, -50%);
+}
+
 .dl-badge {
   font-weight: 700;
   letter-spacing: 0.03em;

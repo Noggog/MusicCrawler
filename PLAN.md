@@ -159,19 +159,25 @@ Each is independently buildable and testable.
   `DEEZER_FALLBACK_QUALITY` (default `1` = 320 MP3)** so an album not available lossless still
   comes down.
   - **`DownloadService`** is a single-flight channel consumer: ids reach the queue either
-    automatically (a background loop, only when `DEEZER_DOWNLOADS_AUTOMATIC` is on, enqueues
-    pending albums every `DOWNLOAD_BATCH_INTERVAL_MINUTES`) or manually via
+    automatically (a background loop, on while the drainer switch is on, enqueues pending albums
+    every `DOWNLOAD_BATCH_INTERVAL_MINUTES`) or manually via
     `RequestDownload(id)` (the "Download now"/"Retry" button — non-blocking, returns
     immediately). Each item: Pending → Downloading → Sent/Failed, throttled by
     `DOWNLOAD_ITEM_DELAY_SECONDS`. Registered as a **shared singleton hosted service** so the
     endpoint and the loop are one instance. Crash recovery: stranded `Downloading` rows reset
-    to Pending on startup. The catalog sync closes the loop (file in Plex → reconcile →
-    `in-library`).
-  - **`DEEZER_DOWNLOADS_AUTOMATIC` (default off)** governs only the background drainer; manual
-    downloads work regardless. streamrip is always the backend (no NoOp). Env knobs:
+    to Pending on startup. A **settle pass** closes the loop for a fresh download: while a row
+    downloaded within `DOWNLOAD_SETTLE_WINDOW_HOURS` is still waiting, it re-pulls the Plex
+    catalog every `DOWNLOAD_SETTLE_INTERVAL_MINUTES` (file in Plex → reconcile → `in-library`)
+    instead of leaving it to the daily catalog sync.
+  - **The automatic/manual switch** lives on the Download page and is **persisted in Mongo**
+    (`appSettings`, via `IAppSettingsRepo`), so it survives a redeploy and is re-read on every
+    drainer tick — flipping it needs no restart. It is **deliberately not an env var** (automatic
+    until turned off), so nothing can contradict what the UI shows; manual downloads work
+    regardless. streamrip is always the backend (no NoOp). Env knobs:
     `MUSIC_DOWNLOAD_DIR`, `STREAMRIP_BIN`, `DEEZER_QUALITY` (2), `DEEZER_FALLBACK_QUALITY` (1),
     `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE` (3), `DOWNLOAD_ITEM_DELAY_SECONDS` (60),
-    `DOWNLOAD_BATCH_INTERVAL_MINUTES` (30), `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` (15).
+    `DOWNLOAD_BATCH_INTERVAL_MINUTES` (30), `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` (15),
+    `DOWNLOAD_SETTLE_INTERVAL_MINUTES` (15), `DOWNLOAD_SETTLE_WINDOW_HOURS` (6).
   - **Error handling:** every streamrip attempt logs its command up front; a pass that exceeds
     `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` is killed (process tree) and the item marked `failed`
     rather than hanging in `downloading` forever; timeouts/non-zero exits log streamrip's

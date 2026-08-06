@@ -631,6 +631,17 @@ api.MapGet("/purchases/status", async (PurchaseService purchases) =>
     .RequireAuthorization()
     .WithName("DownloadStatus");
 
+// The automatic/manual switch for the background drainer. Persisted in Mongo so it survives a
+// redeploy — this switch is the only place the mode is set, no env var — and re-read by the drainer
+// each tick, so it takes effect without a restart.
+api.MapPost("/purchases/automatic", async (bool automatic, DownloadSettings settings) =>
+    {
+        await settings.SetAutomatic(automatic);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("SetDownloadsAutomatic");
+
 // Manually queue an item for download now (the "Download now"/"Retry" button). Non-blocking — the
 // drainer does the fetch; returns immediately. Works whether or not automatic downloads are on.
 api.MapPost("/purchases/download", async (string id, DownloadService downloads) =>

@@ -21,15 +21,18 @@ public class PurchaseServiceTests
     private readonly PurchaseService _sut;
 
     private static readonly DownloaderConfig Config = new(
-        Automatic: true, DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
+        DownloadDir: "", RipBinary: "rip", Quality: "2", FallbackQuality: "1",
         Codec: "", BatchSize: 3, ItemDelay: TimeSpan.Zero, BatchInterval: TimeSpan.Zero,
-        DownloadTimeout: TimeSpan.FromMinutes(15));
+        DownloadTimeout: TimeSpan.FromMinutes(15), SettleInterval: TimeSpan.FromMinutes(15),
+        SettleWindow: TimeSpan.FromHours(6));
 
     public PurchaseServiceTests()
     {
+        var settings = new DownloadSettings(
+            new FakeAppSettingsRepo(), NullLogger<DownloadSettings>.Instance);
         _sut = new PurchaseService(
             _purchases, _queue, _albumRatings, _library, _catalog, _missing, _overrides, _downloader, Config,
-            NullLogger<PurchaseService>.Instance);
+            settings, NullLogger<PurchaseService>.Instance);
 
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
         _albumRatings.GetAllLiked().Returns(Array.Empty<AlbumRating>());

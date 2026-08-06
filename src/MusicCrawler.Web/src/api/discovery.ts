@@ -154,6 +154,15 @@ export async function getDownloadStatus(): Promise<DownloadSnapshot> {
   return (await res.json()) as DownloadSnapshot
 }
 
+// Flip the background drainer between automatic and manual. Stored server-side (Mongo), so the
+// choice survives a redeploy and applies to everyone — this is the maintainer's shared queue.
+export async function setDownloadsAutomatic(automatic: boolean): Promise<void> {
+  const res = await fetch(`/api/purchases/automatic?automatic=${automatic}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to change download mode: ${res.status} ${res.statusText}`)
+  }
+}
+
 // Manually queue an item for download now (non-blocking — the drainer does the fetch). Also the
 // "retry" action for failed items. Works whether or not automatic downloads are on.
 export async function downloadPurchase(id: string): Promise<void> {

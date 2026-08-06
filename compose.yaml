@@ -30,14 +30,15 @@ services:
       # --- Data store ---
       MONGO_URI: mongodb://mongo:27017
       # --- Deezer downloads (streamrip). The ARL lives in streamrip's own config volume. ---
+      # Automatic vs. manual draining isn't set here: it's the Download page's switch, stored in Mongo.
       MUSIC_DOWNLOAD_DIR: /music
-      DEEZER_DOWNLOADS_AUTOMATIC: ${DEEZER_DOWNLOADS_AUTOMATIC:-false}
       DEEZER_QUALITY: ${DEEZER_QUALITY:-2}
       DEEZER_FALLBACK_QUALITY: ${DEEZER_FALLBACK_QUALITY:-1}
       # Optional knobs (left unset -> backend defaults): RELATED_STALENESS_DAYS,
       # QUEUE_REPLENISH_INTERVAL_HOURS, DEEZER_CODEC, DOWNLOAD_BATCH_SIZE,
       # DOWNLOAD_ITEM_DELAY_SECONDS, DOWNLOAD_BATCH_INTERVAL_MINUTES,
-      # DEEZER_DOWNLOAD_TIMEOUT_MINUTES, PLEX_RESCAN_AFTER_DOWNLOAD, PLEX_RESCAN_DEBOUNCE_MINUTES.
+      # DEEZER_DOWNLOAD_TIMEOUT_MINUTES, DOWNLOAD_SETTLE_INTERVAL_MINUTES,
+      # DOWNLOAD_SETTLE_WINDOW_HOURS, PLEX_RESCAN_AFTER_DOWNLOAD, PLEX_RESCAN_DEBOUNCE_MINUTES.
     volumes:
       # Downloads must land where Plex scans — point this host path at your Plex music library.
       - ${MUSIC_DOWNLOAD_DIR_HOST}:/music

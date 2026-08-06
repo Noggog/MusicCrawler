@@ -25,6 +25,7 @@ public class PurchaseService
     private readonly IAlbumMatchOverrideRepo _overrides;
     private readonly IDownloader _downloader;
     private readonly DownloaderConfig _config;
+    private readonly DownloadSettings _settings;
     private readonly ILogger<PurchaseService> _logger;
 
     public PurchaseService(
@@ -37,8 +38,10 @@ public class PurchaseService
         IAlbumMatchOverrideRepo overrides,
         IDownloader downloader,
         DownloaderConfig config,
+        DownloadSettings settings,
         ILogger<PurchaseService> logger)
     {
+        _settings = settings;
         _purchases = purchases;
         _queue = queue;
         _albumRatings = albumRatings;
@@ -88,7 +91,9 @@ public class PurchaseService
             .ToArray();
 
         return new DownloadSnapshot(
-            _config.Automatic,
+            // The live switch (stored, else the env default) — not the raw config, so the panel shows
+            // what the drainer will actually do.
+            await _settings.Automatic(),
             _downloader.Name,
             _config.BatchSize,
             _config.ItemDelay.TotalSeconds,
