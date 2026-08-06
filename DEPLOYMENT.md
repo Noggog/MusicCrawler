@@ -57,8 +57,11 @@ Create a **Stack** in Komodo pointing at this repo:
 - Deploy. Komodo (with the Podman engine) builds the `app` image from the top-level `Dockerfile`
   (which builds the SPA too) and starts the stack.
 
-The `condition: service_healthy` on `mongo` uses Compose-spec healthchecks; modern `docker compose`
-and Podman both honor it. If your engine doesn't, change it to a plain `depends_on: [mongo]`.
+`app` uses a plain `depends_on: [mongo]` — start order without a health gate. Gating on
+`condition: service_healthy` cost ~5 minutes per deploy here: Podman runs container healthchecks off
+a transient systemd timer, and when that doesn't fire the compose wait blocks on "starting" long
+after mongod is actually serving. Mongo still starts first and the driver retries, so the app comes
+up fine. (The healthcheck itself is kept — it's just for status, not for sequencing.)
 
 ### Separate Komodo Build + Stack (no registry)
 

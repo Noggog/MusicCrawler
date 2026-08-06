@@ -44,9 +44,13 @@ services:
       # streamrip config (Deezer ARL + folder_format) — bind-mounted so you can edit config.toml.
       - ${STREAMRIP_CONFIG_HOST}:/config
       - app_logs:/app/logs
+    # Start order only — deliberately NOT `condition: service_healthy`. Under Podman the healthcheck
+    # is driven by a transient systemd timer, and when that doesn't fire the compose wait sat on
+    # "starting" for ~5 minutes per deploy even though mongod was up in under a second. Mongo still
+    # starts first, and the Mongo driver's server-selection window (30s) covers the rest, so the app
+    # tolerates connecting a moment early.
     depends_on:
-      mongo:
-        condition: service_healthy
+      - mongo
 
   mongo:
     image: mongo:7
