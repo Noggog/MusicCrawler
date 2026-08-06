@@ -1947,6 +1947,17 @@ a.detail-chip.via:hover {
   font-weight: 600;
   color: var(--good);
 }
+/* "Next album in 47s" — the countdown to the drainer's next move, under the activity line. */
+.dl-next {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.dl-next strong {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
 .dl-counts {
   display: flex;
   gap: 1.4rem;

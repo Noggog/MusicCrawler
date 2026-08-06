@@ -38,6 +38,12 @@ public class MainModule : Autofac.Module
         builder.RegisterInstance(new ReplenishConfig(
             Interval: TimeSpan.FromHours(replenishHours), StartupDelay: TimeSpan.FromMinutes(5)));
 
+        // Every recurring wait in the app is scattered by this much (env knob, default ±30%) instead of
+        // firing on an exact cadence — see JitterPolicy.
+        var jitterPercent = double.TryParse(
+            Environment.GetEnvironmentVariable("TIMER_JITTER_PERCENT"), out var j) ? j : 30;
+        builder.RegisterInstance(new JitterPolicy(jitterPercent / 100));
+
         builder.RegisterInstance(
             new PlexEndpointInfo(Environment.GetEnvironmentVariable("PLEX_ENDPOINT") ?? throw new InvalidOperationException()));
         builder.RegisterInstance(
@@ -60,6 +66,9 @@ public class MainModule : Autofac.Module
         builder.RegisterAssemblyTypes(typeof(LibraryProvider).Assembly)
             .InNamespacesOf(
                 typeof(LibraryProvider))
+            // JitterPolicy lives in this namespace but is configured above from the environment — the
+            // scan would otherwise re-register it and fail, since its constructor takes a plain double.
+            .Except<JitterPolicy>()
             .AsImplementedInterfaces()
             .AsSelf()
             .SingleInstance();

@@ -18,6 +18,7 @@ public class PurchaseServiceTests
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
     private readonly FakeAlbumMatchOverrideRepo _overrides = new();
     private readonly IDownloader _downloader = Substitute.For<IDownloader>();
+    private readonly DownloadSchedule _schedule = new();
     private readonly PurchaseService _sut;
 
     private static readonly DownloaderConfig Config = new(
@@ -32,7 +33,7 @@ public class PurchaseServiceTests
             new FakeAppSettingsRepo(), NullLogger<DownloadSettings>.Instance);
         _sut = new PurchaseService(
             _purchases, _queue, _albumRatings, _library, _catalog, _missing, _overrides, _downloader, Config,
-            settings, NullLogger<PurchaseService>.Instance);
+            settings, new JitterPolicy(0.3), _schedule, NullLogger<PurchaseService>.Instance);
 
         _queue.GetAllLiked().Returns(Array.Empty<DiscoveryCandidate>());
         _albumRatings.GetAllLiked().Returns(Array.Empty<AlbumRating>());
@@ -246,6 +247,25 @@ public class PurchaseServiceTests
         snap.Queued.Should().Be(1); // only the downloadable pending album with a Deezer id
         snap.Complete.Should().Be(1);
         snap.BatchSize.Should().Be(3);
+        snap.JitterPercent.Should().Be(30);
+    }
+
+    [Fact]
+    public async Task Snapshot_surfaces_when_the_drainer_next_acts()
+    {
+        // Nothing scheduled yet (the drainer hasn't run a pass) -> nothing for the UI to count down.
+        (await _sut.GetDownloadSnapshot()).NextBatchAt.Should().BeNull();
+
+        _schedule.BatchWait(TimeSpan.FromMinutes(30));
+        _schedule.ItemWait(TimeSpan.FromSeconds(60));
+        var snap = await _sut.GetDownloadSnapshot();
+
+        snap.NextBatchAt.Should().BeCloseTo(DateTimeOffset.UtcNow.AddMinutes(30), TimeSpan.FromSeconds(5));
+        snap.NextItemAt.Should().BeCloseTo(DateTimeOffset.UtcNow.AddSeconds(60), TimeSpan.FromSeconds(5));
+
+        // The inter-album wait ends when the next download starts; only the batch time remains.
+        _schedule.ClearItemWait();
+        (await _sut.GetDownloadSnapshot()).NextItemAt.Should().BeNull();
     }
 
     [Fact]

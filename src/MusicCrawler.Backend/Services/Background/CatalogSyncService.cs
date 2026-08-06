@@ -1,11 +1,10 @@
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
 using MusicCrawler.Backend.Services.Singletons;
 
 namespace MusicCrawler.Backend.Services.Background;
 
 /// <summary>
-/// Keeps the Library Catalog fresh: syncs once on startup, then on a fixed daily interval.
+/// Keeps the Library Catalog fresh: syncs once on startup, then daily (jittered, like every recurring
+/// wait in the app — see <see cref="JitterPolicy"/>).
 /// A failed sync is logged and retried at the next tick — it never takes the app down, since
 /// reads serve from whatever is already in the catalog. (Registered as a hosted service in
 /// Program.cs rather than via assembly scanning, so it lives outside the scanned namespace.)
@@ -16,23 +15,21 @@ public class CatalogSyncService : BackgroundService
 
     private readonly CatalogRefresher _refresher;
     private readonly PurchaseService _purchases;
+    private readonly JitterPolicy _jitter;
     private readonly ILogger<CatalogSyncService> _logger;
 
     public CatalogSyncService(
-        CatalogRefresher refresher, PurchaseService purchases, ILogger<CatalogSyncService> logger)
+        CatalogRefresher refresher, PurchaseService purchases, JitterPolicy jitter,
+        ILogger<CatalogSyncService> logger)
     {
         _refresher = refresher;
         _purchases = purchases;
+        _jitter = jitter;
         _logger = logger;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        return Observable
-            .Timer(TimeSpan.Zero, SyncInterval)
-            .SelectMany(_ => Observable.FromAsync(SyncOnce))
-            .ToTask(stoppingToken);
-    }
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        _jitter.RunPeriodic(TimeSpan.Zero, SyncInterval, SyncOnce, stoppingToken);
 
     private async Task SyncOnce()
     {

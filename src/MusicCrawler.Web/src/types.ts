@@ -195,11 +195,16 @@ export interface DownloadSnapshot {
   batchSize: number
   itemDelaySeconds: number
   batchIntervalMinutes: number
+  // ± spread applied to the two timings above, as a percentage (0 = exact).
+  jitterPercent: number
   queued: number
   downloading: number
   complete: number
   failed: number
   current: PurchaseItem[]
+  // ISO timestamps for when the drainer next acts (null when nothing is scheduled).
+  nextItemAt: string | null
+  nextBatchAt: string | null
 }
 
 export interface PurchaseItem {

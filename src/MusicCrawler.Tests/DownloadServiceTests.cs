@@ -24,6 +24,9 @@ public class DownloadServiceTests
     private readonly IUserAlbumRatingRepo _albumRatings = Substitute.For<IUserAlbumRatingRepo>();
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
     private readonly FakeAlbumMatchOverrideRepo _overrides = new();
+    // No jitter in tests: waits stay exact (and zero), so nothing sleeps.
+    private readonly JitterPolicy _jitter = new(0);
+    private readonly DownloadSchedule _schedule = new();
     private readonly List<AlbumRating> _liked = new();
     private readonly List<MissingAlbum> _missingAlbums = new();
 
@@ -52,10 +55,10 @@ public class DownloadServiceTests
         var settings = new DownloadSettings(_settingsRepo, NullLogger<DownloadSettings>.Instance);
         var purchases = new PurchaseService(
             _repo, _queue, _albumRatings, _library, _catalogRepo, _missing, _overrides, _downloader,
-            config, settings, NullLogger<PurchaseService>.Instance);
+            config, settings, _jitter, _schedule, NullLogger<PurchaseService>.Instance);
         var catalog = new CatalogRefresher(_libraryQuery, _catalogRepo, NullLogger<CatalogRefresher>.Instance);
-        return new DownloadService(_repo, _downloader, config, settings, purchases, catalog,
-            Substitute.For<ILibraryScanner>(), NullLogger<DownloadService>.Instance);
+        return new DownloadService(_repo, _downloader, config, settings, purchases, catalog, _jitter,
+            _schedule, Substitute.For<ILibraryScanner>(), NullLogger<DownloadService>.Instance);
     }
 
     /// <summary>

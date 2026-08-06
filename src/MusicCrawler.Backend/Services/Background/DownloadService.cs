@@ -1,5 +1,3 @@
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
 using System.Threading.Channels;
 using MusicCrawler.Backend.Services.Download;
 using MusicCrawler.Backend.Services.Singletons;
@@ -29,6 +27,8 @@ public class DownloadService : BackgroundService
     private readonly DownloadSettings _settings;
     private readonly PurchaseService _purchases;
     private readonly CatalogRefresher _catalog;
+    private readonly JitterPolicy _jitter;
+    private readonly DownloadSchedule _schedule;
     private readonly ILibraryScanner _scanner;
     private readonly ILogger<DownloadService> _logger;
 
@@ -42,6 +42,8 @@ public class DownloadService : BackgroundService
         DownloadSettings settings,
         PurchaseService purchases,
         CatalogRefresher catalog,
+        JitterPolicy jitter,
+        DownloadSchedule schedule,
         ILibraryScanner scanner,
         ILogger<DownloadService> logger)
     {
@@ -51,6 +53,8 @@ public class DownloadService : BackgroundService
         _settings = settings;
         _purchases = purchases;
         _catalog = catalog;
+        _jitter = jitter;
+        _schedule = schedule;
         _scanner = scanner;
         _logger = logger;
     }
@@ -140,7 +144,13 @@ public class DownloadService : BackgroundService
                         // Ask Plex to pick up the new album. Debounced, so a draining batch triggers a
                         // single rescan once it quiets — and a no-op unless PLEX_RESCAN_AFTER_DOWNLOAD is on.
                         await _scanner.RequestScan();
-                        await Delay(_config.ItemDelay, ct);
+
+                        // Publish the wait before taking it, so the monitor can show when the next
+                        // album starts rather than just "Idle".
+                        var wait = _jitter.Apply(_config.ItemDelay);
+                        _schedule.ItemWait(wait);
+                        await Delay(wait, ct);
+                        _schedule.ClearItemWait();
                     }
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -191,14 +201,16 @@ public class DownloadService : BackgroundService
     }
 
     /// <summary>Periodically enqueues pending downloadable albums (batch-capped) while the drainer
-    /// switch is on. Mirrors the daily sync services' Rx shape. The timer runs regardless of the
-    /// switch and each pass re-checks it, so switching to automatic starts draining at the next tick
-    /// rather than needing a restart.</summary>
+    /// switch is on. The loop runs regardless of the switch and each pass re-checks it, so switching to
+    /// automatic starts draining at the next tick rather than needing a restart. Every gap is jittered
+    /// (as all the app's recurring waits are) and published to <see cref="DownloadSchedule"/> so the
+    /// monitor can count it down.</summary>
     private Task AutoEnqueue(CancellationToken ct) =>
-        Observable
-            .Timer(TimeSpan.Zero, _config.BatchInterval)
-            .SelectMany(_ => Observable.FromAsync(EnqueuePendingBatch))
-            .ToTask(ct);
+        // Zero start delay: after a deploy the queue should start moving at once, and a single pass at
+        // startup isn't what a rate-limiter keys on — the repeating cadence is, and that's jittered.
+        _jitter.RunPeriodic(
+            TimeSpan.Zero, _config.BatchInterval, EnqueuePendingBatch, ct,
+            onWait: _schedule.BatchWait);
 
     /// <summary>One automatic pass: a no-op in manual mode, where only the button enqueues.</summary>
     internal async Task EnqueuePendingBatch()
@@ -240,10 +252,7 @@ public class DownloadService : BackgroundService
     /// visible in Plex. Ticks every <c>DOWNLOAD_SETTLE_INTERVAL_MINUTES</c>.
     /// </summary>
     private Task Settle(CancellationToken ct) =>
-        Observable
-            .Timer(_config.SettleInterval, _config.SettleInterval)
-            .SelectMany(_ => Observable.FromAsync(SettleOnce))
-            .ToTask(ct);
+        _jitter.RunPeriodic(_config.SettleInterval, _config.SettleInterval, SettleOnce, ct);
 
     /// <summary>
     /// One settle pass: re-pull the Plex catalog and reconcile, but only while something downloaded

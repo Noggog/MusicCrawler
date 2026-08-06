@@ -178,6 +178,14 @@ Each is independently buildable and testable.
     `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE` (3), `DOWNLOAD_ITEM_DELAY_SECONDS` (60),
     `DOWNLOAD_BATCH_INTERVAL_MINUTES` (30), `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` (15),
     `DOWNLOAD_SETTLE_INTERVAL_MINUTES` (15), `DOWNLOAD_SETTLE_WINDOW_HOURS` (6).
+  - **Timer jitter (`JitterPolicy`, app-wide):** *every* recurring wait — between albums, between
+    batches, the settle re-check, and the daily catalog / missing-album / queue-replenish passes —
+    is scattered by ±`TIMER_JITTER_PERCENT` (30, clamped 0–90) instead of firing on an exact
+    cadence, since a perfectly periodic fetch pattern is a machine signature. `JitterPolicy`
+    also owns `RunPeriodic`, the jittered loop that replaced those services' fixed `Observable.Timer`.
+  - **`DownloadSchedule`** publishes when the drainer next acts (next album / next batch) for the
+    monitor's countdown. Its own singleton because the snapshot is built by `PurchaseService`,
+    which `DownloadService` depends on — reading it back the other way would be a cycle.
   - **Error handling:** every streamrip attempt logs its command up front; a pass that exceeds
     `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` is killed (process tree) and the item marked `failed`
     rather than hanging in `downloading` forever; timeouts/non-zero exits log streamrip's

@@ -26,6 +26,8 @@ public class PurchaseService
     private readonly IDownloader _downloader;
     private readonly DownloaderConfig _config;
     private readonly DownloadSettings _settings;
+    private readonly JitterPolicy _jitter;
+    private readonly DownloadSchedule _schedule;
     private readonly ILogger<PurchaseService> _logger;
 
     public PurchaseService(
@@ -39,9 +41,13 @@ public class PurchaseService
         IDownloader downloader,
         DownloaderConfig config,
         DownloadSettings settings,
+        JitterPolicy jitter,
+        DownloadSchedule schedule,
         ILogger<PurchaseService> logger)
     {
         _settings = settings;
+        _jitter = jitter;
+        _schedule = schedule;
         _purchases = purchases;
         _queue = queue;
         _albumRatings = albumRatings;
@@ -98,11 +104,14 @@ public class PurchaseService
             _config.BatchSize,
             _config.ItemDelay.TotalSeconds,
             _config.BatchInterval.TotalMinutes,
+            _jitter.Percent,
             queued,
             current.Length,
             all.Count(p => p.Status == PurchaseStatus.Sent),
             all.Count(p => p.Status == PurchaseStatus.Failed),
-            current);
+            current,
+            _schedule.NextItemAt,
+            _schedule.NextBatchAt);
     }
 
     /// <summary>

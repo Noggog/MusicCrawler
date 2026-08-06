@@ -61,11 +61,19 @@ public record DownloadSnapshot(
     int BatchSize,
     double ItemDelaySeconds,
     double BatchIntervalMinutes,
+    // How far the two waits above are randomly spread, as a percentage — so the panel doesn't read as
+    // a promise of exact timing when it isn't one.
+    double JitterPercent,
     int Queued,
     int Downloading,
     int Complete,
     int Failed,
-    PurchaseItem[] Current);
+    PurchaseItem[] Current,
+    // When the drainer next expects to act: NextItemAt is the end of the wait between two albums
+    // (null unless it's mid-wait), NextBatchAt the next automatic sweep for pending albums. Both null
+    // when nothing is scheduled — e.g. before the first pass has run.
+    DateTimeOffset? NextItemAt = null,
+    DateTimeOffset? NextBatchAt = null);
 
 /// <summary>
 /// Canonical id for a purchase row — "artist:{name}" or "album:{artist} {album}", lower-cased. One

@@ -1,5 +1,3 @@
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Interfaces;
 
@@ -17,27 +15,25 @@ public class QueueReplenishService : BackgroundService
     private readonly IUserQueueRepo _queue;
     private readonly IQueueReplenisher _replenisher;
     private readonly ReplenishConfig _config;
+    private readonly JitterPolicy _jitter;
     private readonly ILogger<QueueReplenishService> _logger;
 
     public QueueReplenishService(
         IUserQueueRepo queue,
         IQueueReplenisher replenisher,
         ReplenishConfig config,
+        JitterPolicy jitter,
         ILogger<QueueReplenishService> logger)
     {
         _queue = queue;
         _replenisher = replenisher;
         _config = config;
+        _jitter = jitter;
         _logger = logger;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        return Observable
-            .Timer(_config.StartupDelay, _config.Interval)
-            .SelectMany(_ => Observable.FromAsync(ReplenishAll))
-            .ToTask(stoppingToken);
-    }
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        _jitter.RunPeriodic(_config.StartupDelay, _config.Interval, ReplenishAll, stoppingToken);
 
     /// <summary>Tops up every user once. Public so it can be unit-tested without the timer.</summary>
     public async Task ReplenishAll()

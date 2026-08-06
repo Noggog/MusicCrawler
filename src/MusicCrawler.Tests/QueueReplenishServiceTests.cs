@@ -17,6 +17,7 @@ public class QueueReplenishServiceTests
         _queue,
         _replenisher,
         new ReplenishConfig(TimeSpan.FromHours(24), TimeSpan.FromMinutes(5)),
+        new JitterPolicy(0),
         NullLogger<QueueReplenishService>.Instance);
 
     [Fact]

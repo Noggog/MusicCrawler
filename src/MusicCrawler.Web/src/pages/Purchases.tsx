@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -122,6 +122,29 @@ function MergePane({
   )
 }
 
+// Re-renders once a second so a countdown ticks smoothly. The snapshot itself is only polled every
+// few seconds — the deadline it carries is absolute, so the remaining time is derived locally.
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [active])
+  return now
+}
+
+// "in 47s" / "in 12m 30s" / "any moment" once the deadline passes (the server acts on its own clock,
+// and a jittered wait means the exact instant was never a promise).
+function countdown(iso: string, now: number) {
+  const remaining = Math.round((new Date(iso).getTime() - now) / 1000)
+  if (remaining <= 0) return 'any moment'
+  if (remaining < 60) return `in ${remaining}s`
+  const minutes = Math.floor(remaining / 60)
+  const seconds = remaining % 60
+  return minutes < 10 ? `in ${minutes}m ${seconds}s` : `in ${minutes}m`
+}
+
 function Monitor({
   s,
   onToggleAutomatic,
@@ -139,6 +162,17 @@ function Monitor({
         ? `Idle — ${s.queued} album${s.queued === 1 ? '' : 's'} queued (auto)`
         : `${s.queued} album${s.queued === 1 ? '' : 's'} queued — use Download now`
       : 'Idle — queue empty'
+
+  // What the drainer does next. The wait between two albums wins when there is one, since it's the
+  // nearer event; otherwise it's the next automatic sweep — which only means anything on auto, as the
+  // pass is a no-op in manual mode. Nothing to show while an album is actively downloading: the
+  // activity line already says so, and the next wait hasn't been scheduled yet.
+  const next = s.nextItemAt
+    ? { label: 'Next album', at: s.nextItemAt }
+    : s.automatic && s.nextBatchAt
+      ? { label: s.queued > 0 ? 'Next batch' : 'Next check', at: s.nextBatchAt }
+      : null
+  const now = useNow(next !== null)
 
   return (
     <div className="dl-monitor">
@@ -167,15 +201,22 @@ function Monitor({
         <span className="dl-backend">backend: {s.backend}</span>
       </div>
       <div className={current ? 'dl-activity active' : 'dl-activity'}>{activity}</div>
+      {next && <div className="dl-next">{next.label} <strong>{countdown(next.at, now)}</strong></div>}
       <div className="dl-counts">
         <span>Queued <strong>{s.queued}</strong></span>
         <span>Downloading <strong>{s.downloading}</strong></span>
         <span>Complete <strong>{s.complete}</strong></span>
         <span>Failed <strong>{s.failed}</strong></span>
       </div>
+      {/* Reads batch-first: the batch cadence is what sets the pace (3 albums every 30m ≈ one per
+          10m), while the per-item wait only spaces albums out inside a batch. The ± is the random
+          spread applied to both waits. */}
       <div className="dl-throttle">
-        {s.automatic ? 'auto' : 'manual only'} · batch {s.batchSize} · {s.itemDelaySeconds}s between
-        items{s.automatic ? ` · every ${s.batchIntervalMinutes}m` : ''}
+        {s.automatic
+          ? `auto · batch ${s.batchSize} every ~${s.batchIntervalMinutes}m`
+          : `manual only · batch ${s.batchSize}`}
+        {' · '}~{s.itemDelaySeconds}s between items
+        {s.jitterPercent > 0 ? ` (±${s.jitterPercent}%)` : ''}
       </div>
     </div>
   )

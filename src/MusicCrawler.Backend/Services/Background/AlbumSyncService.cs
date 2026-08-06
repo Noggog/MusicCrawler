@@ -1,5 +1,3 @@
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
 using MusicCrawler.Backend.Services.Singletons;
 
 namespace MusicCrawler.Backend.Services.Background;
@@ -17,23 +15,21 @@ public class AlbumSyncService : BackgroundService
 
     private readonly MissingAlbumRefresher _refresher;
     private readonly PurchaseService _purchases;
+    private readonly JitterPolicy _jitter;
     private readonly ILogger<AlbumSyncService> _logger;
 
     public AlbumSyncService(
-        MissingAlbumRefresher refresher, PurchaseService purchases, ILogger<AlbumSyncService> logger)
+        MissingAlbumRefresher refresher, PurchaseService purchases, JitterPolicy jitter,
+        ILogger<AlbumSyncService> logger)
     {
         _refresher = refresher;
         _purchases = purchases;
+        _jitter = jitter;
         _logger = logger;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        return Observable
-            .Timer(StartupDelay, SyncInterval)
-            .SelectMany(_ => Observable.FromAsync(SyncOnce))
-            .ToTask(stoppingToken);
-    }
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        _jitter.RunPeriodic(StartupDelay, SyncInterval, SyncOnce, stoppingToken);
 
     private async Task SyncOnce()
     {
