@@ -11,6 +11,7 @@ import { rateFeedback } from '../effects/effectsBus'
 import type { ArtistAlbumItem, ArtistListItem, DiscoveryStatus, FeedItem, SourceCandidate, SourceIdentity } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
+import { MergeAlbumPane } from '../components/MergeAlbumPane'
 import { PlexRatingStats } from '../components/PlexRatingStats'
 import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
 
@@ -369,6 +370,7 @@ function AlbumSubRow({
   onToggle,
   onRate,
   onClear,
+  onMerge,
 }: {
   a: ArtistAlbumItem
   busy: boolean
@@ -376,6 +378,7 @@ function AlbumSubRow({
   onToggle: () => void
   onRate: (a: ArtistAlbumItem, verdict: Verdict) => void
   onClear: (a: ArtistAlbumItem) => void
+  onMerge: (a: ArtistAlbumItem) => void
 }) {
   const accent = useArtAccent(a.imageUrl)
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
@@ -398,25 +401,39 @@ function AlbumSubRow({
             <span className="album-owned" title="Already in your library">
               <IconCheck size={15} /> In library
             </span>
-          ) : label ? (
-            <AlbumState label={label} busy={busy} onClear={() => onClear(a)} />
           ) : (
             <>
+              {label ? (
+                <AlbumState label={label} busy={busy} onClear={() => onClear(a)} />
+              ) : (
+                <>
+                  <button
+                    className="disc-btn up"
+                    title="Queue album to buy"
+                    disabled={busy}
+                    onClick={() => onRate(a, 'up')}
+                  >
+                    <IconApprove />
+                  </button>
+                  <button
+                    className="disc-btn down"
+                    title="Not interested"
+                    disabled={busy}
+                    onClick={() => onRate(a, 'down')}
+                  >
+                    <IconReject />
+                  </button>
+                </>
+              )}
+              {/* The copy we already have is filed under a near-miss title (or a different act), so
+                  the diff can't see it. Merge the two before the downloader grabs a duplicate. */}
               <button
-                className="disc-btn up"
-                title="Queue album to buy"
+                className="disc-btn"
+                title="Already in library — match an album you own"
                 disabled={busy}
-                onClick={() => onRate(a, 'up')}
+                onClick={() => onMerge(a)}
               >
-                <IconApprove />
-              </button>
-              <button
-                className="disc-btn down"
-                title="Not interested"
-                disabled={busy}
-                onClick={() => onRate(a, 'down')}
-              >
-                <IconReject />
+                <IconWrench size={15} />
               </button>
             </>
           )}
@@ -434,6 +451,8 @@ function ArtistAlbums({ artist }: { artist: string }) {
   const queryClient = useQueryClient()
   // Which album's Deezer preview is expanded — one at a time, like selecting a row in Discover.
   const [openAlbum, setOpenAlbum] = useState<string | null>(null)
+  // The album whose "Already in library?" pane is open, if any.
+  const [merging, setMerging] = useState<ArtistAlbumItem | null>(null)
   const { data, isPending, isError } = useQuery({
     queryKey: ['artist-discography', artist],
     queryFn: () => getArtistDiscography(artist),
@@ -491,8 +510,23 @@ function ArtistAlbums({ artist }: { artist: string }) {
           onToggle={() => setOpenAlbum((cur) => (cur === a.album ? null : a.album))}
           onRate={(album, verdict) => rateAlbum.mutate({ a: album, verdict })}
           onClear={(album) => clearAlbum.mutate(album)}
+          onMerge={setMerging}
         />
       ))}
+
+      {merging && (
+        <MergeAlbumPane
+          artist={merging.artist.artistName}
+          album={merging.album}
+          onClose={() => setMerging(null)}
+          onMerged={() => {
+            setMerging(null)
+            // The album now reads as owned here, is gone from the feed, and off the download queue.
+            invalidate()
+            queryClient.invalidateQueries({ queryKey: ['feed'] })
+          }}
+        />
+      )}
     </div>
   )
 }

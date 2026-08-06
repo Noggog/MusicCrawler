@@ -230,45 +230,124 @@ public class PurchaseService
         .Select(o => AlbumOverrideKey.For(o.MatchArtist, o.DeezerTitle))
         .ToHashSet();
 
+    /// <summary>How many library albums a merge search returns — enough to scan, bounded for the wire.</summary>
+    private const int SearchLimit = 60;
+
     /// <summary>
-    /// The library albums a queued (near-miss titled) album can be merged into: every album owned
-    /// under the act this purchase is filed (its persisted album-artist, else the listing artist),
-    /// alphabetical. Empty when the id is unknown, not an album, or the artist owns nothing.
+    /// The library albums a (near-miss titled) album can be merged into. With no <paramref name="query"/>
+    /// these are the suggestions: everything owned under the acts this album could be filed under (see
+    /// <see cref="MergeArtistsFor"/>), plus any album anywhere in the library carrying the same title —
+    /// that second set is the cross-artist duplicate (Plex has "Care Tracts" under "Matthewdavid's
+    /// Mindflight" while Deezer lists it under "Matthewdavid"), and it sorts first. A non-empty query
+    /// searches the whole library instead, on artist or title, for when neither suggestion fits.
     /// </summary>
-    public async Task<string[]> LibraryAlbumsFor(string purchaseId)
+    public async Task<LibraryAlbumOption[]> MergeCandidates(string artist, string album, string? query)
     {
-        var row = (await _purchases.GetAll()).FirstOrDefault(p => p.Id == purchaseId);
-        if (row is null || row.Kind != FeedKind.MissingAlbum)
+        var all = (await _catalog.GetOwnedAlbums())
+            .SelectMany(kvp => kvp.Value.Select(title => new LibraryAlbumOption(kvp.Key, title)));
+
+        var q = query?.Trim();
+        if (!string.IsNullOrEmpty(q))
         {
-            return Array.Empty<string>();
+            return all
+                .Where(o => o.Album.Contains(q, StringComparison.OrdinalIgnoreCase)
+                            || o.Artist.Contains(q, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(o => o.Artist, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(o => o.Album, StringComparer.CurrentCultureIgnoreCase)
+                .Take(SearchLimit)
+                .ToArray();
         }
 
-        var matchArtist = row.AlbumArtist ?? row.Artist.ArtistName;
-        return (await _catalog.GetOwnedAlbums()).TryGetValue(matchArtist, out var owned)
-            ? owned.OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase).ToArray()
-            : Array.Empty<string>();
+        var acts = await MergeArtistsFor(artist, album);
+        var title = AlbumTitleMatcher.Normalize(album);
+        return all
+            .Select(o => (Option: o, SameTitle: AlbumTitleMatcher.Normalize(o.Album) == title))
+            .Where(x => x.SameTitle || acts.Contains(x.Option.Artist, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(x => x.SameTitle ? 0 : 1)
+            .ThenBy(x => x.Option.Artist, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(x => x.Option.Album, StringComparer.CurrentCultureIgnoreCase)
+            .Select(x => x.Option)
+            .Take(SearchLimit)
+            .ToArray();
     }
 
     /// <summary>
-    /// Merges a queued album into one already in the library under a different title: records a
-    /// durable match override (honoured by the reconcile AND the missing-album diff) and closes the
-    /// row out as <see cref="PurchaseStatus.InLibrary"/> so it drops off the active list. Returns
-    /// false when the id is unknown or the row isn't a downloadable album.
+    /// Merges an album the diff calls missing into one already in the library under a different title:
+    /// records a durable match override (honoured by the reconcile AND the missing-album diff), drops
+    /// the row from the global missing set so it stops surfacing before the next sweep re-diffs it, and
+    /// closes out any queued purchase as <see cref="PurchaseStatus.InLibrary"/>. Keyed by the (listing
+    /// artist, album) the UI shows, so it works from the Download queue, the Browse discography and the
+    /// Discover feed alike — including for an album no one has thumbed yet. Returns false on blank input.
     /// </summary>
-    public async Task<bool> Merge(string purchaseId, string libraryAlbum)
+    public async Task<bool> MergeAlbum(string artist, string album, string libraryAlbum)
     {
-        var row = (await _purchases.GetAll()).FirstOrDefault(p => p.Id == purchaseId);
-        if (row is null || row.Kind != FeedKind.MissingAlbum || string.IsNullOrWhiteSpace(row.Album))
+        if (string.IsNullOrWhiteSpace(artist)
+            || string.IsNullOrWhiteSpace(album)
+            || string.IsNullOrWhiteSpace(libraryAlbum))
         {
             return false;
         }
 
-        var matchArtist = row.AlbumArtist ?? row.Artist.ArtistName;
-        await _overrides.Add(new AlbumMatchOverride(matchArtist, row.Album, libraryAlbum));
-        await _purchases.SetStatus(row.Id, PurchaseStatus.InLibrary);
+        foreach (var act in await MergeArtistsFor(artist, album))
+        {
+            await _overrides.Add(new AlbumMatchOverride(act, album, libraryAlbum));
+        }
+
+        await DropFromMissing(artist, album);
+        await _purchases.SetStatus(PurchaseKey.ForAlbum(artist, album), PurchaseStatus.InLibrary);
         _logger.LogInformation(
-            "Merged queued album \"{Album}\" ({Artist}) into library album \"{Library}\"",
-            row.Album, matchArtist, libraryAlbum);
+            "Merged album \"{Album}\" ({Artist}) into library album \"{Library}\"",
+            album, artist, libraryAlbum);
         return true;
+    }
+
+    /// <summary>
+    /// The acts a merge has to be recorded under so every ownership check honours it: the listing
+    /// artist (what the missing-album diff keys on while scanning that discography) plus the album-artist
+    /// the library files it under (what the reconcile keys on) — from the queued row if there is one,
+    /// else the missing set. The two differ for a collaboration, and the missing row disappears once the
+    /// merge lands, so recording both is what keeps the album from resurfacing.
+    /// </summary>
+    private async Task<string[]> MergeArtistsFor(string artist, string album)
+    {
+        var acts = new List<string> { artist };
+
+        var row = (await _purchases.GetAll())
+            .FirstOrDefault(p => p.Id == PurchaseKey.ForAlbum(artist, album));
+        if (row?.AlbumArtist is { } persisted)
+        {
+            acts.Add(persisted);
+        }
+
+        var key = AlbumRatingKey.For(artist, album);
+        var missing = (await _missing.GetAll())
+            .FirstOrDefault(m => AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName) == key);
+        if (missing is not null)
+        {
+            acts.Add(missing.MatchArtist.ArtistName);
+        }
+
+        return acts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>
+    /// Removes one album from the listing artist's missing set, so a merge takes effect in the feed
+    /// immediately rather than at the next discography sweep (which the override then resolves as owned).
+    /// </summary>
+    private async Task DropFromMissing(string artist, string album)
+    {
+        var forArtist = (await _missing.GetAll())
+            .Where(m => string.Equals(m.Artist.ArtistName, artist, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var remaining = forArtist
+            .Where(m => !string.Equals(m.Album.AlbumName, album, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (remaining.Count != forArtist.Count)
+        {
+            // The store matches the artist exactly, so rewrite under the spelling it holds rather than
+            // whatever casing the caller passed.
+            await _missing.ReplaceForArtist(forArtist[0].Artist.ArtistName, remaining);
+        }
     }
 }

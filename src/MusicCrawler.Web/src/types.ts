@@ -200,6 +200,14 @@ export interface ArtistAlbumItem {
   year: number | null
 }
 
+// Mirror LibraryAlbumOption (Album.cs) — one album already in the library, offered as a merge target
+// for a release the diff calls missing. Carries the artist because the copy we own can be filed under
+// a different act than the one whose discography surfaced it.
+export interface LibraryAlbumOption {
+  artist: string
+  album: string
+}
+
 // Mirror PurchaseStatus / PurchaseItem (IPurchaseRepo.cs) — the shared "to buy" list with a
 // persisted acquisition lifecycle. `kind` is 'RecommendedArtist' (no album) or 'MissingAlbum'.
 export type PurchaseStatus = 'Pending' | 'Queued' | 'Downloading' | 'Sent' | 'InLibrary' | 'Failed'

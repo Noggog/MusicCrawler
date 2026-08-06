@@ -289,9 +289,10 @@ public class PurchaseServiceTests
         {
             ["Mick Gordon"] = new(StringComparer.OrdinalIgnoreCase) { plexTitle },
         });
-        (await _sut.LibraryAlbumsFor(id)).Should().Equal(plexTitle);
+        (await _sut.MergeCandidates("Mick Gordon", deezerTitle, null))
+            .Should().Equal(new LibraryAlbumOption("Mick Gordon", plexTitle));
 
-        (await _sut.Merge(id, plexTitle)).Should().BeTrue();
+        (await _sut.MergeAlbum("Mick Gordon", deezerTitle, plexTitle)).Should().BeTrue();
 
         // The override is recorded, and the row closes out — and stays closed across a fresh reconcile
         // (the override is honoured, not just a one-off status flip).
@@ -302,8 +303,51 @@ public class PurchaseServiceTests
     }
 
     [Fact]
-    public async Task Merge_returns_false_for_an_unknown_id()
+    public async Task Merge_returns_false_for_blank_input()
     {
-        (await _sut.Merge("album:nobody nothing", "Whatever")).Should().BeFalse();
+        (await _sut.MergeAlbum("Nobody", "Nothing", "  ")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Merge_candidates_offer_the_same_title_owned_under_a_different_act()
+    {
+        // The library files "Care Tracts" under "Matthewdavid's Mindflight"; Deezer lists it under the
+        // plain "Matthewdavid", which the library also has (with an unrelated album). Nothing owned
+        // under the listing artist matches, so the suggestion has to come from the same-title sweep.
+        _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Matthewdavid"] = new(StringComparer.OrdinalIgnoreCase) { "Outmind" },
+            ["Matthewdavid's Mindflight"] = new(StringComparer.OrdinalIgnoreCase) { "Care Tracts" },
+        });
+
+        var candidates = await _sut.MergeCandidates("Matthewdavid", "Care Tracts", null);
+
+        // Same-title first (it's the one they mean), then what the listing artist owns.
+        candidates.Should().Equal(
+            new LibraryAlbumOption("Matthewdavid's Mindflight", "Care Tracts"),
+            new LibraryAlbumOption("Matthewdavid", "Outmind"));
+    }
+
+    [Fact]
+    public async Task Merge_of_an_unrated_album_records_the_override_without_a_queued_row()
+    {
+        // Merging straight from the Browse discography / Discover feed: no one has thumbed the album,
+        // so there is no purchase row to close out — the override still has to land, keyed under both
+        // the listing artist and the act Deezer credits, so neither the diff nor the reconcile
+        // resurfaces it.
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(
+                new ArtistKey("Matthewdavid"), new AlbumKey("Care Tracts"), null, 42,
+                new ArtistKey("Matthewdavid's Mindflight")),
+        });
+
+        (await _sut.MergeAlbum("Matthewdavid", "Care Tracts", "Care Tracts")).Should().BeTrue();
+
+        _overrides.Items.Select(o => o.MatchArtist)
+            .Should().BeEquivalentTo("Matthewdavid", "Matthewdavid's Mindflight");
+        _purchases.Items.Should().BeEmpty();
+        // And it leaves the missing set at once, rather than lingering in the feed until the next sweep.
+        await _missing.Received(1).ReplaceForArtist("Matthewdavid", Arg.Is<IReadOnlyList<MissingAlbum>>(l => l.Count == 0));
     }
 }

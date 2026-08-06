@@ -33,6 +33,13 @@ public record MissingAlbum(
 }
 
 /// <summary>
+/// One album already in the library, offered as a merge target for a release the diff calls missing.
+/// Carries the artist because the copy we own can be filed under a different act than the one whose
+/// discography surfaced it (e.g. Plex's "Matthewdavid's Mindflight" vs. Deezer's "Matthewdavid").
+/// </summary>
+public record LibraryAlbumOption(string Artist, string Album);
+
+/// <summary>
 /// Canonical (artist, album) identity used to match a user's album verdict against a missing album.
 /// One definition shared by the rating store and the feed filter so they never drift.
 /// </summary>

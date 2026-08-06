@@ -847,6 +847,10 @@ input[type='checkbox'] {
 .disc-rated.mark-snoozed .disc-rated-icon {
   color: var(--purple-fg);
 }
+/* A merged album — the same "already owned" green as the In-library flag in the Browse drill-down. */
+.disc-rated.mark-merged .disc-rated-icon {
+  color: var(--good);
+}
 
 /* An icon sitting inline within a run of text (e.g. the "· 🌙 Snoozed" note). */
 .inline-icon {

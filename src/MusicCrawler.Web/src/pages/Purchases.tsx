@@ -6,16 +6,15 @@ import {
   clearRating,
   downloadPurchase,
   getDownloadStatus,
-  getLibraryAlbums,
   getPurchases,
-  mergePurchase,
   setDownloadsAutomatic,
   unsendPurchase,
 } from '../api/discovery'
 import { useArtAccent } from '../art/artColors'
 import type { DownloadSnapshot, FeedItem, PurchaseItem } from '../types'
 import { useAuth } from '../auth/AuthContext'
-import { IconCheck, IconClear, IconDownload, IconUndo, IconWrench, IconX } from '../components/icons'
+import { MergeAlbumPane } from '../components/MergeAlbumPane'
+import { IconClear, IconDownload, IconUndo, IconWrench } from '../components/icons'
 
 function Avatar({ item }: { item: PurchaseItem }) {
   const label = item.album ?? item.artist.artistName
@@ -55,69 +54,6 @@ function PurchaseRow({ item, actions }: { item: PurchaseItem; actions: ReactNode
         </span>
       </Link>
       <div className="disc-actions">{actions}</div>
-    </div>
-  )
-}
-
-// "Already in library?" — resolve a near-miss title mismatch by hand. Lists the albums the library
-// already owns under this act (Deezer's "DOOM (Original Game Soundtrack)" won't auto-match Plex's
-// "Doom: Original Game Soundtrack"); picking one records a durable merge so the row leaves the queue
-// and never resurfaces as missing. Uses the app's shared picker-modal chrome.
-function MergePane({
-  item,
-  onClose,
-  onMerged,
-}: {
-  item: PurchaseItem
-  onClose: () => void
-  onMerged: () => void
-}) {
-  const albums = useQuery({
-    queryKey: ['library-albums', item.id],
-    queryFn: () => getLibraryAlbums(item.id),
-  })
-  const merge = useMutation({
-    mutationFn: (libraryAlbum: string) => mergePurchase(item.id, libraryAlbum),
-    onSuccess: onMerged,
-  })
-
-  return (
-    <div className="picker-backdrop" onClick={onClose}>
-      <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="picker-head">
-          <h2>Match Existing Album</h2>
-          <button className="disc-btn" title="Close" onClick={onClose}>
-            <IconX />
-          </button>
-        </div>
-        <p className="picker-pinned">Merge “{item.album}” into an album already in your library.</p>
-
-        {albums.isPending && <p><em>Loading library…</em></p>}
-        {albums.isError && <p className="error">Failed to load library albums.</p>}
-        {albums.data && albums.data.length === 0 && (
-          <p><em>No albums are in the library under {item.artist.artistName}.</em></p>
-        )}
-
-        <ul className="picker-results">
-          {(albums.data ?? []).map((title) => (
-            <li key={title} className="picker-result">
-              <div className="picker-meta">
-                <span className="picker-name">{title}</span>
-              </div>
-              <button
-                className="disc-btn up"
-                title="Merge into this album"
-                disabled={merge.isPending}
-                onClick={() => merge.mutate(title)}
-              >
-                <IconCheck />
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {merge.isError && <p className="error">Merge failed — try again.</p>}
-      </div>
     </div>
   )
 }
@@ -456,15 +392,17 @@ export default function Purchases() {
         </div>
       )}
 
-      {mergingItem && (
-        <MergePane
-          item={mergingItem}
+      {mergingItem?.album && (
+        <MergeAlbumPane
+          artist={mergingItem.artist.artistName}
+          album={mergingItem.album}
           onClose={() => setMergingId(null)}
           onMerged={() => {
             setMergingId(null)
             invalidate()
             queryClient.invalidateQueries({ queryKey: ['ratings'] })
             queryClient.invalidateQueries({ queryKey: ['feed'] })
+            queryClient.invalidateQueries({ queryKey: ['artist-discography'] })
           }}
         />
       )}

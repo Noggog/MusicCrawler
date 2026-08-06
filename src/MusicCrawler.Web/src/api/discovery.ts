@@ -6,6 +6,7 @@ import type {
   DownloadSnapshot,
   FeedItem,
   FeedKind,
+  LibraryAlbumOption,
   PurchaseItem,
   RatedItem,
 } from '../types'
@@ -180,22 +181,29 @@ export async function unsendPurchase(id: string): Promise<void> {
   }
 }
 
-// The library albums a queued (near-miss titled) album can be merged into — every album owned under
-// the act this purchase is filed. Fetched on demand when the "Already in library?" pane opens.
-export async function getLibraryAlbums(id: string): Promise<string[]> {
-  const res = await fetch(`/api/purchases/library-albums?id=${encodeURIComponent(id)}`)
+// The library albums a missing album can be merged into: suggestions for this album (what's owned
+// under its act, plus same-titled copies filed under another act) when `query` is empty, or a
+// whole-library search on artist/title when it isn't. Fetched when the "Already in library?" pane opens.
+export async function getMergeCandidates(
+  artist: string,
+  album: string,
+  query = '',
+): Promise<LibraryAlbumOption[]> {
+  const params = new URLSearchParams({ artist, album })
+  if (query) params.set('q', query)
+  const res = await fetch(`/api/albums/merge-candidates?${params}`)
   if (!res.ok) {
     throw new Error(`Failed to load library albums: ${res.status} ${res.statusText}`)
   }
-  return (await res.json()) as string[]
+  return (await res.json()) as LibraryAlbumOption[]
 }
 
-// Merge a queued album into one already in the library under a different title. Records a durable
-// match override (honoured by the reconcile and the missing-album diff) and drops the row from the
-// queue on the next reconcile.
-export async function mergePurchase(id: string, libraryAlbum: string): Promise<void> {
-  const params = new URLSearchParams({ id, libraryAlbum })
-  const res = await fetch(`/api/purchases/merge?${params}`, { method: 'POST' })
+// Merge a missing album into one already in the library under a different title. Records a durable
+// match override (honoured by the reconcile and the missing-album diff), so the album stops being
+// offered anywhere and never reaches the downloader.
+export async function mergeAlbum(artist: string, album: string, libraryAlbum: string): Promise<void> {
+  const params = new URLSearchParams({ artist, album, libraryAlbum })
+  const res = await fetch(`/api/albums/merge?${params}`, { method: 'POST' })
   if (!res.ok) {
     throw new Error(`Failed to merge album: ${res.status} ${res.statusText}`)
   }

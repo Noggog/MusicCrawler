@@ -663,22 +663,25 @@ api.MapPost("/purchases/unsend", async (string id, PurchaseService purchases) =>
     .RequireAuthorization()
     .WithName("UnsendPurchase");
 
-// The library albums a queued (near-miss titled) album can be merged into — every album owned under
-// the act this purchase is filed. Feeds the "Already in library?" pane on the Download page. `id` is
-// a query param so purchase keys containing '/' survive.
-api.MapGet("/purchases/library-albums", async (string id, PurchaseService purchases) =>
-        Results.Ok(await purchases.LibraryAlbumsFor(id)))
+// The library albums a (near-miss titled) album can be merged into: the suggestions for this album
+// by default, or a whole-library search when `q` is supplied. Feeds the "Already in library?" pane,
+// which is offered wherever a missing album shows — the Download queue, the Browse discography and
+// the Discover feed. Query params so names with '/' survive.
+api.MapGet("/albums/merge-candidates", async (string artist, string album, string? q, PurchaseService purchases) =>
+        Results.Ok(await purchases.MergeCandidates(artist, album, q)))
     .RequireAuthorization()
-    .WithName("PurchaseLibraryAlbums");
+    .WithName("AlbumMergeCandidates");
 
-// Merge a queued album into one already in the library under a different title (e.g. Deezer's "DOOM
-// (Original Game Soundtrack)" vs. Plex's "Doom: Original Game Soundtrack"): records a durable match
-// override honoured by both the reconcile and the missing-album diff, then closes the row as
-// in-library. Query params so names with '/' survive.
-api.MapPost("/purchases/merge", async (string id, string libraryAlbum, PurchaseService purchases) =>
-        await purchases.Merge(id, libraryAlbum) ? Results.NoContent() : Results.NotFound())
+// Merge a missing album into one already in the library under a different title (e.g. Deezer's "DOOM
+// (Original Game Soundtrack)" vs. Plex's "Doom: Original Game Soundtrack", or a copy filed under a
+// different act entirely): records a durable match override honoured by both the reconcile and the
+// missing-album diff, and closes out any queued download.
+api.MapPost("/albums/merge", async (string artist, string album, string libraryAlbum, PurchaseService purchases) =>
+        await purchases.MergeAlbum(artist, album, libraryAlbum)
+            ? Results.NoContent()
+            : Results.BadRequest("Artist, album and library album are all required."))
     .RequireAuthorization()
-    .WithName("MergePurchase");
+    .WithName("MergeAlbum");
 
 app.MapDefaultEndpoints();
 

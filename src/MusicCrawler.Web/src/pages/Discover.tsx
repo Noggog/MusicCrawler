@@ -34,8 +34,9 @@ import { useArtAccent } from '../art/artColors'
 import type { FeedItem, FeedKind, ReconsiderSignal } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
+import { MergeAlbumPane } from '../components/MergeAlbumPane'
 import { PlexRatingStats } from '../components/PlexRatingStats'
-import { IconApprove, IconMoon, IconReject } from '../components/icons'
+import { IconApprove, IconCheck, IconMoon, IconReject, IconWrench } from '../components/icons'
 import { rateFeedback } from '../effects/effectsBus'
 
 const PAGE_SIZE = 20
@@ -101,24 +102,51 @@ function writeShownKinds(shown: Set<FeedKind>) {
   }
 }
 
-// How a row was marked this view (approve / reject / snooze) so it stays in place until the next
-// natural refresh.
-type RowMark = Verdict | 'snoozed'
-const MARK_LABEL: Record<RowMark, string> = { up: 'Added', down: 'Dismissed', snoozed: 'Snoozed' }
+// How a row was marked this view (approve / reject / snooze, or merged into an album already owned)
+// so it stays in place until the next natural refresh.
+type RowMark = Verdict | 'snoozed' | 'merged'
+const MARK_LABEL: Record<RowMark, string> = {
+  up: 'Added',
+  down: 'Dismissed',
+  snoozed: 'Snoozed',
+  merged: 'In library',
+}
 const MarkIcon = ({ mark }: { mark: RowMark }) =>
-  mark === 'up' ? <IconApprove size={15} /> : mark === 'down' ? <IconReject size={15} /> : <IconMoon size={15} />
+  mark === 'up' ? <IconApprove size={15} />
+    : mark === 'down' ? <IconReject size={15} />
+      : mark === 'merged' ? <IconCheck size={15} />
+        : <IconMoon size={15} />
 
 // An in-place decision marker with an undo: "✓ Added · undo". Every decision (approve / reject /
-// snooze, on artists or albums) is reversible from the feed so a misclick is one click to fix.
+// snooze, on artists or albums) is reversible from the feed so a misclick is one click to fix. A
+// merge is the exception — it's an assertion about the library, not a verdict, and there's nothing
+// to walk back in the feed once the album is known to be owned.
 function DecisionMark({ mark, onUndo, disabled }: { mark: RowMark; onUndo: () => void; disabled: boolean }) {
   return (
     <span className={`disc-rated mark-${mark}`}>
       <span className="disc-rated-icon"><MarkIcon mark={mark} /></span>
       {MARK_LABEL[mark]}
-      <button className="disc-undo" title="Undo this decision" disabled={disabled} onClick={onUndo}>
-        undo
-      </button>
+      {mark !== 'merged' && (
+        <button className="disc-undo" title="Undo this decision" disabled={disabled} onClick={onUndo}>
+          undo
+        </button>
+      )}
     </span>
+  )
+}
+
+// "Already in library?" on a missing-album row — the copy we own is filed under a near-miss title (or
+// a different act), so the diff keeps offering it. Opens the merge pane before it downloads.
+function MergeButton({ onMerge, disabled }: { onMerge: () => void; disabled: boolean }) {
+  return (
+    <button
+      className="disc-btn"
+      title="Already in library — match an album you own"
+      disabled={disabled}
+      onClick={onMerge}
+    >
+      <IconWrench size={15} />
+    </button>
   )
 }
 
@@ -345,6 +373,7 @@ function SubAlbumRow({
   onToggle,
   onRate,
   onUndo,
+  onMerge,
 }: {
   album: FeedItem
   verdict: RowMark | undefined
@@ -354,6 +383,7 @@ function SubAlbumRow({
   onToggle: () => void
   onRate: (item: FeedItem, verdict: Verdict) => void
   onUndo: (item: FeedItem) => void
+  onMerge: (item: FeedItem) => void
 }) {
   const accent = useArtAccent(useArtUrl(album))
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
@@ -382,6 +412,7 @@ function SubAlbumRow({
               <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
                 <IconReject />
               </button>
+              <MergeButton disabled={disabled} onMerge={() => onMerge(album)} />
             </>
           )}
         </div>
@@ -399,12 +430,14 @@ function ArtistAlbumsPanel({
   rated,
   onRate,
   onUndo,
+  onMerge,
   disabled,
 }: {
   artist: string
   rated: Map<string, RowMark>
   onRate: (item: FeedItem, verdict: Verdict) => void
   onUndo: (item: FeedItem) => void
+  onMerge: (item: FeedItem) => void
   disabled: boolean
 }) {
   // Which album's Deezer preview is expanded — one at a time, like selecting a row in the left-hand
@@ -439,6 +472,7 @@ function ArtistAlbumsPanel({
             onToggle={() => setOpenAlbum((cur) => (cur === rowKey ? null : rowKey))}
             onRate={onRate}
             onUndo={onUndo}
+            onMerge={onMerge}
           />
         )
       })}
@@ -489,6 +523,7 @@ function DetailPanel({
   onRate,
   onSnooze,
   onUndo,
+  onMerge,
   onClose,
 }: {
   item: FeedItem | null
@@ -497,6 +532,7 @@ function DetailPanel({
   onRate: (item: FeedItem, verdict: Verdict) => void
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
+  onMerge: (item: FeedItem) => void
   onClose: () => void
 }) {
   // Resolve artwork + accent unconditionally (hooks must run before the empty-state early return) so
@@ -601,6 +637,7 @@ function DetailPanel({
                   <IconReject />
                 </button>
                 <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={false} />
+                {isAlbum && <MergeButton disabled={busy} onMerge={() => onMerge(item)} />}
               </>
             )}
           </div>
@@ -637,6 +674,7 @@ function DetailPanel({
             rated={rated}
             onRate={onRate}
             onUndo={onUndo}
+            onMerge={onMerge}
             disabled={false}
           />
         </>
@@ -658,6 +696,7 @@ function DiscRow({
   onRate,
   onSnooze,
   onUndo,
+  onMerge,
 }: {
   item: FeedItem
   selected: boolean
@@ -667,6 +706,7 @@ function DiscRow({
   onRate: (item: FeedItem, verdict: Verdict) => void
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
+  onMerge: (item: FeedItem) => void
 }) {
   const name = item.artist.artistName
   const isAlbum = !!item.album
@@ -722,6 +762,7 @@ function DiscRow({
                 onPick={(duration) => onSnooze(item, duration)}
                 disabled={false}
               />
+              {isAlbum && <MergeButton disabled={busy} onMerge={() => onMerge(item)} />}
             </>
           )}
         </div>
@@ -763,6 +804,9 @@ export default function Discover() {
   // The row whose readout is open on the right (desktop) / in the drawer (mobile). Liking a brand-new
   // recommended artist auto-selects it so its grabbable albums surface in the panel.
   const [selected, setSelected] = useState<FeedItem | null>(() => persisted.selected)
+  // The album row whose "Already in library?" pane is open, if any. Deliberately not persisted — a
+  // modal shouldn't reopen itself when you navigate back to the feed.
+  const [merging, setMerging] = useState<FeedItem | null>(null)
 
   // Mirror the live view state back into the module store every render so a later remount restores it.
   useEffect(() => {
@@ -1002,6 +1046,7 @@ export default function Discover() {
                     onRate={(it, verdict) => rateMutation.mutate({ item: it, verdict })}
                     onSnooze={(it, duration) => snoozeMutation.mutate({ item: it, duration })}
                     onUndo={(it) => undo.mutate(it)}
+                    onMerge={setMerging}
                   />
                 )
               })}
@@ -1029,9 +1074,28 @@ export default function Discover() {
             onRate={(item, verdict) => rateMutation.mutate({ item, verdict })}
             onSnooze={(item, duration) => snoozeMutation.mutate({ item, duration })}
             onUndo={(item) => undo.mutate(item)}
+            onMerge={setMerging}
             onClose={() => setSelected(null)}
           />
         </div>
+      )}
+
+      {/* Merging marks the row in place ("✓ In library") like a rating does, rather than invalidating
+          the feed — the list is frozen for the session on purpose, and a reshuffle here would move
+          every other card out from under you. The album is gone from the server's missing set, so the
+          next natural refresh drops it. */}
+      {merging?.album && (
+        <MergeAlbumPane
+          artist={merging.artist.artistName}
+          album={merging.album}
+          onClose={() => setMerging(null)}
+          onMerged={() => {
+            setRated((prev) => new Map(prev).set(rowKeyFor(merging), 'merged'))
+            setMerging(null)
+            queryClient.invalidateQueries({ queryKey: ['purchases'] })
+            queryClient.invalidateQueries({ queryKey: ['artist-discography'] })
+          }}
+        />
       )}
     </section>
   )
