@@ -1873,9 +1873,11 @@ a.detail-chip.via:hover {
 .dl-section .feed-section-title {
   margin-bottom: 0.5rem;
 }
-/* A section's lead-in note ("The downloader couldn't grab these") sits between heading and list. */
+/* A section's lead-in note ("The downloader couldn't grab these") sits between heading and list.
+   `auto` on the sides, not 0: .disc-sub centres itself with auto margins, and a shorthand that zeroes
+   them leaves the note hanging off to the left of the list it belongs to. */
 .dl-section .disc-sub {
-  margin: -0.15rem 0 0.6rem;
+  margin: -0.15rem auto 0.6rem;
 }
 
 /* The auto/manual drainer switch in the monitor head: an iOS-style track + knob, with the mode word
