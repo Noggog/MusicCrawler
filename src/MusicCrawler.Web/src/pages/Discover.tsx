@@ -526,8 +526,21 @@ function DetailPanel({
             <>
               <div className="detail-section-label">Recommended via</div>
               <div className="detail-chips">
+                {/* Each source is the library artist this recommendation stems from — clicking one
+                    opens their Browse page in a fresh tab, so the feed (and the current preview)
+                    stays exactly where it is. A plain anchor rather than a router Link: target
+                    "_blank" needs a real navigation. */}
                 {item.sources.slice(0, 8).map((s) => (
-                  <span className="detail-chip via" key={s}>{s}</span>
+                  <a
+                    className="detail-chip via"
+                    key={s}
+                    href={`/browse?artist=${encodeURIComponent(s)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Open ${s} in a new tab`}
+                  >
+                    {s} ↗
+                  </a>
                 ))}
               </div>
             </>

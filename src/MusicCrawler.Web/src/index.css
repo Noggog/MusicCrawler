@@ -1548,6 +1548,21 @@ a.disc-row-link:hover .disc-name {
   border-color: rgba(250, 115, 118, 0.4);
 }
 
+/* A chip that links somewhere (the "recommended via" source artists → their Browse page). Brightens
+   in its own hue on hover rather than inheriting the global cyan link glow, so it still reads as a
+   chip and not as body-copy link. */
+a.detail-chip {
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+a.detail-chip.via:hover {
+  color: var(--salmon-white);
+  background: rgba(225, 96, 99, 0.26);
+  border-color: rgba(250, 115, 118, 0.75);
+  text-shadow: none;
+}
+
 .detail-section-label {
   font-family: 'Orbitron', sans-serif;
   font-size: 0.66rem;
