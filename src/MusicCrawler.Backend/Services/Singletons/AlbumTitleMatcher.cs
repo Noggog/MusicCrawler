@@ -11,9 +11,10 @@ public static class AlbumTitleMatcher
 {
     /// <summary>
     /// Canonical form for matching album titles across sources: trimmed, lower-cased, with curly
-    /// quotes/apostrophes and en/em dashes folded to ASCII, zero-width characters stripped, and
-    /// internal whitespace collapsed — so a title that differs only in typography (Plex's "Don't"
-    /// vs. Deezer's "Don't") still matches.
+    /// quotes/apostrophes and en/em dashes folded to ASCII, zero-width characters stripped,
+    /// ampersands spelled out as "and", and internal whitespace collapsed — so a title that differs
+    /// only in typography (Plex's "Don't" vs. Deezer's "Don't") or in the ampersand convention
+    /// (Plex's "Radiance &amp; Submission" vs. Deezer's "Radiance and Submission") still matches.
     /// </summary>
     public static string Normalize(string? title)
     {
@@ -23,8 +24,10 @@ public static class AlbumTitleMatcher
         }
 
         var sb = new StringBuilder(title.Length);
-        var lastWasSpace = false;
-        foreach (var ch in title.Trim())
+        // A separator is owed before the next character we emit. Starts false so leading whitespace
+        // is dropped, and is never flushed at the end so trailing whitespace is too.
+        var pendingSpace = false;
+        foreach (var ch in title)
         {
             switch (ch)
             {
@@ -43,19 +46,31 @@ public static class AlbumTitleMatcher
 
             if (char.IsWhiteSpace(c))
             {
-                if (!lastWasSpace)
+                pendingSpace = sb.Length > 0;
+                continue;
+            }
+
+            if (c is '&' or '＆')
+            {
+                // Spelled out and space-padded on both sides, so "R&B", "R & B" and "R and B" all
+                // land on the same form regardless of which side of the swap each source wrote.
+                if (sb.Length > 0)
                 {
                     sb.Append(' ');
                 }
-                lastWasSpace = true;
+                sb.Append("and");
+                pendingSpace = true;
+                continue;
             }
-            else
+
+            if (pendingSpace)
             {
-                sb.Append(c);
-                lastWasSpace = false;
+                sb.Append(' ');
+                pendingSpace = false;
             }
+            sb.Append(c);
         }
 
-        return sb.ToString().Trim();
+        return sb.ToString();
     }
 }
