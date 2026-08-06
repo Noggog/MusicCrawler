@@ -63,6 +63,11 @@ builder.Services.AddHostedService<AlbumSyncService>();
 // stale similarity edges without clearing pending). Cadence via QUEUE_REPLENISH_INTERVAL_HOURS.
 builder.Services.AddHostedService<QueueReplenishService>();
 
+// Re-reads the Plex song ratings for every thumbed-down artist and flags the ones the ratings
+// contradict, feeding the "second chance" discovery category. Slow by design (weekly, via
+// RECONSIDER_SWEEP_INTERVAL_DAYS) — it exists to resurrect artists rejected years ago.
+builder.Services.AddHostedService<ReconsiderSweepService>();
+
 // The Deezer download engine (DownloadService) is registered in MainModule as a shared singleton
 // hosted service, so the "download now" endpoint and the drainer loop are the same instance.
 
@@ -404,6 +409,7 @@ api.MapGet("/discovery/mixed", async (
             {
                 FeedKind.RecommendedArtist, FeedKind.MissingAlbum,
                 FeedKind.RecommendedLibraryArtist, FeedKind.SeedLibraryArtist,
+                FeedKind.ReconsiderArtist,
             };
         }
         var feed = await engine.GetMixedFeed(

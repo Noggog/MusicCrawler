@@ -98,6 +98,7 @@ public class DiscoveryEngine : IQueueReplenisher
         FeedKind.LibraryArtist => LibraryItems(userId),
         FeedKind.RecommendedLibraryArtist => LibraryItemsBySection(userId, recommended: true),
         FeedKind.SeedLibraryArtist => LibraryItemsBySection(userId, recommended: false),
+        FeedKind.ReconsiderArtist => ReconsiderItems(userId),
         FeedKind.MissingAlbum => MissingAlbumItems(userId),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown feed kind"),
     };
@@ -194,6 +195,29 @@ public class DiscoveryEngine : IQueueReplenisher
 
         return sources.ToDictionary(kv => kv.Key, kv => kv.Value.ToList(), StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The thumbed-down artists the user's own Plex song ratings argue with — a thumbs-down is a snap
+    /// judgement, while the star ratings are what they thought after actually listening. Which artists
+    /// those are is decided out of band by the weekly <c>ReconsiderSweepService</c> and stored on the
+    /// queue row, so serving this category is one read with no Plex traffic and nothing to recompute.
+    /// A second thumbs-down confirms the rejection for good (see
+    /// <see cref="IUserQueueRepo.TryConfirmDislike"/>), which drops the row out of the sweep too.
+    ///
+    /// Snoozing one of these cards is a plain snooze, not a soft rejection: it stops being Disliked, so
+    /// when the window lapses it comes back through the ordinary unrated-owned-artist sections rather
+    /// than here. Only a second thumbs-down settles it permanently.
+    /// </summary>
+    private async Task<List<FeedItem>> ReconsiderItems(string userId) =>
+        // Strongest contradiction first — the higher you rated it, the more the thumbs-down looks like
+        // the mistake. Ties break by name so the order is stable across loads.
+        (await _queue.GetReconsiderable(userId))
+        .OrderByDescending(r => r.Signal.Average)
+        .ThenBy(r => r.Artist.ArtistName, StringComparer.OrdinalIgnoreCase)
+        .Select(r => new FeedItem(
+            FeedKind.ReconsiderArtist, r.Artist, null, r.ImageUrl,
+            0, Array.Empty<string>(), null, Reconsider: r.Signal))
+        .ToList();
 
     private async Task<List<FeedItem>> MissingAlbumItems(string userId)
     {
@@ -304,9 +328,21 @@ public class DiscoveryEngine : IQueueReplenisher
     /// Thumbs an artist. A like records the verdict and grows the frontier from it (queuing it to buy
     /// too, if it isn't owned); a dislike records the verdict and prunes the recommendations that
     /// artist alone had seeded, so the queue tracks current taste without a manual rebuild.
+    ///
+    /// A dislike landing on an <em>already</em>-disliked artist is the user re-rejecting something the
+    /// reconsider category offered back — that confirms the verdict permanently, so the artist is never
+    /// second-guessed again.
     /// </summary>
     public async Task RateArtist(string userId, string artistName, DiscoveryStatus status)
     {
+        // Before Rate overwrites the previous verdict, while the row still carries it.
+        if (status == DiscoveryStatus.Disliked && await _queue.TryConfirmDislike(userId, artistName))
+        {
+            _logger.LogInformation(
+                "{User} thumbed {Artist} down a second time — the rejection is now permanent",
+                userId, artistName);
+        }
+
         var rated = await _queue.Rate(userId, artistName, status, imageUrl: null);
         if (status == DiscoveryStatus.Liked)
         {

@@ -265,6 +265,7 @@ export default function Purchases() {
         sources: [],
         deezerAlbumId: item.deezerAlbumId,
         year: null,
+        reconsider: null,
       }
       return clearRating(feedItem)
     },

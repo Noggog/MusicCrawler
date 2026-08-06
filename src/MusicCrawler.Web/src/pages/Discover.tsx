@@ -31,7 +31,7 @@ import {
 import { getDeezerPlayInfo } from '../api/deezer'
 import { getArtistLibraries } from '../api/library'
 import { useArtAccent } from '../art/artColors'
-import type { FeedItem, FeedKind } from '../types'
+import type { FeedItem, FeedKind, ReconsiderSignal } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
 import { PlexRatingStats } from '../components/PlexRatingStats'
@@ -47,6 +47,7 @@ const BADGE: Record<FeedKind, string> = {
   RecommendedLibraryArtist: 'Recommended Artist',
   SeedLibraryArtist: 'Rate Unfamiliar Artist',
   LibraryArtist: 'Mark existing artist',
+  ReconsiderArtist: 'Second Chance',
 }
 
 // The category filters, shown up top as toggle-able tag chips styled exactly like the per-row
@@ -56,12 +57,18 @@ const FILTER_CHIPS: { kind: FeedKind; tip: string }[] = [
   { kind: 'RecommendedLibraryArtist', tip: "Unrated artists already in the library" },
   { kind: 'SeedLibraryArtist', tip: "Rate artists not yet recommended to grow the frontier" },
   { kind: 'MissingAlbum', tip: 'Missing albums for artists you like' },
+  { kind: 'ReconsiderArtist', tip: 'Bands you thumbed down but rated highly in Plex' },
 ]
 
-const ALL_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
-// Default to everything on: the recommended sections (new + existing owned), missing albums, and the
-// seed section (owned artists nothing recommends yet) — rating those grows the frontier.
-const DEFAULT_KINDS: FeedKind[] = ['RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist']
+const ALL_KINDS: FeedKind[] = [
+  'RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist', 'ReconsiderArtist',
+]
+// Default to everything on: the recommended sections (new + existing owned), missing albums, the
+// seed section (owned artists nothing recommends yet) — rating those grows the frontier — and the
+// second-chance section (dislikes the user's own song ratings argue with).
+const DEFAULT_KINDS: FeedKind[] = [
+  'RecommendedArtist', 'MissingAlbum', 'RecommendedLibraryArtist', 'SeedLibraryArtist', 'ReconsiderArtist',
+]
 
 const newSeed = () => Math.floor(Math.random() * 1_000_000_000)
 
@@ -315,6 +322,18 @@ function Provenance({ sources }: { sources: string[] }) {
   )
 }
 
+// Why a "Second Chance" card is in the feed: nothing recommended it — the user's own Plex song
+// ratings did, by contradicting the thumbs-down they gave the band. Stands in for the provenance line.
+// The numbers come off the feed item (snapshotted by the sweep that flagged it), so no per-row fetch.
+function ReconsiderWhy({ signal }: { signal: ReconsiderSignal | null }) {
+  if (!signal) return null
+  return (
+    <span className="disc-provenance disc-why">
+      you rated {signal.ratedCount} of {signal.trackCount} songs · {signal.average.toFixed(1)}★ avg
+    </span>
+  )
+}
+
 // One album under the inline panel below — themed from its cover via `--art-accent`, matching the
 // feed rows / Download queue. Owns its accent so the per-row hook stays out of the parent's `.map`.
 function SubAlbumRow({
@@ -429,7 +448,9 @@ function ArtistAlbumsPanel({
 
 // Discover kinds whose artist is already in the library (owned), so a "open where it lives" link makes
 // sense. RecommendedArtist (not yet owned) and MissingAlbum (an album, not the artist) are excluded.
-const IN_LIBRARY_KINDS = new Set<FeedKind>(['RecommendedLibraryArtist', 'SeedLibraryArtist', 'LibraryArtist'])
+const IN_LIBRARY_KINDS = new Set<FeedKind>([
+  'RecommendedLibraryArtist', 'SeedLibraryArtist', 'LibraryArtist', 'ReconsiderArtist',
+])
 
 // Deep links to open an owned artist where it lives (Plex now, Navidrome later) — the same per-library
 // links as the Artists-page "Library" tab, shown compactly in the readout for in-library Discover cards.
@@ -525,6 +546,16 @@ function DetailPanel({
               <Link className="deezer-link detail-goartist" to={`/browse?artist=${encodeURIComponent(name)}`}>
                 Go to artist ↗
               </Link>
+            </>
+          ) : item.kind === 'ReconsiderArtist' ? (
+            // Nothing recommended this one — the user's own song ratings contradict the thumbs-down
+            // they gave it. Spell out the second thumbs-down, since that's what makes it permanent.
+            <>
+              <div className="detail-section-label">Why this is back</div>
+              <p className="detail-why">
+                You thumbed this band down, but your song ratings say otherwise. Thumb it down again to
+                settle it for good — it won't come back a third time.
+              </p>
             </>
           ) : item.sources.length > 0 ? (
             <>
@@ -661,6 +692,8 @@ function DiscRow({
               {name}
               {item.year && <> · {item.year}</>}
             </span>
+          ) : item.kind === 'ReconsiderArtist' ? (
+            <ReconsiderWhy signal={item.reconsider} />
           ) : (
             <Provenance sources={item.sources} />
           )}

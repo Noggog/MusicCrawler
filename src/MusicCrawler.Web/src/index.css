@@ -1042,6 +1042,12 @@ a.disc-row-link:hover .disc-name {
   font-size: 0.8rem;
   color: var(--text-faint);
 }
+/* The rating evidence on a "Second Chance" row — brighter than plain provenance, since it's the
+   whole reason the card is there. */
+.disc-why {
+  color: var(--salmon-white);
+  opacity: 0.85;
+}
 
 .disc-actions {
   display: flex;
@@ -1580,6 +1586,16 @@ a.detail-chip.via:hover {
   margin: 1rem 0 0.4rem;
 }
 
+/* The "why this is back" explainer on a Second Chance readout — sits where the "recommended via"
+   chips would, so it reads as that card's provenance. */
+.detail-why {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+  margin: 0 0 1rem;
+  max-width: 44ch;
+}
+
 .detail-library-links {
   display: flex;
   flex-wrap: wrap;
@@ -1706,6 +1722,13 @@ a.detail-chip.via:hover {
   background: rgba(56, 232, 160, 0.1);
   border-color: rgba(56, 232, 160, 0.38);
 }
+/* "Second Chance" — salmon, the palette's rejection hue, since these cards are re-litigating a
+   thumbs-down rather than offering something new. */
+.feed-badge-ReconsiderArtist {
+  color: var(--salmon-white);
+  background: rgba(225, 96, 99, 0.12);
+  border-color: rgba(250, 115, 118, 0.42);
+}
 
 /* Filter chips: the per-kind badge styling made into a clickable on/off toggle. */
 .feed-chip {
@@ -1735,6 +1758,9 @@ a.detail-chip.via:hover {
 }
 .feed-chip.feed-badge-RecommendedLibraryArtist:not(.off) {
   box-shadow: 0 0 12px rgba(56, 232, 160, 0.32), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+.feed-chip.feed-badge-ReconsiderArtist:not(.off) {
+  box-shadow: 0 0 12px rgba(250, 115, 118, 0.32), inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
 /* Off chip: desaturated, dashed, dimmed — clearly toggled out. */
 .feed-chip.off {

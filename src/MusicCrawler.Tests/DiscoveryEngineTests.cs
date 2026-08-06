@@ -3,10 +3,12 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MusicCrawler.Backend;
 using MusicCrawler.Backend.Services.Singletons;
 using MusicCrawler.Deezer.Models;
 using MusicCrawler.Deezer.Services;
 using MusicCrawler.Interfaces;
+using MusicCrawler.Plex.Services.Singletons;
 using NSubstitute;
 using Xunit;
 
@@ -40,6 +42,7 @@ public class DiscoveryEngineTests
         _queue.GetLikedArtistNames(User).Returns(Array.Empty<string>());
         _library.GetAllArtistMetadata().Returns(Array.Empty<ArtistMetadata>());
         _queue.GetDecidedArtists(User).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        _queue.GetReconsiderable(User).Returns(Array.Empty<ReconsiderCandidate>());
         _queue.CountPending(User).Returns(0);
         _queue.GetPending(User, Arg.Any<int>(), Arg.Any<int>())
             .Returns(new DiscoveryPage(Array.Empty<DiscoveryCandidate>(), 0, 20, 0));
@@ -358,4 +361,83 @@ public class DiscoveryEngineTests
         ratings.Where(r => r.Kind == FeedKind.MissingAlbum).Select(r => r.Album).Should().Equal("U.F.O.F.");
     }
 
+    // ---- Reconsider: serving what the weekly sweep already flagged ----
+
+    private Task<DiscoveryFeedPage> Reconsidered() => _sut.GetFeed(User, FeedKind.ReconsiderArtist, 0, 20);
+
+    [Fact]
+    public async Task Reconsider_serves_the_flagged_rows_with_their_stored_evidence()
+    {
+        // The engine does no judging here — the sweep decided, and the row carries both the verdict and
+        // the numbers behind it, so the card needs no Plex round-trip to explain itself.
+        _queue.GetReconsiderable(User).Returns(new[]
+        {
+            new ReconsiderCandidate(new ArtistKey("Low"), "low-img", new ReconsiderSignal(4.0, 4, 6)),
+        });
+
+        var item = (await Reconsidered()).Items.Single();
+
+        item.Kind.Should().Be(FeedKind.ReconsiderArtist);
+        item.Artist.ArtistName.Should().Be("Low");
+        item.ImageUrl.Should().Be("low-img");
+        item.Reconsider.Should().Be(new ReconsiderSignal(4.0, 4, 6));
+    }
+
+    [Fact]
+    public async Task Reconsider_ranks_the_strongest_contradiction_first()
+    {
+        _queue.GetReconsiderable(User).Returns(new[]
+        {
+            new ReconsiderCandidate(new ArtistKey("Slint"), null, new ReconsiderSignal(3.25, 4, 4)),
+            new ReconsiderCandidate(new ArtistKey("Low"), null, new ReconsiderSignal(4.0, 4, 4)),
+        });
+
+        var page = await Reconsidered();
+
+        page.Items.Select(i => i.Artist.ArtistName).Should().Equal("Low", "Slint");
+    }
+
+    [Fact]
+    public async Task Reconsider_is_empty_until_the_sweep_has_flagged_something()
+    {
+        (await Reconsidered()).Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task First_dislike_records_the_verdict_without_confirming_it()
+    {
+        // TryConfirmDislike is a no-op unless the row was *already* disliked — the repo enforces that,
+        // so the engine may call it unconditionally, but nothing else about a first dislike changes.
+        _queue.TryConfirmDislike(User, "Low").Returns(false);
+
+        await _sut.RateArtist(User, "Low", DiscoveryStatus.Disliked);
+
+        await _queue.Received(1).Rate(User, "Low", DiscoveryStatus.Disliked, null);
+    }
+
+    [Fact]
+    public async Task Second_dislike_confirms_the_rejection_before_recording_it()
+    {
+        // The confirm must land while the row still holds the previous verdict, i.e. before Rate
+        // overwrites it — otherwise every dislike would look like a repeat.
+        _queue.TryConfirmDislike(User, "Low").Returns(true);
+
+        await _sut.RateArtist(User, "Low", DiscoveryStatus.Disliked);
+
+        Received.InOrder(() =>
+        {
+            _queue.TryConfirmDislike(User, "Low");
+            _queue.Rate(User, "Low", DiscoveryStatus.Disliked, null);
+        });
+    }
+
+    [Fact]
+    public async Task Liking_an_artist_never_confirms_a_dislike()
+    {
+        Relates("Low", ("Codeine", null, 1)); // a like expands the frontier, which reads the graph
+
+        await _sut.RateArtist(User, "Low", DiscoveryStatus.Liked);
+
+        await _queue.DidNotReceive().TryConfirmDislike(Arg.Any<string>(), Arg.Any<string>());
+    }
 }

@@ -38,6 +38,22 @@ public class MainModule : Autofac.Module
         builder.RegisterInstance(new ReplenishConfig(
             Interval: TimeSpan.FromHours(replenishHours), StartupDelay: TimeSpan.FromMinutes(5)));
 
+        // When a thumbed-down artist gets offered back because the user's own Plex song ratings say they
+        // liked it (env knobs, defaults 3+ stars across at least a third of the songs), and how often
+        // the sweep looks. This resurrects artists buried years ago, so weekly is plenty; the first run
+        // is offset past the catalog + album syncs so boot isn't three heavy passes at once.
+        var reconsiderStars = double.TryParse(
+            Environment.GetEnvironmentVariable("RECONSIDER_MIN_AVG_STARS"), out var stars) ? stars : 3;
+        var reconsiderFraction = double.TryParse(
+            Environment.GetEnvironmentVariable("RECONSIDER_MIN_RATED_FRACTION"), out var frac) ? frac : 1.0 / 3;
+        var reconsiderDays = double.TryParse(
+            Environment.GetEnvironmentVariable("RECONSIDER_SWEEP_INTERVAL_DAYS"), out var rd) ? rd : 7;
+        builder.RegisterInstance(new ReconsiderPolicy(
+            MinAverage: reconsiderStars,
+            MinRatedFraction: reconsiderFraction,
+            Interval: TimeSpan.FromDays(reconsiderDays),
+            StartupDelay: TimeSpan.FromMinutes(10)));
+
         // Every recurring wait in the app is scattered by this much (env knob, default ±30%) instead of
         // firing on an exact cadence — see JitterPolicy.
         var jitterPercent = double.TryParse(

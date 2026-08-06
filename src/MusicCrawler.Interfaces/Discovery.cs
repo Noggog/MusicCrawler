@@ -74,6 +74,14 @@ public enum FeedKind
     /// (a fresh taste anchor to grow recommendations from).
     /// </summary>
     SeedLibraryArtist,
+
+    /// <summary>
+    /// An owned artist the user thumbed <em>down</em> even though their own Plex song ratings say
+    /// otherwise — a high average across a decent share of the artist's tracks. The thumbs-down was
+    /// probably a misfire (a snap judgement, or a rating made before they'd heard much), so the card
+    /// offers it back once. Thumbing it down a second time confirms the verdict and it never returns.
+    /// </summary>
+    ReconsiderArtist,
 }
 
 /// <summary>
@@ -82,6 +90,9 @@ public enum FeedKind
 /// the UI sample/link the album on Deezer); <paramref name="Score"/>/<paramref name="Sources"/> rank
 /// and explain recommended artists (0/empty for the other kinds). <paramref name="Year"/> is the
 /// album's release year (album kinds only, null when Deezer supplied no date).
+/// <paramref name="Reconsider"/> is the stored rating evidence behind a
+/// <see cref="FeedKind.ReconsiderArtist"/> card, so the UI can show why it's being offered back.
+/// Null for every other kind.
 /// </summary>
 public record FeedItem(
     FeedKind Kind,
@@ -91,7 +102,25 @@ public record FeedItem(
     double Score,
     IReadOnlyList<string> Sources,
     long? DeezerAlbumId,
-    int? Year = null);
+    int? Year = null,
+    ReconsiderSignal? Reconsider = null);
+
+/// <summary>
+/// Why the weekly sweep thinks a thumbed-down artist was actually a keeper: a snapshot of the user's
+/// Plex song ratings for it, taken when the artist was flagged. Persisted on the queue row so serving
+/// the feed is one Mongo read — no Plex round-trip, and nothing to recompute per request.
+/// </summary>
+public record ReconsiderSignal(double Average, int RatedCount, int TrackCount);
+
+/// <summary>
+/// One thumbed-down artist for the sweep to weigh, carrying the flag it currently holds
+/// (<paramref name="Reconsider"/> null = not currently flagged) so the sweep only writes when the
+/// verdict actually changes.
+/// </summary>
+public record DislikedArtist(ArtistKey Artist, string? ImageUrl, ReconsiderSignal? Reconsider);
+
+/// <summary>A flagged artist ready to serve as a "second chance" card — artist, art, and the evidence.</summary>
+public record ReconsiderCandidate(ArtistKey Artist, string? ImageUrl, ReconsiderSignal Signal);
 
 /// <summary>A paged feed section for a single <see cref="FeedKind"/>.</summary>
 public record DiscoveryFeedPage(

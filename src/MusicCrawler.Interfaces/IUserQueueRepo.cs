@@ -65,6 +65,39 @@ public interface IUserQueueRepo
     /// <summary>Every Liked/Disliked artist rating (verdict + image), for the Ratings review page.</summary>
     Task<ArtistRating[]> GetRated(string userId);
 
+    /// <summary>
+    /// The artists this user thumbed down whose dislike hasn't been confirmed by a second thumbs-down,
+    /// each with the reconsider flag it currently carries — the working set for the periodic sweep.
+    /// Once <see cref="TryConfirmDislike"/> has stuck on a row it drops out of here permanently, so a
+    /// re-rejected artist is never weighed (or offered back) again.
+    /// </summary>
+    Task<DislikedArtist[]> GetUnconfirmedDislikes(string userId);
+
+    /// <summary>
+    /// Records (or, with a null <paramref name="signal"/>, clears) the sweep's verdict that a
+    /// thumbed-down artist looks like a keeper. Only touches rows that are still Disliked, so a
+    /// verdict the user changed mid-sweep can't be re-flagged. Fills <paramref name="imageUrl"/> when
+    /// supplied — an artist rated straight from the library has no art on its row, and stamping it here
+    /// keeps serving the feed to a single query.
+    /// </summary>
+    Task SetReconsider(string userId, string artistName, ReconsiderSignal? signal, string? imageUrl);
+
+    /// <summary>
+    /// The flagged artists to serve as "second chance" cards: thumbed down, not re-rejected, and
+    /// carrying a sweep verdict. One indexed read — all the judgement already happened in the sweep.
+    /// </summary>
+    Task<ReconsiderCandidate[]> GetReconsiderable(string userId);
+
+    /// <summary>
+    /// Marks a thumbs-down as final, but <em>only</em> when the artist was already Disliked — i.e.
+    /// this is the user rejecting it a second time, after it came back for reconsideration. Returns
+    /// true when the flag was set (the verdict is now remembered forever), false for a first-time
+    /// dislike, which stays eligible to resurface. Must be called <em>before</em> <see cref="Rate"/>
+    /// records the new verdict, while the row still holds the previous one. Clearing the verdict
+    /// (<see cref="ClearVerdict"/>) drops the flag with the row — a full reset means a clean slate.
+    /// </summary>
+    Task<bool> TryConfirmDislike(string userId, string artistName);
+
     /// <summary>Clears pending candidates (keeps Liked/Disliked) so the queue can be rebuilt from likes.</summary>
     Task DeletePending(string userId);
 

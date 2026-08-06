@@ -22,6 +22,16 @@ public class UserQueueRepo : IUserQueueRepo
     private const string FieldAddedAt = "addedAt";
     private const string FieldDecidedAt = "decidedAt";
     private const string FieldSnoozeUntil = "snoozeUntil";
+    // Sticky "this thumbs-down is final" flag, set when a dislike lands on an already-disliked row.
+    // Absent on every legacy doc, which reads as false — so old dislikes stay eligible to resurface.
+    private const string FieldDislikeConfirmed = "dislikeConfirmed";
+    // The periodic sweep's verdict that this thumbed-down artist looks like a keeper, as a subdocument
+    // holding the rating snapshot behind it. Present = flagged; the sweep $unsets it to withdraw the
+    // verdict, so "is it flagged" and "why" can never disagree.
+    private const string FieldReconsider = "reconsider";
+    private const string FieldReconsiderAverage = "average";
+    private const string FieldReconsiderRatedCount = "ratedCount";
+    private const string FieldReconsiderTrackCount = "trackCount";
 
     private static readonly string StatusPending = DiscoveryStatus.Pending.ToString();
     private static readonly string StatusLiked = DiscoveryStatus.Liked.ToString();
@@ -253,6 +263,106 @@ public class UserQueueRepo : IUserQueueRepo
                 : null;
             return new ArtistRating(c.Artist, c.ImageUrl, status, snoozeUntil);
         }).ToArray();
+    }
+
+    /// <summary>Dislikes that haven't been re-rejected: the sweep's working set.</summary>
+    private static FilterDefinition<BsonDocument> UnconfirmedDislikes(string userId)
+    {
+        var f = Builders<BsonDocument>.Filter;
+        // $ne also matches docs where the field is absent, so every pre-existing dislike counts as
+        // unconfirmed — exactly right: none of them has been re-rejected yet.
+        return f.Eq(FieldUserId, userId)
+               & f.Eq(FieldStatus, StatusDisliked)
+               & f.Ne(FieldDislikeConfirmed, true);
+    }
+
+    public async Task<DislikedArtist[]> GetUnconfirmedDislikes(string userId)
+    {
+        var cursor = await Collection.FindAsync(UnconfirmedDislikes(userId), new FindOptions<BsonDocument>
+        {
+            Sort = Builders<BsonDocument>.Sort.Descending(FieldDecidedAt),
+        });
+
+        return (await cursor.ToListAsync())
+            .Select(doc =>
+            {
+                var c = ToCandidate(doc);
+                return new DislikedArtist(c.Artist, c.ImageUrl, ToSignal(doc));
+            })
+            .ToArray();
+    }
+
+    public async Task SetReconsider(string userId, string artistName, ReconsiderSignal? signal, string? imageUrl)
+    {
+        var updates = new List<UpdateDefinition<BsonDocument>>
+        {
+            signal is null
+                ? Builders<BsonDocument>.Update.Unset(FieldReconsider)
+                : Builders<BsonDocument>.Update.Set(FieldReconsider, new BsonDocument
+                {
+                    { FieldReconsiderAverage, signal.Average },
+                    { FieldReconsiderRatedCount, signal.RatedCount },
+                    { FieldReconsiderTrackCount, signal.TrackCount },
+                }),
+        };
+        // Same "fill, never clobber" rule as Rate/Snooze.
+        if (imageUrl != null)
+        {
+            updates.Add(Builders<BsonDocument>.Update.Set(FieldImageUrl, imageUrl));
+        }
+
+        // Status-scoped (never an upsert): if the user liked or cleared the artist while the sweep was
+        // running, this matches nothing rather than resurrecting a stale verdict.
+        await Collection.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", DocId(userId, artistName))
+            & Builders<BsonDocument>.Filter.Eq(FieldStatus, StatusDisliked),
+            Builders<BsonDocument>.Update.Combine(updates));
+    }
+
+    public async Task<ReconsiderCandidate[]> GetReconsiderable(string userId)
+    {
+        var filter = UnconfirmedDislikes(userId)
+                     & Builders<BsonDocument>.Filter.Exists(FieldReconsider);
+        var cursor = await Collection.FindAsync(filter);
+
+        return (await cursor.ToListAsync())
+            .Select(doc => (Candidate: ToCandidate(doc), Signal: ToSignal(doc)))
+            // Defensive: Exists() already guarantees a signal, but a hand-edited/partial subdoc would
+            // otherwise NRE here rather than just being skipped.
+            .Where(x => x.Signal != null)
+            .Select(x => new ReconsiderCandidate(x.Candidate.Artist, x.Candidate.ImageUrl, x.Signal!))
+            .ToArray();
+    }
+
+    /// <summary>The stored sweep verdict on a queue doc, or null when it carries none.</summary>
+    private static ReconsiderSignal? ToSignal(BsonDocument doc)
+    {
+        if (!doc.TryGetValue(FieldReconsider, out var value) || !value.IsBsonDocument)
+        {
+            return null;
+        }
+
+        var sub = value.AsBsonDocument;
+        if (!sub.TryGetValue(FieldReconsiderAverage, out var avg) || !avg.IsNumeric)
+        {
+            return null;
+        }
+
+        var rated = sub.TryGetValue(FieldReconsiderRatedCount, out var r) && r.IsNumeric ? r.ToInt32() : 0;
+        var tracks = sub.TryGetValue(FieldReconsiderTrackCount, out var t) && t.IsNumeric ? t.ToInt32() : 0;
+        return new ReconsiderSignal(avg.ToDouble(), rated, tracks);
+    }
+
+    public async Task<bool> TryConfirmDislike(string userId, string artistName)
+    {
+        var f = Builders<BsonDocument>.Filter;
+        // The status predicate is the whole point: it only matches when the row is *already* Disliked,
+        // making this a no-op on a first-time thumbs-down. One atomic update — no read-then-write race.
+        var result = await Collection.UpdateOneAsync(
+            f.Eq("_id", DocId(userId, artistName)) & f.Eq(FieldStatus, StatusDisliked),
+            Builders<BsonDocument>.Update.Set(FieldDislikeConfirmed, true));
+
+        return result.MatchedCount > 0;
     }
 
     public async Task<DiscoveryCandidate[]> GetLiked(string userId)
