@@ -20,11 +20,13 @@ import {
 } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
+  blockAlbum,
   clearRating,
   getArtistAlbums,
   getMixedFeed,
   rate,
   snooze,
+  unblockAlbum,
   type SnoozeDuration,
   type Verdict,
 } from '../api/discovery'
@@ -36,7 +38,7 @@ import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
 import { MergeAlbumPane } from '../components/MergeAlbumPane'
 import { PlexRatingStats } from '../components/PlexRatingStats'
-import { IconApprove, IconCheck, IconMoon, IconReject, IconWrench } from '../components/icons'
+import { IconApprove, IconBlock, IconCheck, IconMoon, IconReject, IconWrench } from '../components/icons'
 import { rateFeedback } from '../effects/effectsBus'
 
 const PAGE_SIZE = 20
@@ -102,36 +104,71 @@ function writeShownKinds(shown: Set<FeedKind>) {
   }
 }
 
-// How a row was marked this view (approve / reject / snooze, or merged into an album already owned)
-// so it stays in place until the next natural refresh.
-type RowMark = Verdict | 'snoozed' | 'merged'
+// How a row was marked this view (approve / meh / snooze, merged into an album already owned, or
+// blocked for everyone) so it stays in place until the next natural refresh.
+type RowMark = Verdict | 'snoozed' | 'merged' | 'blocked'
 const MARK_LABEL: Record<RowMark, string> = {
   up: 'Added',
   down: 'Dismissed',
   snoozed: 'Snoozed',
   merged: 'In library',
+  blocked: 'Blocked for all',
 }
 const MarkIcon = ({ mark }: { mark: RowMark }) =>
   mark === 'up' ? <IconApprove size={15} />
     : mark === 'down' ? <IconReject size={15} />
       : mark === 'merged' ? <IconCheck size={15} />
-        : <IconMoon size={15} />
+        : mark === 'blocked' ? <IconBlock size={15} />
+          : <IconMoon size={15} />
 
 // An in-place decision marker with an undo: "✓ Added · undo". Every decision (approve / reject /
 // snooze, on artists or albums) is reversible from the feed so a misclick is one click to fix. A
 // merge is the exception — it's an assertion about the library, not a verdict, and there's nothing
 // to walk back in the feed once the album is known to be owned.
-function DecisionMark({ mark, onUndo, disabled }: { mark: RowMark; onUndo: () => void; disabled: boolean }) {
+//
+// A thumbs-down means different things either side of the artist/album line, so the label follows:
+// on an artist it prunes the frontier ("Dismissed"), on an album it's the private "meh" that hides
+// the record from you alone.
+function DecisionMark({
+  mark,
+  onUndo,
+  disabled,
+  isAlbum = false,
+}: {
+  mark: RowMark
+  onUndo: () => void
+  disabled: boolean
+  isAlbum?: boolean
+}) {
   return (
     <span className={`disc-rated mark-${mark}`}>
       <span className="disc-rated-icon"><MarkIcon mark={mark} /></span>
-      {MARK_LABEL[mark]}
+      {mark === 'down' && isAlbum ? 'Meh' : MARK_LABEL[mark]}
       {mark !== 'merged' && (
         <button className="disc-undo" title="Undo this decision" disabled={disabled} onClick={onUndo}>
           undo
         </button>
       )}
     </span>
+  )
+}
+
+// Block an album for everyone. The down-chevron beside it is a personal "meh" — it hides the album
+// from you alone and leaves it offerable to everyone else, which is what you want for a band you like
+// but don't want the whole discography of. This is the other thing: a release nobody should be
+// offered (a junk Deezer entry, a reissue of something owned). It gets a stop sign rather than a
+// louder chevron so it reads as a different action, not a bigger thumbs-down, and sits muted at rest
+// so the per-user pass stays the obvious default.
+function BlockButton({ onBlock, disabled }: { onBlock: () => void; disabled: boolean }) {
+  return (
+    <button
+      className="disc-btn block"
+      title="Block for everyone — no one gets offered this album"
+      disabled={disabled}
+      onClick={onBlock}
+    >
+      <IconBlock size={15} />
+    </button>
   )
 }
 
@@ -374,6 +411,7 @@ function SubAlbumRow({
   onRate,
   onUndo,
   onMerge,
+  onBlock,
 }: {
   album: FeedItem
   verdict: RowMark | undefined
@@ -384,6 +422,7 @@ function SubAlbumRow({
   onRate: (item: FeedItem, verdict: Verdict) => void
   onUndo: (item: FeedItem) => void
   onMerge: (item: FeedItem) => void
+  onBlock: (item: FeedItem) => void
 }) {
   const accent = useArtAccent(useArtUrl(album))
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
@@ -403,16 +442,17 @@ function SubAlbumRow({
         </div>
         <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
           {verdict ? (
-            <DecisionMark mark={verdict} disabled={disabled} onUndo={() => onUndo(album)} />
+            <DecisionMark mark={verdict} disabled={disabled} isAlbum onUndo={() => onUndo(album)} />
           ) : (
             <>
               <button className="disc-btn up" title="Queue album to buy" disabled={disabled} onClick={() => onRate(album, 'up')}>
                 <IconApprove />
               </button>
-              <button className="disc-btn down" title="Not interested" disabled={disabled} onClick={() => onRate(album, 'down')}>
+              <button className="disc-btn down" title="Meh — hide this from my feed only" disabled={disabled} onClick={() => onRate(album, 'down')}>
                 <IconReject />
               </button>
               <MergeButton disabled={disabled} onMerge={() => onMerge(album)} />
+              <BlockButton disabled={disabled} onBlock={() => onBlock(album)} />
             </>
           )}
         </div>
@@ -431,6 +471,7 @@ function ArtistAlbumsPanel({
   onRate,
   onUndo,
   onMerge,
+  onBlock,
   disabled,
 }: {
   artist: string
@@ -438,6 +479,7 @@ function ArtistAlbumsPanel({
   onRate: (item: FeedItem, verdict: Verdict) => void
   onUndo: (item: FeedItem) => void
   onMerge: (item: FeedItem) => void
+  onBlock: (item: FeedItem) => void
   disabled: boolean
 }) {
   // Which album's Deezer preview is expanded — one at a time, like selecting a row in the left-hand
@@ -473,6 +515,7 @@ function ArtistAlbumsPanel({
             onRate={onRate}
             onUndo={onUndo}
             onMerge={onMerge}
+            onBlock={onBlock}
           />
         )
       })}
@@ -524,6 +567,7 @@ function DetailPanel({
   onSnooze,
   onUndo,
   onMerge,
+  onBlock,
   onClose,
 }: {
   item: FeedItem | null
@@ -533,6 +577,7 @@ function DetailPanel({
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
   onMerge: (item: FeedItem) => void
+  onBlock: (item: FeedItem) => void
   onClose: () => void
 }) {
   // Resolve artwork + accent unconditionally (hooks must run before the empty-state early return) so
@@ -619,7 +664,7 @@ function DetailPanel({
 
           <div className="detail-actions">
             {verdict ? (
-              <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
+              <DecisionMark mark={verdict} disabled={busy} isAlbum={isAlbum} onUndo={() => onUndo(item)} />
             ) : (
               <>
                 <button
@@ -631,13 +676,14 @@ function DetailPanel({
                 </button>
                 <button
                   className="disc-btn down"
-                  title="Not interested"
+                  title={isAlbum ? 'Meh — hide this from my feed only' : 'Not interested'}
                   onClick={() => onRate(item, 'down')}
                 >
                   <IconReject />
                 </button>
                 <SnoozeControl onPick={(duration) => onSnooze(item, duration)} disabled={false} />
                 {isAlbum && <MergeButton disabled={busy} onMerge={() => onMerge(item)} />}
+                {isAlbum && <BlockButton disabled={busy} onBlock={() => onBlock(item)} />}
               </>
             )}
           </div>
@@ -675,6 +721,7 @@ function DetailPanel({
             onRate={onRate}
             onUndo={onUndo}
             onMerge={onMerge}
+            onBlock={onBlock}
             disabled={false}
           />
         </>
@@ -697,6 +744,7 @@ function DiscRow({
   onSnooze,
   onUndo,
   onMerge,
+  onBlock,
 }: {
   item: FeedItem
   selected: boolean
@@ -707,6 +755,7 @@ function DiscRow({
   onSnooze: (item: FeedItem, duration: SnoozeDuration) => void
   onUndo: (item: FeedItem) => void
   onMerge: (item: FeedItem) => void
+  onBlock: (item: FeedItem) => void
 }) {
   const name = item.artist.artistName
   const isAlbum = !!item.album
@@ -740,7 +789,7 @@ function DiscRow({
         </div>
         <div className="disc-actions" onClick={(e) => e.stopPropagation()}>
           {verdict ? (
-            <DecisionMark mark={verdict} disabled={busy} onUndo={() => onUndo(item)} />
+            <DecisionMark mark={verdict} disabled={busy} isAlbum={isAlbum} onUndo={() => onUndo(item)} />
           ) : (
             <>
               <button
@@ -752,7 +801,7 @@ function DiscRow({
               </button>
               <button
                 className="disc-btn down"
-                title="Not interested"
+                title={isAlbum ? 'Meh — hide this from my feed only' : 'Not interested'}
                 onClick={() => onRate(item, 'down')}
               >
                 <IconReject />
@@ -763,6 +812,7 @@ function DiscRow({
                 disabled={false}
               />
               {isAlbum && <MergeButton disabled={busy} onMerge={() => onMerge(item)} />}
+              {isAlbum && <BlockButton disabled={busy} onBlock={() => onBlock(item)} />}
             </>
           )}
         </div>
@@ -911,6 +961,36 @@ export default function Discover() {
       queryClient.invalidateQueries({ queryKey: ['ratings'] })
     },
   })
+  // Blocking an album takes it off *everyone's* feed, so unlike a rating it isn't a private call —
+  // confirm before writing. Marked in place like any other decision (undo lifts the block again).
+  const blockMutation = useMutation({
+    mutationFn: (item: FeedItem) => blockAlbum(item.artist.artistName, item.album!),
+    onMutate: (item) => {
+      setRated((prev) => new Map(prev).set(rowKeyFor(item), 'blocked'))
+    },
+    onError: (_err, item) => {
+      setRated((prev) => {
+        const next = new Map(prev)
+        next.delete(rowKeyFor(item))
+        return next
+      })
+    },
+    onSuccess: () => {
+      // The album is gone from every album surface now; drop the cached discographies so a later
+      // visit to Browse reflects the block.
+      queryClient.invalidateQueries({ queryKey: ['artist-discography'] })
+      queryClient.invalidateQueries({ queryKey: ['artist-albums'] })
+    },
+  })
+  const confirmBlock = (item: FeedItem) => {
+    const ok = window.confirm(
+      `Block "${item.album}" for everyone?\n\n` +
+        'No user will be offered this album again. To just hide it from your own feed, use the ' +
+        'thumbs-down ("meh") instead.',
+    )
+    if (ok) blockMutation.mutate(item)
+  }
+
   // The inline album decisions made under a just-liked brand-new artist (from its expanded panel),
   // read from the react-query cache. Used so undoing the artist also walks back those album picks.
   const decidedAlbumsFor = (artistName: string): FeedItem[] => {
@@ -918,12 +998,17 @@ export default function Discover() {
     return albums.filter((a) => rated.has(rowKeyFor(a)))
   }
 
-  // Undo any decision (like / dislike / snooze, artist or album), clearing it back to actionable.
+  // Undo any decision (like / meh / snooze / block, artist or album), clearing it back to actionable.
   // Optimistically drops the in-place mark so the card's 👍/👎/💤 reappear instantly; rolls back on
   // failure. Undoing a recommended artist also clears the album decisions made in its readout panel —
   // you went back on the artist, so its album picks shouldn't linger.
   const undo = useMutation({
     mutationFn: async (item: FeedItem) => {
+      // A block isn't a verdict — there's no rating to clear, so undo means lifting it globally.
+      if (rated.get(rowKeyFor(item)) === 'blocked') {
+        await unblockAlbum(item.artist.artistName, item.album!)
+        return
+      }
       await clearRating(item)
       if (item.kind === 'RecommendedArtist') {
         await Promise.all(decidedAlbumsFor(item.artist.artistName).map((a) => clearRating(a)))
@@ -952,7 +1037,7 @@ export default function Discover() {
     setPage(0)
   }
 
-  const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending
+  const busy = rateMutation.isPending || snoozeMutation.isPending || undo.isPending || blockMutation.isPending
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
@@ -1010,6 +1095,7 @@ export default function Discover() {
 
       {rateMutation.isError && <p className="error">Rating failed: {(rateMutation.error as Error).message}</p>}
       {snoozeMutation.isError && <p className="error">Snooze failed: {(snoozeMutation.error as Error).message}</p>}
+      {blockMutation.isError && <p className="error">Block failed: {(blockMutation.error as Error).message}</p>}
       {isError && <p className="error">Failed to load feed: {(error as Error).message}</p>}
 
       {kinds.length === 0 && (
@@ -1047,6 +1133,7 @@ export default function Discover() {
                     onSnooze={(it, duration) => snoozeMutation.mutate({ item: it, duration })}
                     onUndo={(it) => undo.mutate(it)}
                     onMerge={setMerging}
+                    onBlock={confirmBlock}
                   />
                 )
               })}
@@ -1075,6 +1162,7 @@ export default function Discover() {
             onSnooze={(item, duration) => snoozeMutation.mutate({ item, duration })}
             onUndo={(item) => undo.mutate(item)}
             onMerge={setMerging}
+            onBlock={confirmBlock}
             onClose={() => setSelected(null)}
           />
         </div>

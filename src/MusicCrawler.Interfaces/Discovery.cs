@@ -155,6 +155,8 @@ public record ArtistRating(ArtistKey Artist, string? ImageUrl, DiscoveryStatus S
 /// be queued to buy. <paramref name="Verdict"/> reflects any rating the user has placed on a missing
 /// album (null = not yet decided, or owned). Owned albums the library has that Deezer doesn't list as an
 /// LP carry no Deezer id/art — nor a <paramref name="Year"/>, which comes from Deezer's release date.
+/// <paramref name="Blocked"/> marks an album blocked for everyone (see <see cref="IAlbumBlockRepo"/>);
+/// it's filtered out of the feeds entirely, and surfaced only here so the block can be lifted.
 /// </summary>
 public record ArtistAlbumItem(
     ArtistKey Artist,
@@ -163,4 +165,5 @@ public record ArtistAlbumItem(
     long? DeezerAlbumId,
     bool Owned,
     DiscoveryStatus? Verdict,
-    int? Year = null);
+    int? Year = null,
+    bool Blocked = false);

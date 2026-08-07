@@ -25,6 +25,7 @@ public class DiscoveryEngineTests
     private readonly IMissingAlbumRepo _missing = Substitute.For<IMissingAlbumRepo>();
     private readonly IAlbumMatchOverrideRepo _overrides = Substitute.For<IAlbumMatchOverrideRepo>();
     private readonly IUserAlbumRatingRepo _albumRatings = Substitute.For<IUserAlbumRatingRepo>();
+    private readonly IAlbumBlockRepo _blocks = Substitute.For<IAlbumBlockRepo>();
     private readonly IDeezerApi _deezer = Substitute.For<IDeezerApi>();
     private readonly DiscoveryEngine _sut;
 
@@ -36,7 +37,8 @@ public class DiscoveryEngineTests
         var refresher = new MissingAlbumRefresher(
             _catalog, resolver, _deezer, _missing, _overrides, NullLogger<MissingAlbumRefresher>.Instance);
         _sut = new DiscoveryEngine(
-            _queue, _related, _library, _catalog, _missing, _albumRatings, refresher, NullLogger<DiscoveryEngine>.Instance);
+            _queue, _related, _library, _catalog, _missing, _albumRatings, _blocks, refresher,
+            NullLogger<DiscoveryEngine>.Instance);
 
         // Sensible empty defaults; individual tests override what they need.
         _queue.GetLikedArtistNames(User).Returns(Array.Empty<string>());
@@ -49,6 +51,7 @@ public class DiscoveryEngineTests
         _catalog.GetOwnedAlbums().Returns(new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
         _missing.GetAll().Returns(Array.Empty<MissingAlbum>());
         _albumRatings.GetDecidedKeys(User).Returns(new HashSet<string>());
+        _blocks.GetAll().Returns(Array.Empty<AlbumBlock>());
     }
 
     private void Relates(string artist, params (string name, string? image, int sources)[] related)
@@ -320,6 +323,82 @@ public class DiscoveryEngineTests
         _queue.GetLikedArtistNames(User).Returns(new[] { "Big Thief" });
         var afterLike = await _sut.GetFeed(User, FeedKind.MissingAlbum, 0, 20);
         afterLike.Items.Select(i => i.Album).Should().Equal("Capacity");
+    }
+
+    [Fact]
+    public async Task A_meh_is_personal_and_leaves_the_album_offerable_to_everyone_else()
+    {
+        // The point of the "meh" (a thumbs-down on an album): it's stored per user, so another user
+        // who likes the same band is still offered the album. Nothing global is written.
+        const string Other = "user-2";
+        _queue.GetLikedArtistNames(User).Returns(new[] { "Stevie Wonder" });
+        _queue.GetLikedArtistNames(Other).Returns(new[] { "Stevie Wonder" });
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("Stevie Wonder"), new AlbumKey("Talking Book"), "art1", 101),
+        });
+        _albumRatings.GetDecidedKeys(Other).Returns(new HashSet<string>());
+
+        await _sut.RateAlbum(User, "Stevie Wonder", "Talking Book", "art1", DiscoveryStatus.Disliked);
+
+        await _albumRatings.Received(1)
+            .Rate(User, "Stevie Wonder", "Talking Book", "art1", DiscoveryStatus.Disliked);
+        await _blocks.DidNotReceive().Add(Arg.Any<AlbumBlock>());
+        var otherUser = await _sut.GetFeed(Other, FeedKind.MissingAlbum, 0, 20);
+        otherUser.Items.Select(i => i.Album).Should().Equal("Talking Book");
+    }
+
+    [Fact]
+    public async Task A_blocked_album_leaves_every_users_missing_album_feed()
+    {
+        const string Other = "user-2";
+        _queue.GetLikedArtistNames(Other).Returns(new[] { "Stevie Wonder" });
+        _albumRatings.GetDecidedKeys(Other).Returns(new HashSet<string>());
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("Stevie Wonder"), new AlbumKey("Talking Book"), "art1", 101),
+            new MissingAlbum(new ArtistKey("Stevie Wonder"), new AlbumKey("Innervisions"), "art2", 102),
+        });
+        _blocks.GetAll().Returns(new[] { new AlbumBlock("Stevie Wonder", "Talking Book", User) });
+
+        var page = await _sut.GetFeed(Other, FeedKind.MissingAlbum, 0, 20);
+
+        page.Items.Select(i => i.Album).Should().Equal("Innervisions");
+    }
+
+    [Fact]
+    public async Task Blocking_records_the_album_under_the_collaboration_act_too()
+    {
+        // The album is reachable through either member's discography, so a block recorded only under
+        // the listing artist would let it resurface via the other. Both acts get a row.
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(
+                new ArtistKey("Milo"), new AlbumKey("Nostrum Grocers"), "art1", 101,
+                new ArtistKey("Nostrum Grocers")),
+        });
+
+        await _sut.BlockAlbum(User, "Milo", "Nostrum Grocers");
+
+        await _blocks.Received(1).Add(new AlbumBlock("Milo", "Nostrum Grocers", User));
+        await _blocks.Received(1).Add(new AlbumBlock("Nostrum Grocers", "Nostrum Grocers", User));
+    }
+
+    [Fact]
+    public async Task A_block_matches_across_title_typography()
+    {
+        // The block is keyed canonically (like a match override), so a curly-vs-straight apostrophe
+        // between the stored block and Deezer's title can't let the album slip back into the feed.
+        _queue.GetLikedArtistNames(User).Returns(new[] { "Big Thief" });
+        _missing.GetAll().Returns(new[]
+        {
+            new MissingAlbum(new ArtistKey("Big Thief"), new AlbumKey("Masterpiece’s Edge"), "art1", 101),
+        });
+        _blocks.GetAll().Returns(new[] { new AlbumBlock("Big Thief", "Masterpiece's Edge", User) });
+
+        var page = await _sut.GetFeed(User, FeedKind.MissingAlbum, 0, 20);
+
+        page.Items.Should().BeEmpty();
     }
 
     [Fact]

@@ -4,7 +4,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getArtists } from '../api/artists'
 import { clearSource, getArtistSources, pinSource, searchSource, unlinkSource } from '../api/sources'
 import { getArtistLibraries } from '../api/library'
-import { clearRating, getArtistDiscography, getRatings, rate, seedArtist, type Verdict } from '../api/discovery'
+import {
+  blockAlbum,
+  clearRating,
+  getArtistDiscography,
+  getRatings,
+  rate,
+  seedArtist,
+  unblockAlbum,
+  type Verdict,
+} from '../api/discovery'
 import { getRelated } from '../api/related'
 import { useArtAccent } from '../art/artColors'
 import { rateFeedback } from '../effects/effectsBus'
@@ -13,7 +22,7 @@ import { useAuth } from '../auth/AuthContext'
 import { DeezerSample } from '../components/DeezerSample'
 import { MergeAlbumPane } from '../components/MergeAlbumPane'
 import { PlexRatingStats } from '../components/PlexRatingStats'
-import { IconApprove, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
+import { IconApprove, IconBlock, IconCheck, IconClear, IconReject, IconWrench } from '../components/icons'
 
 // The detail pane is driven by a lightweight selection: just enough to render the readout and to key
 // the Albums / Related tab queries. A library row supplies the full ArtistListItem (looked up by name
@@ -340,22 +349,35 @@ function AlbumThumb({ item }: { item: ArtistAlbumItem }) {
   )
 }
 
-// A decided missing album (queued / dismissed / snoozed) with a one-click clear back to actionable.
-function AlbumState({ label, onClear, busy }: { label: string; onClear: () => void; busy: boolean }) {
+// A decided missing album (queued / meh / snoozed, or blocked for everyone) with a one-click clear
+// back to actionable.
+function AlbumState({
+  label,
+  onClear,
+  busy,
+  clearTitle = 'Clear — return to choices',
+}: {
+  label: string
+  onClear: () => void
+  busy: boolean
+  clearTitle?: string
+}) {
   return (
     <span className="album-state">
       {label}
-      <button className="disc-btn" title="Clear — return to choices" disabled={busy} onClick={onClear}>
+      <button className="disc-btn" title={clearTitle} disabled={busy} onClick={onClear}>
         <IconClear size={15} />
       </button>
     </span>
   )
 }
 
-// Verdict → the label shown on a decided missing album.
+// Verdict → the label shown on a decided missing album. "Meh" is a purely personal pass: it hides
+// the album from your feed for good and leaves it offerable to every other user (a globally blocked
+// album shows as "Blocked" instead — see the `blocked` flag).
 const ALBUM_VERDICT_LABEL: Partial<Record<DiscoveryStatus, string>> = {
   Liked: 'Queued',
-  Disliked: 'Dismissed',
+  Disliked: 'Meh',
   Snoozed: 'Snoozed',
 }
 
@@ -371,6 +393,8 @@ function AlbumSubRow({
   onRate,
   onClear,
   onMerge,
+  onBlock,
+  onUnblock,
 }: {
   a: ArtistAlbumItem
   busy: boolean
@@ -379,6 +403,8 @@ function AlbumSubRow({
   onRate: (a: ArtistAlbumItem, verdict: Verdict) => void
   onClear: (a: ArtistAlbumItem) => void
   onMerge: (a: ArtistAlbumItem) => void
+  onBlock: (a: ArtistAlbumItem) => void
+  onUnblock: (a: ArtistAlbumItem) => void
 }) {
   const accent = useArtAccent(a.imageUrl)
   const accentStyle = accent ? ({ '--art-accent': accent } as CSSProperties) : undefined
@@ -401,6 +427,15 @@ function AlbumSubRow({
             <span className="album-owned" title="Already in your library">
               <IconCheck size={15} /> In library
             </span>
+          ) : a.blocked ? (
+            // Blocked for everyone — it's filtered out of all the feeds, and shown here (the one place
+            // a block is reviewable) purely so it can be lifted again.
+            <AlbumState
+              label="Blocked"
+              busy={busy}
+              clearTitle="Unblock — return this album to everyone's feeds"
+              onClear={() => onUnblock(a)}
+            />
           ) : (
             <>
               {label ? (
@@ -417,7 +452,7 @@ function AlbumSubRow({
                   </button>
                   <button
                     className="disc-btn down"
-                    title="Not interested"
+                    title="Meh — hide this from my feed only"
                     disabled={busy}
                     onClick={() => onRate(a, 'down')}
                   >
@@ -434,6 +469,15 @@ function AlbumSubRow({
                 onClick={() => onMerge(a)}
               >
                 <IconWrench size={15} />
+              </button>
+              {/* Escalation from the personal "meh": takes the album off every user's feed. */}
+              <button
+                className="disc-btn block"
+                title="Block for everyone — no one gets offered this album"
+                disabled={busy}
+                onClick={() => onBlock(a)}
+              >
+                <IconBlock size={15} />
               </button>
             </>
           )}
@@ -487,7 +531,27 @@ function ArtistAlbums({ artist }: { artist: string }) {
     mutationFn: (a: ArtistAlbumItem) => clearRating(toFeedItem(a)),
     onSuccess: invalidate,
   })
-  const busy = rateAlbum.isPending || clearAlbum.isPending
+  // Blocking/unblocking changes what *every* user is offered, so it also busts the feed cache — not
+  // just this artist's discography.
+  const setBlocked = useMutation({
+    mutationFn: ({ a, blocked }: { a: ArtistAlbumItem; blocked: boolean }) =>
+      blocked
+        ? blockAlbum(a.artist.artistName, a.album)
+        : unblockAlbum(a.artist.artistName, a.album),
+    onSuccess: () => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    },
+  })
+  const confirmBlock = (a: ArtistAlbumItem) => {
+    const ok = window.confirm(
+      `Block "${a.album}" for everyone?\n\n` +
+        'No user will be offered this album again. To just hide it from your own feed, use the ' +
+        'thumbs-down ("meh") instead.',
+    )
+    if (ok) setBlocked.mutate({ a, blocked: true })
+  }
+  const busy = rateAlbum.isPending || clearAlbum.isPending || setBlocked.isPending
 
   if (isPending) {
     return <div className="disc-sub-albums"><em className="disc-sub-note">Loading albums…</em></div>
@@ -511,6 +575,8 @@ function ArtistAlbums({ artist }: { artist: string }) {
           onRate={(album, verdict) => rateAlbum.mutate({ a: album, verdict })}
           onClear={(album) => clearAlbum.mutate(album)}
           onMerge={setMerging}
+          onBlock={confirmBlock}
+          onUnblock={(album) => setBlocked.mutate({ a: album, blocked: false })}
         />
       ))}
 

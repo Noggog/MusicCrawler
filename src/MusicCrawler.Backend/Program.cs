@@ -683,6 +683,32 @@ api.MapPost("/albums/merge", async (string artist, string album, string libraryA
     .RequireAuthorization()
     .WithName("MergeAlbum");
 
+// Block an album for everyone — the escalation from a personal "meh" (a thumbs-down, which only ever
+// hides an album from the user who gave it). Use for releases nobody should be offered: a junk Deezer
+// entry, a reissue that duplicates something owned. Existing verdicts and queued downloads are left
+// alone; the block stops the album being offered from here on.
+api.MapPost("/albums/block", async (string artist, string album, HttpContext http, DiscoveryEngine engine) =>
+    {
+        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(album))
+        {
+            return Results.BadRequest("Artist and album are both required.");
+        }
+        await engine.BlockAlbum(http.User.GetSubject()!, artist, album);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("BlockAlbum");
+
+// Lift a global block, returning the album to everyone's feeds. Anyone may lift a block — the same
+// trust model as recording a merge.
+api.MapDelete("/albums/block", async (string artist, string album, DiscoveryEngine engine) =>
+    {
+        await engine.UnblockAlbum(artist, album);
+        return Results.NoContent();
+    })
+    .RequireAuthorization()
+    .WithName("UnblockAlbum");
+
 app.MapDefaultEndpoints();
 
 // Any unmatched, non-API route serves the SPA shell so client-side deep links work.

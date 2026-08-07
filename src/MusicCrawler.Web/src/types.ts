@@ -198,6 +198,9 @@ export interface ArtistAlbumItem {
   verdict: DiscoveryStatus | null
   // Deezer's release year; null for owned-only albums Deezer doesn't list, or when it gave no date.
   year: number | null
+  // Blocked for everyone (not just you) — filtered out of the feeds entirely, and surfaced here only
+  // so the block can be lifted. Always false for owned albums.
+  blocked: boolean
 }
 
 // Mirror LibraryAlbumOption (Album.cs) — one album already in the library, offered as a merge target

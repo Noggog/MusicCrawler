@@ -33,6 +33,7 @@ public class DiscoveryEngine : IQueueReplenisher
     private readonly IArtistCatalogRepo _catalog;
     private readonly IMissingAlbumRepo _missing;
     private readonly IUserAlbumRatingRepo _albumRatings;
+    private readonly IAlbumBlockRepo _blocks;
     private readonly MissingAlbumRefresher _albumRefresher;
     private readonly ILogger<DiscoveryEngine> _logger;
 
@@ -43,6 +44,7 @@ public class DiscoveryEngine : IQueueReplenisher
         IArtistCatalogRepo catalog,
         IMissingAlbumRepo missing,
         IUserAlbumRatingRepo albumRatings,
+        IAlbumBlockRepo blocks,
         MissingAlbumRefresher albumRefresher,
         ILogger<DiscoveryEngine> logger)
     {
@@ -52,6 +54,7 @@ public class DiscoveryEngine : IQueueReplenisher
         _catalog = catalog;
         _missing = missing;
         _albumRatings = albumRatings;
+        _blocks = blocks;
         _albumRefresher = albumRefresher;
         _logger = logger;
     }
@@ -230,14 +233,35 @@ public class DiscoveryEngine : IQueueReplenisher
         }
 
         var decided = await _albumRatings.GetDecidedKeys(userId);
+        var blocked = await BlockedKeys();
         return (await _missing.GetAll())
             .Where(m => liked.Contains(m.Artist.ArtistName))
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
+            .Where(m => !IsBlocked(blocked, m))
             .Select(m => new FeedItem(
                 FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(),
                 m.DeezerAlbumId, m.Year))
             .ToList();
     }
+
+    /// <summary>
+    /// The canonical keys of every globally blocked album. Keyed like a match override (act + the
+    /// title in canonical form), so typography differences between the stored block and the diffed
+    /// Deezer title can't let a blocked release slip back into a feed.
+    /// </summary>
+    private async Task<HashSet<string>> BlockedKeys() =>
+        (await _blocks.GetAll())
+        .Select(b => AlbumOverrideKey.For(b.Artist, b.Album))
+        .ToHashSet();
+
+    /// <summary>
+    /// Whether a missing album is blocked, checked under both acts it can be filed as — the artist
+    /// whose discography surfaced it and the act Deezer credits it to. A collaboration reachable
+    /// through either member is blocked once, from whichever side it was blocked.
+    /// </summary>
+    private static bool IsBlocked(HashSet<string> blocked, MissingAlbum m) =>
+        blocked.Contains(AlbumOverrideKey.For(m.Artist.ArtistName, m.Album.AlbumName))
+        || blocked.Contains(AlbumOverrideKey.For(m.MatchArtist.ArtistName, m.Album.AlbumName));
 
     /// <summary>
     /// On-demand: a brand-new (non-owned) liked artist's albums, so the discover→acquire loop can act
@@ -253,8 +277,10 @@ public class DiscoveryEngine : IQueueReplenisher
         var ownedAlbums = await _catalog.GetOwnedAlbums();
         var rows = await _albumRefresher.RefreshOne(new ArtistKey(artistName), ownedAlbums);
         var decided = await _albumRatings.GetDecidedKeys(userId);
+        var blocked = await BlockedKeys();
         return rows
             .Where(m => !decided.Contains(AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName)))
+            .Where(m => !IsBlocked(blocked, m))
             .Select(m => new FeedItem(
                 FeedKind.MissingAlbum, m.Artist, m.Album.AlbumName, m.AlbumArt, 0, Array.Empty<string>(),
                 m.DeezerAlbumId, m.Year))
@@ -266,6 +292,9 @@ public class DiscoveryEngine : IQueueReplenisher
     /// whether the library owns it, missing ones overlaid with the user's verdict (queued/dismissed/
     /// snoozed) so the listing matches the to-buy list. One Deezer call per expand; owned albums sort
     /// first. Pulling the discography also refreshes the persisted missing-album rows for the artist.
+    ///
+    /// Globally blocked albums are <em>marked</em> here rather than dropped — this drill-down is the
+    /// one place a block can be reviewed and lifted, so hiding them would make it a one-way door.
     /// </summary>
     public async Task<IReadOnlyList<ArtistAlbumItem>> ArtistDiscography(string userId, string artistName)
     {
@@ -277,6 +306,7 @@ public class DiscoveryEngine : IQueueReplenisher
         var verdicts = (await _albumRatings.GetRated(userId))
             .Where(r => string.Equals(r.Artist.ArtistName, artistName, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(r => AlbumRatingKey.For(r.Artist.ArtistName, r.Album.AlbumName), r => r.Status);
+        var blocked = await BlockedKeys();
 
         var artist = new ArtistKey(artistName);
         return albums
@@ -288,7 +318,9 @@ public class DiscoveryEngine : IQueueReplenisher
                     && verdicts.TryGetValue(AlbumRatingKey.For(artistName, a.Title), out var v)
                     ? v
                     : null;
-                return new ArtistAlbumItem(artist, a.Title, a.CoverUrl, a.DeezerAlbumId, a.Owned, verdict, a.Year);
+                var isBlocked = !a.Owned && blocked.Contains(AlbumOverrideKey.For(artistName, a.Title));
+                return new ArtistAlbumItem(
+                    artist, a.Title, a.CoverUrl, a.DeezerAlbumId, a.Owned, verdict, a.Year, isBlocked);
             })
             .ToList();
     }
@@ -371,9 +403,62 @@ public class DiscoveryEngine : IQueueReplenisher
     public Task SnoozeAlbum(string userId, string artistName, string albumName, string? albumArt, TimeSpan duration) =>
         _albumRatings.Snooze(userId, artistName, albumName, albumArt, DateTimeOffset.UtcNow + duration);
 
-    /// <summary>Thumbs a missing album: like = queue to buy, dislike = not interested.</summary>
+    /// <summary>
+    /// Thumbs a missing album: like = queue to buy, <see cref="DiscoveryStatus.Disliked"/> = "meh" —
+    /// a purely personal pass. It hides the album from this user's feed for good and touches nothing
+    /// anyone else sees; the album stays offerable to every other user. To take a release off
+    /// everyone's feeds, see <see cref="BlockAlbum"/>.
+    /// </summary>
     public Task RateAlbum(string userId, string artistName, string albumName, string? albumArt, DiscoveryStatus status) =>
         _albumRatings.Rate(userId, artistName, albumName, albumArt, status);
+
+    /// <summary>
+    /// Blocks an album for everyone — the escalation from a personal "meh". It stops being offered in
+    /// any user's missing-album feed and in the inline albums of a freshly-liked artist, and survives
+    /// the nightly Deezer re-diff (the block is stored separately from the missing set, so the sweep
+    /// can't resurrect it).
+    ///
+    /// Deliberately does not touch anyone's existing verdicts or the shared to-buy list: someone who
+    /// already queued this album keeps it (and the row keeps the Deezer id the downloader needs). A
+    /// block stops the album being <em>offered</em>; it doesn't retract choices already made.
+    /// </summary>
+    public async Task BlockAlbum(string userId, string artistName, string albumName)
+    {
+        foreach (var act in await BlockActsFor(artistName, albumName))
+        {
+            await _blocks.Add(new AlbumBlock(act, albumName, userId));
+        }
+        _logger.LogInformation(
+            "{User} blocked album \"{Album}\" ({Artist}) for everyone", userId, albumName, artistName);
+    }
+
+    /// <summary>Lifts a global block, returning the album to everyone's feeds.</summary>
+    public async Task UnblockAlbum(string artistName, string albumName)
+    {
+        foreach (var act in await BlockActsFor(artistName, albumName))
+        {
+            await _blocks.Remove(act, albumName);
+        }
+    }
+
+    /// <summary>
+    /// The acts a block has to be recorded under to actually stick: the artist whose discography
+    /// surfaced the album, plus the act Deezer credits it to when they differ (a collaboration reached
+    /// through one member). Mirrors the same problem merges solve — without the second act the album
+    /// resurfaces through the other member's discography.
+    /// </summary>
+    private async Task<string[]> BlockActsFor(string artistName, string albumName)
+    {
+        var key = AlbumRatingKey.For(artistName, albumName);
+        var row = (await _missing.GetAll())
+            .FirstOrDefault(m => AlbumRatingKey.For(m.Artist.ArtistName, m.Album.AlbumName) == key);
+        var acts = new List<string> { artistName };
+        if (row is not null)
+        {
+            acts.Add(row.MatchArtist.ArtistName);
+        }
+        return acts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
 
     /// <summary>Clears an artist's verdict, returning it to the feed (recommended or library).</summary>
     public async Task ClearArtistRating(string userId, string artistName)

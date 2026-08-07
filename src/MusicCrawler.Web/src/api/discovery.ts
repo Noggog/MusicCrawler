@@ -198,6 +198,26 @@ export async function getMergeCandidates(
   return (await res.json()) as LibraryAlbumOption[]
 }
 
+// Block an album for everyone. A thumbs-down ("meh") is per-user and invisible to anyone else; this
+// takes the release off every user's feed for good, and survives the nightly Deezer re-diff. Existing
+// verdicts and queued downloads are left alone — it stops the album being offered, not choices made.
+export async function blockAlbum(artist: string, album: string): Promise<void> {
+  const params = new URLSearchParams({ artist, album })
+  const res = await fetch(`/api/albums/block?${params}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(`Failed to block ${album}: ${res.status} ${res.statusText}`)
+  }
+}
+
+// Lift a global block, returning the album to everyone's feeds.
+export async function unblockAlbum(artist: string, album: string): Promise<void> {
+  const params = new URLSearchParams({ artist, album })
+  const res = await fetch(`/api/albums/block?${params}`, { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(`Failed to unblock ${album}: ${res.status} ${res.statusText}`)
+  }
+}
+
 // Merge a missing album into one already in the library under a different title. Records a durable
 // match override (honoured by the reconcile and the missing-album diff), so the album stops being
 // offered anywhere and never reaches the downloader.

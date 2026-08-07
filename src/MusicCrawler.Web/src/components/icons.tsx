@@ -98,6 +98,19 @@ export function IconX(props: IconProps) {
   )
 }
 
+// Block — a stop sign. The down-chevron beside it is the familiar "I don't want this" (a personal
+// meh), so a block has to read as a different *kind* of action rather than a stronger flavour of the
+// same one: an octagon shares no line with the chevrons, and the bar across it keeps it unmistakable
+// at 15px, where a bare octagon would just look like a circle.
+export function IconBlock(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8.8 4.2h6.4l4.6 4.6v6.4l-4.6 4.6H8.8l-4.6-4.6V8.8z" />
+      <path d="M8.5 12h7" />
+    </Svg>
+  )
+}
+
 // Download — an arrow into a tray. The "Download now" action on a queued album.
 export function IconDownload(props: IconProps) {
   return (

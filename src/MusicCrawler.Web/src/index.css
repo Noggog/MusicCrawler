@@ -851,6 +851,10 @@ input[type='checkbox'] {
 .disc-rated.mark-merged .disc-rated-icon {
   color: var(--good);
 }
+/* Blocked for everyone — full salmon, a step past the personal "meh" beside it. */
+.disc-rated.mark-blocked .disc-rated-icon {
+  color: var(--salmon);
+}
 
 /* An icon sitting inline within a run of text (e.g. the "· 🌙 Snoozed" note). */
 .inline-icon {
@@ -1093,6 +1097,19 @@ a.disc-row-link:hover .disc-name {
   }
   .disc-btn.down:hover:not(:disabled) {
     border-color: var(--salmon-light);
+    box-shadow: var(--glow-salmon);
+  }
+}
+/* Block-for-everyone. Deliberately muted at rest so it never competes with the thumbs — the personal
+   "meh" is the action you want nine times out of ten — then goes hard red on hover to signal that
+   this one reaches past your own feed. */
+.disc-btn.block {
+  color: var(--salmon-dark);
+}
+@media (hover: hover) {
+  .disc-btn.block:hover:not(:disabled) {
+    border-color: var(--salmon);
+    color: var(--salmon-white);
     box-shadow: var(--glow-salmon);
   }
 }
