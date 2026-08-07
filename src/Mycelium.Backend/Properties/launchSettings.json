@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Mycelium.Backend": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:59664;http://localhost:59665"
+    }
+  }
+}

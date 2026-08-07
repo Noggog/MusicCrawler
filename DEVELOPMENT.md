@@ -4,21 +4,21 @@ This file contains helpful information for developers and AI assistants working 
 
 ## Project Architecture
 
-MusicCrawler is a .NET 9.0 Aspire distributed application that crawls music libraries (Plex) and provides recommendations using external services (Spotify). The application follows a modular architecture with separate projects for each concern.
+Mycelium is a .NET 9.0 Aspire distributed application that crawls music libraries (Plex) and provides recommendations using external services (Spotify). The application follows a modular architecture with separate projects for each concern.
 
 ### Core Components
 
 - **AppHost**: Aspire orchestration host that manages the distributed application lifecycle and configures Redis cache and MongoDB
-- **MusicCrawler.Backend**: ASP.NET Core Web API that serves artist data via REST endpoints
-- **MusicCrawler.Web**: Vite + React + TypeScript single-page app for the user interface (replaced the former Blazor frontend). Talks to the backend's REST endpoints; see "Frontend (React)" below.
-- **MusicCrawler.Interfaces**: Shared contracts and data models used across all modules
+- **Mycelium.Backend**: ASP.NET Core Web API that serves artist data via REST endpoints
+- **Mycelium.Web**: Vite + React + TypeScript single-page app for the user interface (replaced the former Blazor frontend). Talks to the backend's REST endpoints; see "Frontend (React)" below.
+- **Mycelium.Interfaces**: Shared contracts and data models used across all modules
 - **ServiceDefaults**: Aspire shared project containing common telemetry and service discovery configuration
 
 ### Integration Modules
 
-- **MusicCrawler.Plex**: Integrates with Plex media server for music library access
-- **MusicCrawler.Spotify**: Integrates with Spotify API for music recommendations
-- **MusicCrawler.MongoDB**: Provides MongoDB data persistence layer
+- **Mycelium.Plex**: Integrates with Plex media server for music library access
+- **Mycelium.Spotify**: Integrates with Spotify API for music recommendations
+- **Mycelium.MongoDB**: Provides MongoDB data persistence layer
 
 ### Dependency Injection
 
@@ -38,22 +38,22 @@ The application uses Autofac for dependency injection. Each module registers its
 ### Building and Running
 ```bash
 # Build the entire solution
-dotnet build src/MusicCrawler.sln
+dotnet build src/Mycelium.sln
 
 # Run the application (starts all Aspire services)
 dotnet run --project src/AppHost
 
 # Run individual projects
-dotnet run --project src/MusicCrawler.Backend
+dotnet run --project src/Mycelium.Backend
 ```
 
 ### Frontend (React)
 
-The UI lives in `src/MusicCrawler.Web` (Vite + React + TypeScript).
+The UI lives in `src/Mycelium.Web` (Vite + React + TypeScript).
 
 ```bash
 # First time: install dependencies
-cd src/MusicCrawler.Web
+cd src/Mycelium.Web
 npm install
 
 # Normally the Aspire AppHost launches the Vite dev server for you
@@ -66,15 +66,15 @@ npm run build    # type-check + production build to dist/
 
 The dev server proxies `/api/*` to the backend. The backend URL comes from the
 `VITE_BACKEND_URL` env var (injected by the AppHost), falling back to the backend's default dev
-HTTP endpoint when run standalone — see `src/MusicCrawler.Web/vite.config.ts`.
+HTTP endpoint when run standalone — see `src/Mycelium.Web/vite.config.ts`.
 
 ### Testing
 ```bash
 # Run all tests
-dotnet test src/MusicCrawler.Tests
+dotnet test src/Mycelium.Tests
 
 # Run tests with verbose output
-dotnet test src/MusicCrawler.Tests --verbosity normal
+dotnet test src/Mycelium.Tests --verbosity normal
 ```
 
 ## Configuration

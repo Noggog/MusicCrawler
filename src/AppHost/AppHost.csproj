@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MusicCrawler.Backend\MusicCrawler.Backend.csproj" />
+    <ProjectReference Include="..\Mycelium.Backend\Mycelium.Backend.csproj" />
   </ItemGroup>
 
 </Project>

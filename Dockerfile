@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 #
-# MusicCrawler — single image that serves the API *and* the built SPA on one HTTP port (8080).
-# The Aspire AppHost is dev-only; here we run MusicCrawler.Backend.dll directly with settings from
+# Mycelium — single image that serves the API *and* the built SPA on one HTTP port (8080).
+# The Aspire AppHost is dev-only; here we run Mycelium.Backend.dll directly with settings from
 # env vars (see compose.yaml / .env). streamrip is baked in because the download path shells out to
 # the `rip` binary locally (there is no remote downloader API).
 
 # ---- build the SPA ----
 FROM node:20-alpine AS web
 WORKDIR /web
-COPY src/MusicCrawler.Web/package.json src/MusicCrawler.Web/package-lock.json ./
+COPY src/Mycelium.Web/package.json src/Mycelium.Web/package-lock.json ./
 RUN npm ci
-COPY src/MusicCrawler.Web/ ./
+COPY src/Mycelium.Web/ ./
 # `npm run build` == `tsc && vite build`; emits static assets to /web/dist.
 RUN npm run build
 
@@ -20,7 +20,7 @@ WORKDIR /src
 # Publish only the backend project graph (Deezer, MongoDB, Plex, Interfaces, ServiceDefaults).
 # Building the whole solution would pull the Aspire AppHost, which needs the Aspire workload SDK.
 COPY src/ ./src/
-RUN dotnet publish src/MusicCrawler.Backend/MusicCrawler.Backend.csproj -c Release -o /app
+RUN dotnet publish src/Mycelium.Backend/Mycelium.Backend.csproj -c Release -o /app
 
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
@@ -48,4 +48,4 @@ COPY --from=build /app ./
 COPY --from=web /web/dist ./wwwroot
 
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "MusicCrawler.Backend.dll"]
+ENTRYPOINT ["dotnet", "Mycelium.Backend.dll"]

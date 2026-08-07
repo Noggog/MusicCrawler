@@ -1,4 +1,4 @@
-# MusicCrawler — Project Plan
+# Mycelium — Project Plan
 
 > Living document. Captures the product vision, architecture, and phased build
 > order. See `DEVELOPMENT.md` for how the current code is wired.

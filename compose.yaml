@@ -1,6 +1,6 @@
-name: musiccrawler
+name: mycelium
 
-# MusicCrawler stack: one app container (API + SPA on a single HTTP port) plus MongoDB. The Aspire
+# Mycelium stack: one app container (API + SPA on a single HTTP port) plus MongoDB. The Aspire
 # AppHost is NOT used here — it's a local-dev orchestrator only. Put this service behind your own
 # reverse proxy / TLS; it just speaks plain HTTP on ${HTTP_PORT}.
 # Copy .env.example to .env and fill it in (Komodo can also inject these values).
@@ -8,10 +8,10 @@ name: musiccrawler
 services:
   app:
     build: .
-    image: musiccrawler:latest
+    image: mycelium:latest
     # Built locally from the Dockerfile — never pull it from a registry (it isn't published).
     # Without this, `docker compose pull` (which Komodo runs before deploy) fails with
-    # "pull access denied" because musiccrawler:latest exists in no registry.
+    # "pull access denied" because mycelium:latest exists in no registry.
     pull_policy: build
     restart: unless-stopped
     ports:

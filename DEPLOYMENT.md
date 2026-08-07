@@ -1,4 +1,4 @@
-# Deploying MusicCrawler (Podman + Komodo)
+# Deploying Mycelium (Podman + Komodo)
 
 Two containers: the **app** (ASP.NET Core API + the built React SPA, served together on one HTTP
 port) and **MongoDB**. The app speaks plain HTTP — put it behind your own reverse proxy for TLS and
@@ -87,7 +87,7 @@ its own config — not in this app's env. After the stack is up:
 
 ```bash
 # generate a default config into the mounted config dir, if not present
-podman exec -it musiccrawler-app-1 /opt/streamrip/bin/rip config
+podman exec -it mycelium-app-1 /opt/streamrip/bin/rip config
 ```
 
 Then edit `config.toml` on the host (at `STREAMRIP_CONFIG_HOST/streamrip/config.toml`) and set:
@@ -108,7 +108,7 @@ in Mongo (not an env var), so it survives redeploys and takes effect without a r
 ## Notes / troubleshooting
 
 - **Logs:** the app writes rolling logs to the `app_logs` volume (`/app/logs`) and to stdout
-  (`podman logs musiccrawler-app-1`).
+  (`podman logs mycelium-app-1`).
 - **External Mongo:** point `MONGO_URI` at an existing instance and remove the bundled `mongo`
   service.
 - **Rebuild after code changes:** redeploy the Stack in Komodo (it rebuilds the image), or

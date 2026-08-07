@@ -9,7 +9,7 @@ var cache = builder.AddRedis("cache")
 var database = builder.AddMongoDB("db")
     .WithLifetime(ContainerLifetime.Persistent);
 
-var backend = builder.AddProject<MusicCrawler_Backend>("backend")
+var backend = builder.AddProject<Mycelium_Backend>("backend")
     .WithReference(cache)
     .WaitFor(cache)
     .WithReference(database)
@@ -50,7 +50,7 @@ var backend = builder.AddProject<MusicCrawler_Backend>("backend")
     .WithEnvironment("DOWNLOAD_BATCH_INTERVAL_MINUTES", Environment.GetEnvironmentVariable("DOWNLOAD_BATCH_INTERVAL_MINUTES"))
     .WithEnvironment("DEEZER_DOWNLOAD_TIMEOUT_MINUTES", Environment.GetEnvironmentVariable("DEEZER_DOWNLOAD_TIMEOUT_MINUTES"));
 
-builder.AddNpmApp("web", "../MusicCrawler.Web", "dev")
+builder.AddNpmApp("web", "../Mycelium.Web", "dev")
     .WithReference(backend)
     .WaitFor(backend)
     .WithEnvironment("VITE_BACKEND_URL", backend.GetEndpoint("http"))
