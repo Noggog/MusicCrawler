@@ -252,7 +252,10 @@ public class DownloadService : BackgroundService
     /// visible in Plex. Ticks every <c>DOWNLOAD_SETTLE_INTERVAL_MINUTES</c>.
     /// </summary>
     private Task Settle(CancellationToken ct) =>
-        _jitter.RunPeriodic(_config.SettleInterval, _config.SettleInterval, SettleOnce, ct);
+        // Unscattered, unlike the download loops above: a settle pass only re-reads the user's own Plex
+        // server, so there's no fingerprint to hide — just a plain re-check on the interval.
+        _jitter.RunPeriodic(
+            _config.SettleInterval, _config.SettleInterval, SettleOnce, ct, scatter: false);
 
     /// <summary>
     /// One settle pass: re-pull the Plex catalog and reconcile, but only while something downloaded

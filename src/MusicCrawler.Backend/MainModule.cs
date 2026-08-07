@@ -54,6 +54,15 @@ public class MainModule : Autofac.Module
             Interval: TimeSpan.FromDays(reconsiderDays),
             StartupDelay: TimeSpan.FromMinutes(10)));
 
+        // The two daily passes run at a wall-clock hour (env knob, default 6am server-local) rather than
+        // 24h after boot: Plex re-files new music on its own nightly pass, and a catalog read that
+        // drifted to just before it would leave a finished download undetected for another whole day.
+        var syncHour = int.TryParse(
+            Environment.GetEnvironmentVariable("DAILY_SYNC_HOUR"), out var sh) && sh is >= 0 and <= 23 ? sh : 6;
+        builder.RegisterInstance(new DailySyncSchedule(
+            CatalogSync: new TimeOnly(syncHour, 0),
+            AlbumSync: new TimeOnly(syncHour, 0).AddMinutes(30)));
+
         // Every recurring wait in the app is scattered by this much (env knob, default ±30%) instead of
         // firing on an exact cadence — see JitterPolicy.
         var jitterPercent = double.TryParse(

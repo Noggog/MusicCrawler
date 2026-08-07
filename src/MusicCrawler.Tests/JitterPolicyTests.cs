@@ -46,6 +46,94 @@ public class JitterPolicyTests
     }
 
     [Fact]
+    public void The_daily_anchor_waits_until_the_hour_comes_round_again()
+    {
+        var policy = new JitterPolicy(0.3);
+        var sixAm = new TimeOnly(6, 0);
+
+        // Unscattered (the Plex-only callers): exactly on the hour, however much jitter is configured.
+        // Before the hour: later today.
+        policy.UntilNextDaily(new DateTime(2026, 8, 7, 4, 30, 0), sixAm, scatter: false)
+            .Should().Be(TimeSpan.FromHours(1.5));
+        // At or past it (a pass that just ran at its own target): tomorrow, not immediately again.
+        policy.UntilNextDaily(new DateTime(2026, 8, 7, 6, 0, 0), sixAm, scatter: false)
+            .Should().Be(TimeSpan.FromHours(24));
+        policy.UntilNextDaily(new DateTime(2026, 8, 7, 23, 45, 0), sixAm, scatter: false)
+            .Should().Be(TimeSpan.FromHours(6.25));
+    }
+
+    [Fact]
+    public void A_scattered_daily_anchor_only_ever_slips_forwards()
+    {
+        var policy = new JitterPolicy(0.3);
+        var sixAm = new TimeOnly(6, 0);
+        var now = new DateTime(2026, 8, 7, 5, 55, 0);
+
+        var samples = Enumerable.Range(0, 200)
+            .Select(_ => policy.UntilNextDaily(now, sixAm, scatter: true))
+            .ToList();
+
+        // Never early: a pass that woke before its target would find the target still ahead and run
+        // twice. Never more than the scaled spread late, so "6am" still means 6am.
+        samples.Should().OnlyContain(
+            w => w >= TimeSpan.FromMinutes(5) && w <= TimeSpan.FromMinutes(5 + 9));
+        samples.Distinct().Should().HaveCountGreaterThan(100, "the slip is drawn afresh each day");
+    }
+
+    [Fact]
+    public async Task RunDaily_runs_a_startup_pass_before_the_first_anchored_one()
+    {
+        var policy = new JitterPolicy(0);
+        using var cts = new CancellationTokenSource();
+        var passes = 0;
+
+        // The next anchor is ~a day out, so the run only gets past its first pass because the startup
+        // pass happens up front — that's what keeps a fresh deploy from serving a stale catalog.
+        var run = policy.RunDaily(
+            TimeOnly.FromDateTime(DateTime.Now).AddHours(12),
+            TimeSpan.Zero,
+            () =>
+            {
+                passes++;
+                cts.Cancel();
+                return Task.CompletedTask;
+            },
+            cts.Token,
+            scatter: false);
+
+        await run;
+        passes.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_unscattered_periodic_loop_waits_exactly_its_interval()
+    {
+        var policy = new JitterPolicy(0.9);
+        using var cts = new CancellationTokenSource();
+        var waits = new List<TimeSpan>();
+
+        await policy.RunPeriodic(
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(1),
+            () =>
+            {
+                if (waits.Count == 2)
+                {
+                    cts.Cancel();
+                }
+                return Task.CompletedTask;
+            },
+            cts.Token,
+            onWait: waits.Add,
+            scatter: false);
+
+        // Plex-only loops (the download settle pass) opt out — the configured spread doesn't touch them.
+        var expected = TimeSpan.FromMilliseconds(1);
+        waits.Should().NotBeEmpty();
+        waits.Should().OnlyContain(w => w == expected);
+    }
+
+    [Fact]
     public async Task RunPeriodic_repeats_the_pass_until_cancelled()
     {
         var policy = new JitterPolicy(0.5);

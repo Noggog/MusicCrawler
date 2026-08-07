@@ -168,7 +168,9 @@ Each is independently buildable and testable.
     to Pending on startup. A **settle pass** closes the loop for a fresh download: while a row
     downloaded within `DOWNLOAD_SETTLE_WINDOW_HOURS` is still waiting, it re-pulls the Plex
     catalog every `DOWNLOAD_SETTLE_INTERVAL_MINUTES` (file in Plex → reconcile → `in-library`)
-    instead of leaving it to the daily catalog sync.
+    instead of leaving it to the daily catalog sync. That only closes a row early if Plex has
+    *already* filed the album (a `PLEX_RESCAN_AFTER_DOWNLOAD` rescan, or a manual library refresh);
+    left to Plex's own nightly pass, the album lands at the daily anchor below instead.
   - **The automatic/manual switch** lives on the Download page and is **persisted in Mongo**
     (`appSettings`, via `IAppSettingsRepo`), so it survives a redeploy and is re-read on every
     drainer tick — flipping it needs no restart. It is **deliberately not an env var** (automatic
@@ -178,11 +180,24 @@ Each is independently buildable and testable.
     `DEEZER_CODEC`, `DOWNLOAD_BATCH_SIZE` (3), `DOWNLOAD_ITEM_DELAY_SECONDS` (60),
     `DOWNLOAD_BATCH_INTERVAL_MINUTES` (30), `DEEZER_DOWNLOAD_TIMEOUT_MINUTES` (15),
     `DOWNLOAD_SETTLE_INTERVAL_MINUTES` (15), `DOWNLOAD_SETTLE_WINDOW_HOURS` (6).
-  - **Timer jitter (`JitterPolicy`, app-wide):** *every* recurring wait — between albums, between
-    batches, the settle re-check, and the daily catalog / missing-album / queue-replenish passes —
-    is scattered by ±`TIMER_JITTER_PERCENT` (30, clamped 0–90) instead of firing on an exact
-    cadence, since a perfectly periodic fetch pattern is a machine signature. `JitterPolicy`
-    also owns `RunPeriodic`, the jittered loop that replaced those services' fixed `Observable.Timer`.
+  - **Timer jitter (`JitterPolicy`, app-wide):** recurring waits on the **third-party** paths —
+    between albums, between batches, and the daily missing-album / queue-replenish passes — are
+    scattered by ±`TIMER_JITTER_PERCENT` (30, clamped 0–90) instead of firing on an exact cadence,
+    since a perfectly periodic fetch pattern is a machine signature and Deezer/MusicBrainz have
+    reason to look for one. Loops that only touch the **user's own Plex server** and Mongo — the
+    daily catalog sync and the download settle pass — pass `scatter: false` and run on the dot:
+    nothing there is hunting bots, so blurring the schedule only makes it vaguer (changed
+    2026-08-07). `JitterPolicy` also owns `RunPeriodic`/`RunDaily`, the loop shapes that replaced
+    those services' fixed `Observable.Timer`.
+  - **Daily anchor (`DailySyncSchedule`, changed 2026-08-07):** the catalog and missing-album syncs
+    run at a **wall-clock hour** (`DAILY_SYNC_HOUR`, default 6am server-local — set `TZ` on the
+    container; album sync 30 min behind so it reads a fresh catalog) rather than 24h after boot.
+    Plex only files newly-arrived music into the library on its *own* nightly pass, so a catalog read
+    left to drift could land minutes ahead of it and report a finished download nearly two days late.
+    Each still runs once at startup, so a deploy never serves a stale catalog. The wait is recomputed
+    from the local clock each cycle, so DST self-corrects. Where the anchor *is* scattered (the Deezer
+    album sync) it slips **forwards only**, because a pass that woke early would find its own target
+    still ahead of it and run twice.
   - **`DownloadSchedule`** publishes when the drainer next acts (next album / next batch) for the
     monitor's countdown. Its own singleton because the snapshot is built by `PurchaseService`,
     which `DownloadService` depends on — reading it back the other way would be a cycle.
