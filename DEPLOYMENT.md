@@ -63,6 +63,18 @@ a transient systemd timer, and when that doesn't fire the compose wait blocks on
 after mongod is actually serving. Mongo still starts first and the driver retries, so the app comes
 up fine. (The healthcheck itself is kept — it's just for status, not for sequencing.)
 
+Two follow-on traps, both hit for real:
+
+- **Don't "fix" the CPU cost by stretching `interval`.** A container's health stays `starting` until
+  the *first* probe runs, and the first probe doesn't run until one `interval` has elapsed — so a
+  `mongosh` probe at `interval: 5m` behind a `service_healthy` gate stalls every deploy by five
+  minutes while mongod has been serving since second one. `start_period` doesn't help; it only stops
+  early failures counting against `retries`. Cheapen the probe (above), don't rarefy it.
+- **`start_interval` is not available here.** The Compose field that would give "probe fast until
+  healthy, then back off" needs Docker Engine 25+; Podman doesn't implement it and silently ignores
+  it — which, paired with a long `interval`, means the gate never opens at all. Podman's own
+  `--health-startup-*` flags have no Compose equivalent.
+
 ### Separate Komodo Build + Stack (no registry)
 
 If you split this into a Komodo **Build** (clones this repo, runs `docker build`) and a **Stack**

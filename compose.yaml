@@ -62,10 +62,16 @@ services:
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
+    # Status only — nothing sequences off this (see the depends_on note above). A TCP probe rather
+    # than `mongosh --eval "db.adminCommand('ping')"`: mongosh boots a whole Node runtime per probe,
+    # which at any useful interval is constant CPU to answer a question nobody asks. mongod doesn't
+    # bind 27017 until it's accepting connections, so this is still a sound readiness signal; it
+    # just won't catch a wedged-but-listening mongod, which the ping wasn't being used for anyway.
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/27017'"]
+      interval: 30s
+      start_period: 30s
+      timeout: 3s
       retries: 5
 
 volumes:
